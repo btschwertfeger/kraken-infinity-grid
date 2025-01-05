@@ -227,7 +227,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 @option(
     "--db-name",
     type=STRING,
-    default="kraken-infinity-grid",
+    default="kraken_infinity_grid",
     help="PostgreSQL DB name",
     required=True,
 )

@@ -1,7 +1,6 @@
 FROM python:3.11-slim AS builder
 
-ENV TZ=Europe/Berlin \
-    DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /apps
 COPY . /apps
@@ -18,8 +17,7 @@ RUN --mount=type=cache,target=/var/lib/apt/,sharing=locked \
 
 FROM python:3.11-slim
 
-ENV TZ=Europe/Berlin \
-    DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=bind,target=/context,from=builder,source=/apps \
     --mount=type=cache,target=/var/lib/apt/,sharing=locked \
@@ -45,6 +43,5 @@ RUN --mount=type=bind,target=/context,from=builder,source=/apps \
 ENTRYPOINT ["kraken-infinity-grid", "run"]
 
 LABEL maintainer="Benjamin Thomas Schwertfeger contact@b-schwertfeger.de"
-LABEL description="A Docker image for running a Trading algorithm for Kraken."
+LABEL description="The Infinity Grid Trading Algorithm for the Kraken Cryptocurrency Exchange."
 LABEL org.opencontainers.image.source="https://github.com/btschwerfeger/kraken-infinity-grid"
-# LABEL org.opencontainers.image.licenses="GNU General Public License v3.0"
