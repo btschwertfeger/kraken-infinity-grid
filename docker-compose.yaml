@@ -7,15 +7,15 @@ services:
   postgresql:
     image: postgres:13-bookworm
     environment:
-      POSTGRES_USER: kraken-infinity-grid
-      POSTGRES_PASSWORD: kraken-infinity-grid
-      POSTGRES_DB: kraken-infinity-grid
       TZ: Europe/Berlin
+      POSTGRES_USER: kraken_infinity_grid
+      POSTGRES_PASSWORD: kraken_infinity_grid
+      POSTGRES_DB: kraken_infinity_grid
     restart: on-failure
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kraken-infinity-grid"]
+      test: ["CMD-SHELL", "pg_isready -U kraken_infinity_grid"]
       interval: 10s
       retries: 5
     networks:
@@ -27,6 +27,7 @@ services:
       postgresql:
         condition: service_healthy
     environment:
+      TZ: Europe/Berlin
       # General settings
       KRAKEN_API_KEY: ${KRAKEN_API_KEY}
       KRAKEN_SECRET_KEY: ${KRAKEN_SECRET_KEY}
@@ -55,12 +56,12 @@ services:
       KRAKEN_RUN_DB_PORT: ${KRAKEN_RUN_DB_PORT}
     restart: on-failure
     volumes:
-      - gridbot-cache:/root/.cache/gridbot:rw
+      - infinity-grid-cache:/root/.cache/gridbot:rw
     networks:
       - internal_network
 
 volumes:
-  gridbot-cache:
+  infinity-grid-cache:
     external: false
   postgres-data:
     external: false
