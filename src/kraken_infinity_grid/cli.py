@@ -315,7 +315,7 @@ def cancel(ctx: Context, **kwargs: dict) -> None:
     """Cancel all open orders."""
     ctx.obj |= kwargs
     if not ctx.obj["force"]:
-        print("Not canceling -f is required!")  # noqa: T201
+        print("Not canceling unless '-f' was passed!")  # noqa: T201
         sys.exit(1)
 
     from pprint import pprint  # noqa: PLC0415

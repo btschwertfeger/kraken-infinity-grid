@@ -14,6 +14,23 @@ import pytest
 from kraken_infinity_grid.telegram import Telegram
 
 
+@pytest.fixture
+def telegram() -> Telegram:
+    """Fixture to create a Telegram instance for testing."""
+    strategy = mock.Mock()
+    telegram_token = "test_token"  # noqa: S105
+    telegram_chat_id = "test_chat_id"
+    exception_token = "exception_token"  # noqa: S105
+    exception_chat_id = "exception_chat_id"
+    return Telegram(
+        strategy,
+        telegram_token,
+        telegram_chat_id,
+        exception_token,
+        exception_chat_id,
+    )
+
+
 @mock.patch("kraken_infinity_grid.telegram.requests.post")
 def test_send_to_telegram(
     mock_post: mock.Mock,
