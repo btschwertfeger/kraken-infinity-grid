@@ -46,7 +46,7 @@ jobs:
     with:
       TAG: dev
 
-  ##    Run the unit and acceptance tests
+  ##    Run the unit and integration tests
   ##
   Test:
     needs: [Build]
@@ -54,8 +54,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.11"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}

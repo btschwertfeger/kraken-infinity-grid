@@ -538,7 +538,7 @@ def test_new_sell_order_GridSell(
     )
 
     # == Ensure sell order was placed
-    strategy.trade.create_order.called_once()
+    strategy.trade.create_order.assert_called_once()
 
     # == Ensure adding to pending txids
     strategy.pending_txids.add.assert_called_once_with("txid2")
@@ -588,7 +588,7 @@ def test_new_sell_order_GridHODL_SWING(
     )
 
     # == Ensure sell order was placed
-    strategy.trade.create_order.called_once()
+    strategy.trade.create_order.assert_called_once()
 
     # == Ensure adding to pending txids
     strategy.pending_txids.add.assert_called_once_with("txid2")

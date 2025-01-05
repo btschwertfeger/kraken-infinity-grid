@@ -41,8 +41,7 @@ jobs:
           python-version: 3.11
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Build the package
         run: python -m pip wheel -w dist --no-deps .

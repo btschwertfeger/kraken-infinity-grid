@@ -288,7 +288,7 @@ async def test_on_message_ticker(instance: KrakenInfinityGridBot) -> None:
     instance.om.check_price_range.assert_not_called()
 
     # == Ensure saving the last price time
-    instance.configuration.update.called_once()
+    instance.configuration.update.assert_called_once()
     assert instance.ticker.last == 50000.0
 
     # == Ensure doing nothing if the price did not change

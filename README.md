@@ -14,63 +14,6 @@
 
 </div>
 
-# TODOs:
-
-- [x] Telegram exception is not receiving messages properly
-- [x] Fix the connection aborted error
-- [x] If amount something in balance has changed, cancel all open buy orders
-- [x] Show current wealth in telegram
-- [x] Improve exception handling
-- [x] Add script for calculating max drawdown by given input
-- [x] Rename balances table to configuration
-- [x] Update docstrings in gridbot.py
-- [x] Round amounts to n decimals
-- [ ] Testing
-  - [x] Add unit tests
-  - [x] Add integration tests
-  - [ ] Add performance/load tests
-- [ ] Setup
-  - [x] Use src layout
-  - [ ] Use uv in CI
-  - [ ] Rename the project to infinity-grid-algorithm
-  - [ ] Add codecov to CI and add badge
-  - [ ] Add codeql to CI and add badge
-  - [ ] Add a badges:
-    - [ ] Latest release (PyPI and GitHub)
-    - [ ] Documentation
-    - [ ] License
-    - [ ] Code style
-  - [ ] Upload to PyPI
-  - [ ] Upload to Docker Hub
-- [ ] Add harden runner to CI and add badge
-- [ ] Add Scripts or site-tools for backtesting
-- [ ] Bugs and open questions
-  - [ ] What if execution while bot is initializing?
-  - [ ] Call self.close properly after error
-  - [ ] Resolve FIXMEs and TODOs
-  - [ ] Add timeout for subscribing to ticker and executions to 20 seconds
-  - [ ] Fee percentage should be adjustable or depending on the tier
-  - [ ] Review the full execution flow and think about how to simplify it.
-  - [ ] Extend integration tests
-    - [ ] Test unfilled surplus
-    - [ ] Update balances of mock API and test what happens if balances are not
-          sufficient.
-- [ ] Features
-  - [ ] Implement proper dryrun (make use of validate trades)
-  - [ ] Allow for local sqlite database
-- [ ] Write the documentation covering:
-  - [ ] Strategies (don't do switches)
-  - [ ] Kraken API (use different API keys for different instances)
-  - [ ] Configuration
-  - [ ] Troubleshooting
-  - [ ] Setup
-  - [ ] Logging
-  - [ ] Telegram notifications
-  - [ ] Database configuration
-  - [ ] Choosing the right strategy
-  - [ ] Choosing the right interval and amount per grid
-  - [ ] Backtesting
-
 > ⚠️ **Disclaimer**: This software was initially designed for private use only.
 > Please note that this project is independent and not endorsed by Kraken or
 > Payward Ltd. Users should be aware that they are using third-party software,
