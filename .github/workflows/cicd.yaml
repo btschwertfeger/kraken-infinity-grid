@@ -1,0 +1,61 @@
+# -*- coding: utf-8 -*-
+# Copyright (C) 2023 Benjamin Thomas Schwertfeger
+# GitHub: https://github.com/btschwertfeger
+#
+# Workflow to apply pre-commit, build, test and upload the package
+# to the test index of PyPI.
+
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - "**"
+
+concurrency:
+  group: CICD-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ##    Checks the code logic, style and more
+  ##
+  Pre-Commit:
+    uses: ./.github/workflows/_pre_commit.yaml
+
+  ##    Builds the package on multiple OS for multiple
+  ##    Python versions
+  ##
+  Build:
+    needs: [Pre-Commit]
+    uses: ./.github/workflows/_build.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11"]
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+
+  ##    Build the Docker image
+  ##
+  Build-Docker:
+    if: success() && github.ref != 'refs/heads/master'
+    needs: [Pre-Commit]
+    uses: ./.github/workflows/_build_docker.yaml
+    with:
+      TAG: dev
+
+  ##    Run the unit and acceptance tests
+  ##
+  Test:
+    needs: [Build]
+    uses: ./.github/workflows/_test.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11"]
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}

@@ -1,0 +1,558 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Copyright (C) 2023 Benjamin Thomas Schwertfeger
+# GitHub: https://github.com/btschwertfeger
+#
+
+"""Module that implements the main strategy"""
+
+import asyncio
+import sys
+import traceback
+from datetime import datetime, timedelta
+from decimal import Decimal
+from logging import getLogger
+from time import sleep
+from types import SimpleNamespace
+from typing import Iterable, Optional, Self
+
+from kraken.exceptions import KrakenAuthenticationError
+from kraken.spot import Market, SpotWSClient, Trade, User
+from sqlalchemy.engine.result import MappingResult
+
+from kraken_infinity_grid.database import (
+    Configuration,
+    DBConnect,
+    Orderbook,
+    PendingIXIDs,
+    UnsoldBuyOrderTXIDs,
+)
+from kraken_infinity_grid.order_management import OrderManager
+from kraken_infinity_grid.setup import SetupManager
+from kraken_infinity_grid.telegram import Telegram
+
+LOG = getLogger(__name__)
+
+
+class KrakenInfinityGridBot(SpotWSClient):
+    """
+    The KrakenInfinityGridBot class implements the infinity grid trading bot
+    strategy.
+
+    The bot is designed to trade on the Kraken exchange and uses the Kraken API
+    to place orders and fetch information about the current trading pair.
+
+    All actions are triggered via websocket messages received by the
+    ``on_message`` function, which is a callback function used by the
+    python-kraken-sdk.
+
+    The algorithm manages its orders in an orderbook, configuration, and pending
+    transactions in separate tables in a SQL-based database (PostgreSQL). It
+    uses the passed ``userref`` to distinguish between different instances.
+    E.g.: For one instance of the algorithm one uses the userref 1680953420 for
+    the DOT/USD pair, and 1680953421 for the BTC/USD pair.
+
+    The available strategies are documented in the README.md file of this
+    project.
+
+    Internal
+    ========
+
+    The following steps are a rough description of the internal workflow of the
+    algorithm.
+
+    Initialization:
+
+    - This class is derived from the python-kraken-sdk's websocket client, which
+      allows for subscribing to channels and receiving messages. During the
+      init, the algorithm will establish the connection to the database as well
+      as initializing the user, trade, and market clients.
+    - The after the bot is created, events that came from subscribed websocket
+      feeds will trigger the ``on_message`` function. Subscribed feeds are the
+      ticker (of the asset pair) and execution (for order execution updates).
+    - If both channels are connected, the algorithm does an initial setup:
+        - Check pre-conditions
+        - Validate the configuration
+        - Retrieve information about the trading pair (fee, min order size,
+          etc.)
+        - Check, update, and sync the local orderbook with upstream while
+          recovering orders that might not yet found their way into the
+          orderbook after placing.
+        - If there are executed buy orders during downtime, the corresponding
+          sell orders will be placed (depending on the strategy in use).
+        - If all of these are done, the bot is ready to handle new incoming
+          messages.
+
+    New ticker message:
+
+    - If the init is not done yet, the algorithm ignores the message.
+    - The ticker will be updated.
+    - The missing sell orders will be assigned (if any). This is done at this
+      place in order to have a frequent check for missing sell orders.
+    - The ``check_price_range`` function will be triggered.
+        - This either calls ``assign_all_pending_txids`` to add orders that were
+          placed but are not yet added to the local orderbook.
+        - Or checks the current price range. The price range check is skipped in
+          case of pending transactions to avoid double orders.
+            - Ensure the existence $n$ open buy orders.
+            - Cancel the lowest buy order if more than $n$ buy orders are open.
+            - Shift-up buy orders if price rises to high.
+                - Cancel all open buy orders
+                - Calls ``check_price_range``
+            - If strategy==SWING: Place sell orders if possible
+
+    New execution message - new order:
+
+    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - The algorithm ties to assign the new order to the orderbook. In some cases
+      this fails, as newly placed orders may not be fetchable via REST API for
+      some time. For this reason, there are some retries implemented.
+
+    New execution message - filled order:
+
+    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the filled order was a buy order (depending on the strategy), the
+      algorithm places a sell order and updates the local orderbook.
+    - If the filled order was a sell order (depending on the strategy), the
+      algorithm places a buy order and updates the local orderbook.
+
+    New execution message - cancelled order:
+
+    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - The algorithm removes the order from the local orderbook and ensures that
+      in case of a partly filled order, the remaining volume is saved and placed
+      as sell order somewhen later (if it was a buy order). Sell orders usually
+      don't get cancelled.
+
+    """
+
+    def __init__(
+        self: Self,
+        key: str,
+        secret: str,
+        config: dict,
+        db_config: dict,
+        dry_run: bool = False,
+    ) -> None:
+        super().__init__(key=key, secret=secret)
+        LOG.info("Initiate the Kraken Infinity Grid Algorithm instance...")
+        LOG.info("Config: %s", config)
+        self.init_done: bool = False
+        self.dry_run: bool = dry_run
+
+        # Settings and config collection
+        ##
+        self.strategy: str = config["strategy"]
+        self.userref: int = config["userref"]
+        self.name: str = config["name"]
+
+        # Commonly used config values
+        ##
+        self.interval: float = float(config["interval"])
+        self.amount_per_grid: float = float(config["amount_per_grid"])
+        self.max_investment: float = config["max_investment"]
+        self.n_open_buy_orders: int = config["n_open_buy_orders"]
+        self.max_invest_reached: bool = False
+        self.investment: float = 0
+        self.fee: float | None = None
+        self.base_currency: str = config["base_currency"]
+        self.quote_currency: str = config["quote_currency"]
+
+        self.symbol: str = self.base_currency + "/" + self.quote_currency  # BTC/EUR
+        self.xsymbol: str | None = None  # XXBTZEUR
+        self.altname: str | None = None  # XBTEUR
+        self.zbase_currency: str | None = None  # XXBT
+        self.xquote_currency: str | None = None  # ZEUR
+        self.cost_decimals: int | None = None  # 5 for EUR, i.e., 0.00001 EUR
+
+        # Wait for ticker to be connected before do some action
+        ##
+        self.__ticker_channel_connected: bool = False
+        self.ticker: SimpleNamespace = None
+
+        self.is_ready_to_trade: bool = False
+        self.__execution_channel_connected: bool = False
+
+        # Define some clients
+        ##
+        self.user: User = User(key=key, secret=secret)
+        self.market: Market = Market(key=key, secret=secret)
+        self.trade: Trade = Trade(key=key, secret=secret)
+
+        self.om = OrderManager(strategy=self)
+        self.sm = SetupManager(strategy=self)
+        self.t = Telegram(
+            strategy=self,
+            telegram_token=config["telegram_token"],
+            telegram_chat_id=config["telegram_chat_id"],
+            exception_token=config["exception_token"],
+            exception_chat_id=config["exception_chat_id"],
+        )
+
+        # Database setup
+        ##
+        self.database: DBConnect = DBConnect(**db_config)
+        self.orderbook: Orderbook = Orderbook(userref=self.userref, db=self.database)
+        self.configuration: Configuration = Configuration(
+            userref=self.userref,
+            db=self.database,
+        )
+        self.pending_txids: PendingIXIDs = PendingIXIDs(
+            userref=self.userref,
+            db=self.database,
+        )
+        self.unsold_buy_order_txids: UnsoldBuyOrderTXIDs = UnsoldBuyOrderTXIDs(
+            userref=self.userref,
+            db=self.database,
+        )
+        self.database.init_db()
+
+    async def on_message(  # noqa: C901,PLR0912,PLR0911
+        self: Self,
+        message: dict | list,
+    ) -> None:
+        """
+        This function receives all messages that are sent via the websocket
+        connections. It is the entrypoint of the incoming messages and
+        calls the respective functions to handle the actions.
+        """
+        try:
+            # =====================================================================
+            # Filtering out unwanted messages
+            if not isinstance(message, dict):
+                LOG.warning("Message is not a dict: %s", message)
+                return
+
+            if (channel := message.get("channel")) in {"heartbeat", "pong"}:
+                return
+
+            if channel == "status" or message.get("method"):
+                LOG.debug(message)
+                return
+
+            # =====================================================================
+            # Initial setup
+            # FIXME: Add timeout for being connected in case some failure.
+            if channel == "ticker" and not self.__ticker_channel_connected:
+                self.__ticker_channel_connected = True
+                LOG.info("- Subscribed to ticker channel successfully!")
+
+            # FIXME: Add timeout for being connected in case some failure.
+            elif channel == "executions" and not self.__execution_channel_connected:
+                self.__execution_channel_connected = True
+                LOG.info("- Subscribed to execution channel successfully!")
+
+            if (
+                self.__ticker_channel_connected
+                and self.__execution_channel_connected
+                and not self.is_ready_to_trade
+            ):
+                # Sets self.is_ready_to_trade to True
+                self.sm.prepare_for_trading()
+                return
+
+            if not self.is_ready_to_trade:
+                # Return here, until the algorithm is ready to trade. It is
+                # ready when the init/setup is done and the orderbook is
+                # updated.
+                return
+
+            # =====================================================================
+            # Handle ticker and execution messages
+            if (
+                channel == "ticker"
+                and (data := message.get("data"))
+                and data[0].get("symbol") == self.symbol
+            ):
+                # {'channel': 'ticker', 'type': 'update', 'data': [{'symbol':
+                # 'BTC/USD', 'bid': 104179.9, 'bid_qty': 0.04216615, 'ask':
+                # 104180.0, 'ask_qty': 8.62255136, 'last': 104180.0, 'volume':
+                # 5012.66172606, 'vwap': 106355.8, 'low': 103207.8, 'high':
+                # 108297.6, 'change': -2800.0, 'change_pct': -2.62}]}
+                self.configuration.update({"last_price_time": datetime.now()})
+
+                last_price = self.ticker.last
+                self.ticker = SimpleNamespace(last=float(data[0]["last"]))
+                if last_price == self.ticker.last:
+                    return
+
+                if self.unsold_buy_order_txids.count() != 0:
+                    self.om.add_missed_sell_orders()
+
+                self.om.check_price_range()
+
+            elif channel == "executions" and (data := message.get("data", [])):
+                if message.get("type") == "snapshot":
+                    # Snapshot data is not interesting, as this is handled
+                    # during sync with upstream.
+                    return
+
+                for execution in data:
+                    LOG.debug("Got execution: %s", execution)
+                    match execution["exec_type"]:
+                        # FIXME: Check if order_id is part of this bot here, and
+                        #        not later.
+                        case "new":  # "pending_new"
+                            self.om.assign_order_by_txid(execution["order_id"])
+                        case "filled":
+                            self.om.handle_filled_order_event(execution["order_id"])
+                        case "canceled" | "expired":
+                            self.orderbook.remove(
+                                filters={"txid": execution["order_id"]},
+                            )
+
+        except Exception as exc:  # noqa: BLE001
+            # FIXME: this is not a beauty
+            LOG.error(msg="Exception while processing message.", exc_info=exc)
+            self.save_exit(reason=traceback.format_exc())
+
+    # ==========================================================================
+
+    async def run(self: Self) -> None:
+        """
+        The run function creates the asyncio loop which calls the main function
+        that runs forever.
+        """
+        LOG.info("Starting the Kraken Infinity Grid Algorithm...")
+        # ======================================================================
+        # Try to connect to the Kraken API and validate credentials
+        ##
+        self.__check_kraken_status()
+        self.__check_credentials()
+
+        # ======================================================================
+        # Create the event loop to run the main
+        ##
+        await self.__main()
+
+    async def __main(self: Self) -> None:
+        """
+        Main function that creates the instance of the grid trading bot,
+        creates the subscriptions and runs "for ever".
+        """
+
+        # ======================================================================
+        # Start the websocket connection
+        ##
+        LOG.info("Starting the websocket connection...")
+        await self.start()
+        LOG.info("Websocket connection established!")
+
+        # ======================================================================
+        # Subscribe to the execution and ticker channels
+        ##
+        LOG.info("Subscribing to channels...")
+        await self.subscribe(
+            params={
+                "channel": "ticker",
+                "symbol": [f"{self.base_currency}/{self.quote_currency}"],
+            },
+        )
+        await self.subscribe(
+            {
+                "channel": "executions",
+                # Snapshots are only required to check if the channel is
+                # connected. They are not used for any other purpose.
+                "snap_orders": True,
+                "snap_trades": True,
+            },
+        )
+
+        # Set this initially in case the DB contains a value that is too old.
+        self.configuration.update({"last_price_time": datetime.now()})
+
+        # ======================================================================
+        # Main Loop: Run until any unexpected exception occur
+        ##
+
+        # That is still the way to go, python-kraken-sdk will notify like this
+        # about failing connections.
+        while not self.exception_occur:
+            try:
+                b = self.configuration.get()
+                last_hour = datetime.now() - timedelta(hours=1)
+
+                if self.init_done and (
+                    not b["last_price_time"]
+                    or not b["last_telegram_update"]
+                    or b["last_telegram_update"] < last_hour
+                ):
+                    # Send Update once per hour to Telegram
+                    self.t.send_bot_update()
+
+                if b["last_price_time"] < last_hour:
+                    # Exit if no price update for a long time (6 minutes)
+                    self.save_exit(
+                        reason="No price update for a long time, exit!",
+                    )
+
+            except (
+                Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
+            ) as exc:
+                self.save_exit(
+                    reason=f"Exception in main: {exc} {traceback.format_exc()}",
+                )
+
+            await asyncio.sleep(6)
+
+        self.save_exit(
+            reason="The websocket connection encountered an exception!",
+        )
+
+    def save_exit(self: Self, reason: str = "") -> None:
+        """Save exit triggered, saving data and exit the program."""
+        message: str = str(
+            f"❌ {self.name} ❌"
+            f"\n{self.symbol} Save exit triggered, saving data."
+            f"\nReason: {reason}",
+        )
+
+        try:
+            self.t.send_to_telegram(message=message, exception=True)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("%s", message)
+            LOG.error("FIXME: look at this: %s: %s", exc, traceback.format_exc())
+
+        # FIXME: self.close must be called, but must be async which is not
+        #        possible in this function.
+        sys.exit(1)
+
+    def __check_kraken_status(self: Self, tries: int = 0) -> None:
+        """Checks whether the Kraken API is available."""
+        if tries == 3:
+            LOG.error("- Could not connect to the Kraken Exchange API.")
+            sys.exit(1)
+        try:
+            self.market.get_system_status()
+            LOG.info("- Kraken Exchange API Status: Available")
+        except (
+            Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
+        ) as exc:
+            LOG.debug(
+                "Exception while checking Kraken availability {exc} {traceback}",
+                extra={"exc": exc, "traceback": traceback.format_exc()},
+            )
+            LOG.warning("- Kraken not available. (Try %d/3)", tries + 1)
+            sleep(3)
+            self.__check_kraken_status(tries=tries + 1)
+
+    def __check_credentials(self: Self) -> None:
+        """
+        Checks if the credentials are valid by accessing a private endpoint.
+        """
+        try:
+            self.user.get_account_balance()
+            LOG.info("- Passed API keys are valid.")
+        except KrakenAuthenticationError as exc:
+            LOG.debug(
+                "Exception while checking Kraken availability {exc} {traceback}",
+                extra={"exc": exc, "traceback": traceback.format_exc()},
+            )
+            LOG.error("- Passed API keys are invalid!")
+            sys.exit(1)
+
+    # ======================================================================
+    # Helper Functions
+    ##
+    def get_balances(self: Self) -> dict[str, float]:
+        """
+        Returns the available and overall balances of the quote and base
+        currency.
+        ! Hier aufpassen, denn wenn base_available falsch verwendet wird, werden
+        ! gehaltene Währungen verkauft.
+        """
+        LOG.debug("Retrieving the user's balances...")
+
+        base_balance: Decimal = Decimal(0)
+        base_available: Decimal = Decimal(0)
+        quote_balance: Decimal = Decimal(0)
+        quote_available: Decimal = Decimal(0)
+
+        for symbol, data in self.user.get_balances().items():
+            if symbol == self.zbase_currency:
+                base_balance = Decimal(data["balance"])
+                base_available = base_balance - Decimal(data["hold_trade"])
+            elif symbol == self.xquote_currency:
+                quote_balance = Decimal(data["balance"])
+                quote_available = quote_balance - Decimal(data["hold_trade"])
+
+        balances = {
+            "base_balance": float(base_balance),
+            "quote_balance": float(quote_balance),
+            "base_available": float(base_available),
+            "quote_available": float(quote_available),
+        }
+        LOG.debug("Retrieved balances: %s", balances)
+        return balances
+
+    def get_current_buy_prices(self: Self) -> list[float]:
+        """Returns a list of the prices of open buy orders."""
+        LOG.debug("Getting current buy prices...")
+        return [order["price"] for order in self.get_active_buy_orders()]
+
+    def get_active_buy_orders(self: Self) -> MappingResult:
+        """Returns the list of active buy orders."""
+        LOG.debug("Getting active buy orders...")
+        return self.orderbook.get_orders(filters={"side": "buy"})
+
+    def get_active_sell_orders(self: Self) -> MappingResult:
+        """Returns the list of active sell orders."""
+        LOG.debug("Getting active sell orders...")
+        return self.orderbook.get_orders(filters={"side": "sell"})
+
+    def get_order_price(
+        self: Self,
+        side: str,
+        last_price: float,
+        extra_sell: Optional[bool] = False,
+    ) -> float:
+        """
+        Returns the order price depending on the ``bot_type`` and side. Also
+        assigns a new highest buy price to configuration (if new highest
+        buy...).
+        """
+        LOG.debug("Computing the order price...")
+        order_price: float
+        price_of_highest_buy = float(self.configuration.get()["price_of_highest_buy"])
+        last_price = float(last_price)
+
+        if side == "sell":  # new order is sell
+            if self.strategy == "SWING" and extra_sell:
+                # Extra sell order when SWING
+                # 2x interval above [last close price | price of highest buy]
+                order_price = last_price * (1 + self.interval) * (1 + self.interval)
+                if order_price < price_of_highest_buy:
+                    order_price = (
+                        price_of_highest_buy * (1 + self.interval) * (1 + self.interval)
+                    )
+
+            else:
+                # Regular sell order (even for SWING) (DCA will trigger this
+                # but it will be filtered out by handle_arbitrage)
+                if last_price > price_of_highest_buy:
+                    self.configuration.update(
+                        {"price_of_highest_buy": last_price},
+                    )
+
+                # Sell price 1x interval above buy price
+                order_price = last_price * (1 + self.interval)
+                if self.ticker.last > order_price:
+                    order_price = self.ticker.last * (1 + self.interval)
+            return order_price
+
+        if side == "buy":  # new order is buy
+            order_price = last_price * 100 / (100 + 100 * self.interval)
+            if order_price > self.ticker.last:
+                order_price = self.ticker.last * 100 / (100 + 100 * self.interval)
+            return order_price
+
+        raise ValueError(f"Unknown side: {side}!")
+
+    def get_value_of_orders(self: Self, orders: Iterable) -> float:
+        """Returns the overall invested quote that is invested"""
+        LOG.debug("Getting value of open orders...")
+        investment = 0.0
+        for order in orders:
+            investment += float(order["price"]) * float(order["volume"])
+        LOG.debug("Value of open orders: %d %s", investment, self.quote_currency)
+        return investment
