@@ -30,25 +30,62 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Build the package
-        run: python -m build --outdir .
-
-      - name: Install the package on Linux or MacOS
+      - name: Check git status (not Windows)
         if: runner.os != 'Windows'
-        run: python -m pip install kraken_infinity_grid*.whl
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes found."
+          else
+            echo "Changes detected. Please commit or discard changes before publishing."
+            git status --porcelain
+            exit 1
+          fi
 
-      - name: Install the package on Windows
+      - name: Check git status (Windows)
         if: runner.os == 'Windows'
         run: |
-          try {
-              $WHEEL = Get-ChildItem -Path . -Filter "kraken_infinity_grid*.whl" -ErrorAction Stop
-              python -m pip install $WHEEL
-          } catch {
-              Write-Error "Error: .whl file not found in the current directory."
+          if (-not (git status --porcelain)) {
+              Write-Output "No changes found."
+          } else {
+              Write-Output "Changes detected. Please commit or discard changes before publishing."
+              git status --porcelain
               exit 1
           }
+
+      - name: Build Linux
+        if: runner.os == 'linux'
+        run: |
+          uv build .
+          uv tool install dist/kraken_infinity_grid*.whl
+          uv run kraken-infinity-grid --version
+
+      - name: Build macOS
+        if: runner.os == 'macOS'
+        run: |
+          uv build .
+          uv tool install dist/kraken_infinity_grid*.whl
+          uv run kraken-infinity-grid --version
+
+      - name: Build Windows
+        if: runner.os == 'Windows'
+        run: |
+          uv build .
+          try {
+              $WHEEL = Get-ChildItem -Path ./dist -Filter "kraken_infinity_grid*.whl" -ErrorAction Stop
+              uv tool install $WHEEL#
+              uv run kraken-infinity-grid --version
+          } catch {
+              Write-Error "Error: .whl file not found in .\dist."
+              exit 1
+          }
+
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        # upload artifacts with the oldest supported version
+        if: runner.os == 'linux' && inputs.python-version == '3.11'
+        with:
+          name: python-package-distributions
+          path: dist/
