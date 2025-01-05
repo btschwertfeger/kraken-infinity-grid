@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@cbb722410c2e876e24abbe8de2cc27693e501dcb # v4.2.2
 
       - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        uses: actions/setup-python@3fddbee7870211eda9047db10474808be43c71ec # v5.3.0
         with:
           python-version: ${{ inputs.python-version }}
 
