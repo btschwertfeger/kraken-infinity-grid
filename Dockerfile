@@ -37,8 +37,7 @@ RUN --mount=type=bind,target=/context,from=builder,source=/apps \
         git \
     && locale-gen en_US.UTF.8 \
     && rm -rf /var/lib/apt/lists/* \
-    && python -m pip install --compile --no-cache-dir /context/dist/*.whl \
-       git+https://github.com/btschwertfeger/python-kraken-sdk.git/@create-new-session-after-some-time
+    && python -m pip install --compile --no-cache-dir /context/dist/*.whl
 
 ENTRYPOINT ["kraken-infinity-grid", "run"]
 

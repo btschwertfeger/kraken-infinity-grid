@@ -16,7 +16,7 @@ help:
 	@grep "^##" Makefile | sed -e "s/##//"
 
 ## ======= B U I L D I N G =======
-## build		Builds the python-kraken-sdk
+## build		Builds the package
 ##
 .PHONY: build
 build: check-uv
@@ -82,46 +82,20 @@ doctest:
 pre-commit:
 	@pre-commit run -a
 
-## ruff 	Run ruff without fix
-.PHONY: ruff
-ruff:
-	$(UVX) ruff check --preview .
-
-## ruff-fix 	Run ruff with fix
-##
-.PHONY: ruff-fix
-ruff-fix:
-	$(UVX) ruff check --fix --preview .
-
-## changelog	Generate the changelog
-##
-.PHONY: changelog
-changelog:
-	docker run -it --rm \
-		-v $(PWD):/usr/local/src/your-app \
-		githubchangeloggenerator/github-changelog-generator \
-		--user btschwertfeger \
-		--project kraken_infinity_grid \
-		--token $(GHTOKEN)  \
-		--breaking-labels Breaking \
-		--no-issues \
-		--no-issues-wo-labels \
-		--enhancement-labels Feature,enhancement \
-		--release-branch master \
-		--pr-label "Uncategorized merged pull requests:"
-
 ## clean		Clean the workspace
 ##
 .PHONY: clean
 clean:
-	rm -rf .cache \
+	rm -rf \
+		.cache \
 		.vscode \
 		dist/ \
 		doc/_build \
 		kraken_infinity_grid.egg-info \
 	    build/
 
-	rm -f .coverage \
+	rm -f \
+		.coverage \
 		*.csv \
 		*.log \
 		*.zip \
@@ -130,7 +104,7 @@ clean:
 		mypy.xml \
 		pytest.xml \
 		kraken_infinity_grid-*.whl \
-		tests/*.zip
+		uv.lock
 
 	find src/kraken_infinity_grid -name "__pycache__" | xargs rm -rf
 	find tests -name "__pycache__" | xargs rm -rf
