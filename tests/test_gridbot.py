@@ -55,7 +55,10 @@ def db_config() -> dict:
 
 
 @pytest_asyncio.fixture
-async def instance(config: dict, db_config: dict) -> KrakenInfinityGridBot:  # noqa: RUF029
+async def instance(  # noqa: RUF029
+    config: dict,
+    db_config: dict,
+) -> KrakenInfinityGridBot:
     """Fixture to create a KrakenInfinityGridBot instance for testing."""
     instance = KrakenInfinityGridBot(
         key="key",

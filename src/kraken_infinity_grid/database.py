@@ -230,7 +230,12 @@ class Configuration:
             self.__db.metadata,
             Column("id", Integer, primary_key=True),
             Column("userref", Integer, nullable=False),
-            Column("version", String, nullable=False, default=version("kraken-infinity-grid")),
+            Column(
+                "version",
+                String,
+                nullable=False,
+                default=version("kraken-infinity-grid"),
+            ),
             Column("vol_of_unfilled_remaining", Float, nullable=False, default=0),
             Column(
                 "vol_of_unfilled_remaining_max_price",
