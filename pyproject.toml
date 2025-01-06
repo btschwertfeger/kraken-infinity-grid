@@ -13,8 +13,9 @@ dynamic = ["version"]
 authors = [
   { name = "Benjamin Thomas Schwertfeger", email = "contact@b-schwertfeger.de" },
 ]
-description = "Infinity grid trading bot for the Kraken cryptocurrency exchange."
+description = "Infinity grid trading algorithm for the Kraken cryptocurrency exchange."
 readme = "README.md"
+license = { file = "LICENSE" }
 
 requires-python = ">=3.11"
 dependencies = [
