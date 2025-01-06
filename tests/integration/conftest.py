@@ -25,7 +25,6 @@ def db_config() -> dict:
         "db_host": "",
         "db_port": "",
         "db_name": "kraken_infinity_grid",
-        "db_backend": "sqlite",
         "in_memory": True,
     }
 
