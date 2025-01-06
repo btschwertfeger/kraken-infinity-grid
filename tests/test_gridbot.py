@@ -206,7 +206,7 @@ async def test_on_message(
     await instance.on_message({"channel": "heartbeat"})
     await instance.on_message({"channel": "pong"})
     await instance.on_message({"channel": "status"})
-    await instance.on_message({"method": "subscribe"})
+    await instance.on_message({"method": "subscribe", "success": True})
 
     # Test ticker channel
     assert not instance._KrakenInfinityGridBot__ticker_channel_connected
@@ -240,6 +240,15 @@ async def test_on_message(
 
     # Ensure that the algorithm initiated preparation for trading
     instance.sm.prepare_for_trading.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_on_message_failing_subscribe(
+    instance: KrakenInfinityGridBot,
+) -> None:
+    """Test the on_message method failing in case subscribing fails."""
+    with pytest.raises(SystemExit):
+        await instance.on_message({"method": "subscribe", "success": False})
 
 
 @pytest.mark.asyncio
