@@ -9,7 +9,8 @@ from logging import DEBUG, INFO, WARNING, basicConfig, getLogger
 from typing import Any
 
 from click import BOOL, FLOAT, INT, STRING, Context, echo, pass_context
-from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option
+from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option, option_group
+from cloup.constraints import If, accept_none, require_all
 
 
 def print_version(ctx: Context, param: Any, value: Any) -> None:  # noqa: ANN401, ARG001
@@ -126,6 +127,12 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     ),
 )
 @option(
+    "--strategy",
+    type=Choice(choices=("DCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
+    help="The strategy to run.",
+    required=True,
+)
+@option(
     "--name",
     required=True,
     type=STRING,
@@ -213,43 +220,43 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     help="A reference number to identify the bots orders with.",
 )
 @option(
-    "--db-user",
+    "--sqlite-file",
     type=STRING,
-    help="PostgreSQL DB user",
-    required=True,
-)
-@option(
-    "--db-password",
-    type=STRING,
-    help="PostgreSQL DB password",
-    required=True,
+    help="SQLite file to use as database.",
 )
 @option(
     "--db-name",
     type=STRING,
     default="kraken_infinity_grid",
-    help="PostgreSQL DB name",
-    required=True,
+    help="The database name.",
 )
-@option(
-    "--db-host",
-    type=STRING,
-    default="postgresql",
-    help="PostgreSQL DB host",
-    required=True,
-)
-@option(
-    "--db-port",
-    type=STRING,
-    default="5432",
-    help="PostgreSQL DB port",
-    required=True,
-)
-@option(
-    "--strategy",
-    type=Choice(choices=("DCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
-    help="The strategy to run.",
-    required=True,
+@option_group(
+    "PostgreSQL Database Options",
+    option(
+        "--db-user",
+        type=STRING,
+        help="PostgreSQL DB user",
+    ),
+    option(
+        "--db-password",
+        type=STRING,
+        help="PostgreSQL DB password",
+    ),
+    option(
+        "--db-host",
+        type=STRING,
+        help="PostgreSQL DB host",
+    ),
+    option(
+        "--db-port",
+        type=STRING,
+        help="PostgreSQL DB port",
+    ),
+    constraint=If(
+        "sqlite_file",
+        then=accept_none,
+        else_=require_all,
+    ),
 )
 @pass_context
 def run(ctx: Context, **kwargs: dict) -> None:
@@ -261,10 +268,18 @@ def run(ctx: Context, **kwargs: dict) -> None:
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot  # noqa: PLC0415
 
     ctx.obj |= kwargs
-    db_config = {key: value for key, value in kwargs.items() if key.startswith("db_")}
 
-    for key in db_config:
-        del kwargs[key]
+    if ctx.obj["sqlite_file"]:
+        # FIXME: Maybe use in_memory for dry-run?
+        db_config = {"sqlite_file": ctx.obj["sqlite_file"]}
+    else:
+        db_config = {
+            "db_user": ctx.obj["db_user"],
+            "db_password": ctx.obj["db_password"],
+            "db_host": ctx.obj["db_host"],
+            "db_port": ctx.obj["db_port"],
+            "db_name": ctx.obj["db_name"],
+        }
 
     async def main() -> None:
         # Instantiate the trading algorithm
