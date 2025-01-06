@@ -327,7 +327,12 @@ class KrakenInfinityGridBot(SpotWSClient):
         # ======================================================================
         # Create the event loop to run the main
         ##
-        await self.__main()
+        try:
+            await self.__main()
+        except asyncio.CancelledError:
+            await self.stop()  # Stops the websocket connections
+            await self.async_close()  # Stops the aiohttp session
+            self.save_exit("The algorithm was interrupted!")
 
     async def __main(self: Self) -> None:
         """
@@ -368,46 +373,40 @@ class KrakenInfinityGridBot(SpotWSClient):
         # ======================================================================
         # Main Loop: Run until interruption
         ##
-        try:
-            # 'self.exception_occur' is how the python-kraken-sdk notifies about
-            # exceptions in the websocket connection.
-            while not self.exception_occur:
-                try:
-                    conf = self.configuration.get()
-                    now = datetime.now()
-                    last_hour = now - timedelta(hours=1)
+        # 'self.exception_occur' is how the python-kraken-sdk notifies about
+        # exceptions in the websocket connection.
+        while not self.exception_occur:
+            try:
+                conf = self.configuration.get()
+                now = datetime.now()
+                last_hour = now - timedelta(hours=1)
 
-                    if self.init_done and (
-                        not conf["last_price_time"]
-                        or not conf["last_telegram_update"]
-                        or conf["last_telegram_update"] < last_hour
-                    ):
-                        # Send update once per hour to Telegram
-                        self.t.send_bot_update()
+                if self.init_done and (
+                    not conf["last_price_time"]
+                    or not conf["last_telegram_update"]
+                    or conf["last_telegram_update"] < last_hour
+                ):
+                    # Send update once per hour to Telegram
+                    self.t.send_bot_update()
 
-                    if conf["last_price_time"] + timedelta(seconds=600) < now:
-                        # Exit if no price update for a long time (10 minutes).
-                        self.save_exit(
-                            reason="No price update for a long time, exit!",
-                        )
-
-                except (
-                    Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
-                ) as exc:
+                if conf["last_price_time"] + timedelta(seconds=600) < now:
+                    # Exit if no price update for a long time (10 minutes).
                     self.save_exit(
-                        reason=f"Exception in main: {exc} {traceback.format_exc()}",
+                        reason="No price update for a long time, exit!",
                     )
 
-                await asyncio.sleep(6)
+            except (
+                Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
+            ) as exc:
+                self.save_exit(
+                    reason=f"Exception in main: {exc} {traceback.format_exc()}",
+                )
 
-        except asyncio.CancelledError:
-            await self.stop()  # Stops the websocket connections
-            await self.async_close()  # Stops the aiohttp session
-            self.save_exit("The algorithm was interrupted!")
-        else:
-            self.save_exit(
-                reason="The websocket connection encountered an exception!",
-            )
+            await asyncio.sleep(6)
+
+        self.save_exit(
+            reason="The websocket connection encountered an exception!",
+        )
 
     def save_exit(self: Self, reason: str = "") -> None:
         """Save exit triggered, saving data and exit the program."""
