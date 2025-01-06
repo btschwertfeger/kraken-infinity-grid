@@ -59,4 +59,5 @@ async def instance(config: dict, db_config: dict) -> KrakenInfinityGridBot:
         },
     }
     yield instance
+    await instance.stop()
     await instance.async_close()

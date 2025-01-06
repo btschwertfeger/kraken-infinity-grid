@@ -41,7 +41,7 @@ def config() -> dict:
 
 
 @pytest_asyncio.fixture
-async def instance(  # noqa: RUF029
+async def instance(
     config: dict,
     db_config: dict,
 ) -> KrakenInfinityGridBot:
@@ -62,7 +62,9 @@ async def instance(  # noqa: RUF029
     instance.sm = mock.MagicMock(spec=SetupManager)
     instance.om = mock.MagicMock(spec=OrderManager)
     instance.unsold_buy_order_txids = mock.Mock(spec=UnsoldBuyOrderTXIDs)
-    return instance
+    yield instance
+    await instance.async_close()
+    await instance.stop()
 
 
 # ==============================================================================
