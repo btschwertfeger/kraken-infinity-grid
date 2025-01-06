@@ -173,12 +173,14 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.is_ready_to_trade: bool = False
         self.__execution_channel_connected: bool = False
 
-        # Define some clients
+        # Define the Kraken clients
         ##
         self.user: User = User(key=key, secret=secret)
         self.market: Market = Market(key=key, secret=secret)
         self.trade: Trade = Trade(key=key, secret=secret)
 
+        # Instantiate the algorithm's components
+        ##
         self.om = OrderManager(strategy=self)
         self.sm = SetupManager(strategy=self)
         self.t = Telegram(
@@ -223,21 +225,23 @@ class KrakenInfinityGridBot(SpotWSClient):
                 LOG.warning("Message is not a dict: %s", message)
                 return
 
-            if (channel := message.get("channel")) in {"heartbeat", "pong"}:
+            if (channel := message.get("channel")) == {"status", "heartbeat"}:
                 return
 
-            if channel == "status" or message.get("method"):
-                LOG.debug(message)
+            if message.get("method"):
+                if message["method"] == "subscribe" and not message["success"]:
+                    self.save_exit(
+                        "The algorithm was not able to subscribe to selected"
+                        " channels. Please check the logs.",
+                    )
                 return
 
             # =====================================================================
             # Initial setup
-            # FIXME: Add timeout for being connected in case some failure.
             if channel == "ticker" and not self.__ticker_channel_connected:
                 self.__ticker_channel_connected = True
                 LOG.info("- Subscribed to ticker channel successfully!")
 
-            # FIXME: Add timeout for being connected in case some failure.
             elif channel == "executions" and not self.__execution_channel_connected:
                 self.__execution_channel_connected = True
                 LOG.info("- Subscribed to execution channel successfully!")
@@ -369,18 +373,18 @@ class KrakenInfinityGridBot(SpotWSClient):
         # about failing connections.
         while not self.exception_occur:
             try:
-                b = self.configuration.get()
+                conf = self.configuration.get()
                 last_hour = datetime.now() - timedelta(hours=1)
 
                 if self.init_done and (
-                    not b["last_price_time"]
-                    or not b["last_telegram_update"]
-                    or b["last_telegram_update"] < last_hour
+                    not conf["last_price_time"]
+                    or not conf["last_telegram_update"]
+                    or conf["last_telegram_update"] < last_hour
                 ):
                     # Send Update once per hour to Telegram
                     self.t.send_bot_update()
 
-                if b["last_price_time"] < last_hour:
+                if conf["last_price_time"] < last_hour:
                     # Exit if no price update for a long time (6 minutes)
                     self.save_exit(
                         reason="No price update for a long time, exit!",
