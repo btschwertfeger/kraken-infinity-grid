@@ -40,20 +40,6 @@ def config() -> dict:
     }
 
 
-@pytest.fixture
-def db_config() -> dict:
-    """Fixture to create a mock database configuration."""
-    return {
-        "db_user": "",
-        "db_password": "",
-        "db_host": "",
-        "db_port": "",
-        "db_name": "KrakenInfinityGridBot",
-        "db_backend": "sqlite",
-        "in_memory": True,
-    }
-
-
 @pytest_asyncio.fixture
 async def instance(  # noqa: RUF029
     config: dict,

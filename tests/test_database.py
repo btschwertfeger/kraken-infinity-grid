@@ -7,6 +7,8 @@
 """Unit tests for the database module."""
 
 
+from pathlib import Path
+
 import pytest
 
 from kraken_infinity_grid.database import (
@@ -19,11 +21,11 @@ from kraken_infinity_grid.database import (
 
 
 @pytest.fixture
-def db_connect() -> DBConnect:
+def db_connect(sqlite_file: Path) -> DBConnect:
     """
     Fixture to create a DBConnect instance with an in-memory SQLite database.
     """
-    return DBConnect(in_memory=True)
+    return DBConnect(sqlite_file=sqlite_file)
 
 
 @pytest.fixture

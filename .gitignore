@@ -49,3 +49,7 @@ docs/_build/
 
 # CSV and pickle files
 *.csv
+
+# Other artifacts
+*.sqlite
+*.sqlite-journal

@@ -34,6 +34,7 @@ def config() -> dict:
     }
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)

@@ -33,30 +33,31 @@ LOG = getLogger(__name__)
 
 
 class DBConnect:
-    """Class handling the connection to the PostgreSQL database."""
+    """Class handling the connection to the PostgreSQL or sqlite database."""
 
     def __init__(  # pylint: disable=too-many-positional-arguments
         self: Self,
-        db_user: str = "",
-        db_password: str = "",
-        db_host: str = "",
-        db_port: str = "5432",
+        db_user: str | None = None,
+        db_password: str | None = None,
+        db_host: str | None = None,
+        db_port: str | int | None = None,
         db_name: str = "kraken_infinity_grid",
-        db_backend: str = "postgresql",
-        in_memory: bool = False,  # FIXME: Only used for testing
+        in_memory: bool = False,
+        sqlite_file: str | None = None,
     ) -> None:
         LOG.info("Connecting to the database...")
         if in_memory:
             engine = "sqlite:///:memory:"
-        # if sqlite_file: # FIXME: implement this
-        #     engine = f"sqlite:///{sqlite_file}"
+        elif sqlite_file:
+            engine = f"sqlite:///{sqlite_file}"
         else:
-            engine = f"{db_backend}://"
+            engine = "postgresql://"
             if db_user and db_password:
                 engine += f"{db_user}:{db_password}@"
             if db_host and db_port:
                 engine += f"{db_host}:{db_port}"
             engine += f"/{db_name}"
+
         self.engine = create_engine(engine)
         self.session = sessionmaker(bind=self.engine)()
         self.metadata = MetaData()

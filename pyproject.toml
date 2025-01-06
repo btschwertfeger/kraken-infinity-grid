@@ -70,7 +70,11 @@ testpaths = ["tests"]
 
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"
-markers = ["wip: used for wip tests.", "asyncio: used for async tests."]
+markers = [
+  "asyncio: used for async tests.",
+  "integration: used for integration tests.",
+  "wip: used for wip tests.",
+]
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
