@@ -327,7 +327,12 @@ class KrakenInfinityGridBot(SpotWSClient):
         # ======================================================================
         # Create the event loop to run the main
         ##
-        await self.__main()
+        try:
+            await self.__main()
+        except asyncio.CancelledError:
+            await self.stop()  # Stops the websocket connections
+            await self.async_close()  # Stops the aiohttp session
+            self.save_exit("The algorithm was interrupted!")
 
     async def __main(self: Self) -> None:
         """
@@ -366,26 +371,26 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.configuration.update({"last_price_time": datetime.now()})
 
         # ======================================================================
-        # Main Loop: Run until any unexpected exception occur
+        # Main Loop: Run until interruption
         ##
-
-        # That is still the way to go, python-kraken-sdk will notify like this
-        # about failing connections.
+        # 'self.exception_occur' is how the python-kraken-sdk notifies about
+        # exceptions in the websocket connection.
         while not self.exception_occur:
             try:
                 conf = self.configuration.get()
-                last_hour = datetime.now() - timedelta(hours=1)
+                now = datetime.now()
+                last_hour = now - timedelta(hours=1)
 
                 if self.init_done and (
                     not conf["last_price_time"]
                     or not conf["last_telegram_update"]
                     or conf["last_telegram_update"] < last_hour
                 ):
-                    # Send Update once per hour to Telegram
+                    # Send update once per hour to Telegram
                     self.t.send_bot_update()
 
-                if conf["last_price_time"] < last_hour:
-                    # Exit if no price update for a long time (6 minutes)
+                if conf["last_price_time"] + timedelta(seconds=600) < now:
+                    # Exit if no price update for a long time (10 minutes).
                     self.save_exit(
                         reason="No price update for a long time, exit!",
                     )
@@ -417,8 +422,6 @@ class KrakenInfinityGridBot(SpotWSClient):
             LOG.warning("%s", message)
             LOG.error("FIXME: look at this: %s: %s", exc, traceback.format_exc())
 
-        # FIXME: self.close must be called, but must be async which is not
-        #        possible in this function.
         sys.exit(1)
 
     def __check_kraken_status(self: Self, tries: int = 0) -> None:
