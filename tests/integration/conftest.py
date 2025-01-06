@@ -7,26 +7,12 @@
 import logging
 from unittest import mock
 
-import pytest
 import pytest_asyncio
 from kraken.spot import Market
 
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 
 from .helper import KrakenAPI
-
-
-@pytest.fixture
-def db_config() -> dict:
-    """Fixture to create a mock database configuration."""
-    return {
-        "db_user": "",
-        "db_password": "",
-        "db_host": "",
-        "db_port": "",
-        "db_name": "kraken_infinity_grid",
-        "in_memory": True,
-    }
 
 
 @pytest_asyncio.fixture

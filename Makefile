@@ -91,7 +91,7 @@ clean:
 		.vscode \
 		dist/ \
 		doc/_build \
-		kraken_infinity_grid.egg-info \
+		src/kraken_infinity_grid.egg-info \
 	    build/
 
 	rm -f \

@@ -37,18 +37,18 @@ class DBConnect:
 
     def __init__(  # pylint: disable=too-many-positional-arguments
         self: Self,
-        db_user: str = "",
-        db_password: str = "",
-        db_host: str = "",
-        db_port: str = "5432",
+        db_user: str | None = None,
+        db_password: str | None = None,
+        db_host: str | None = None,
+        db_port: str | int | None = None,
         db_name: str = "kraken_infinity_grid",
-        in_memory: bool = False,  # FIXME: Only used for testing
+        in_memory: bool = False,
         sqlite_file: str | None = None,
     ) -> None:
         LOG.info("Connecting to the database...")
         if in_memory:
             engine = "sqlite:///:memory:"
-        if sqlite_file:
+        elif sqlite_file:
             engine = f"sqlite:///{sqlite_file}"
         else:
             engine = "postgresql://"
