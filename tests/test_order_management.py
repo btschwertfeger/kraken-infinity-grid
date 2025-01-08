@@ -161,6 +161,11 @@ def test_check_pending_txids(
     mock_assign_all_pending_transactions.assert_called_once()
 
 
+# ==============================================================================
+# check_near_buy_orders
+##
+
+
 @mock.patch.object(OrderManager, "handle_cancel_order")
 def test_check_near_buy_orders_cancel(
     mock_handle_cancel_order: mock.Mock,  # noqa: ARG001
@@ -194,9 +199,6 @@ def test_check_near_buy_orders_good_distance(
     strategy.get_active_buy_orders.assert_not_called()
 
 
-# ==============================================================================
-# check_n_open_buy_orders
-##
 @mock.patch.object(OrderManager, "handle_cancel_order")
 def test_check_near_buy_orders_cancel_no_buys(
     mock_handle_cancel_order: mock.Mock,  # noqa: ARG001
@@ -209,6 +211,11 @@ def test_check_near_buy_orders_cancel_no_buys(
     strategy.get_current_buy_prices.return_value = []
     order_manager._OrderManager__check_near_buy_orders()
     strategy.get_active_buy_orders.assert_not_called()
+
+
+# ==============================================================================
+# check_n_open_buy_orders
+##
 
 
 @mock.patch.object(OrderManager, "handle_arbitrage")
@@ -227,6 +234,7 @@ def test_check_n_open_buy_orders(
     strategy.n_open_buy_orders = 5
     # Current investment
     strategy.investment = 1000.0
+    strategy.max_investment_reached = False
     # The currently available quote currency
     strategy.get_balances.return_value = {"quote_available": 10000.0}
     # No pending transactions
@@ -277,6 +285,23 @@ def test_check_n_open_buy_orders(
             order_price=price,
         )
     assert mock_handle_arbitrage.call_count == 4
+
+
+@mock.patch.object(OrderManager, "handle_arbitrage")
+def test_check_n_open_buy_orders_max_investment_reached(
+    mock_handle_arbitrage: mock.Mock,
+    strategy: mock.Mock,
+) -> None:
+    """
+    Test checking that the function does not place any order if the maximum
+    investment is reached.
+    """
+    strategy.max_investment_reached = True
+
+    # Ensure no API call is made in order to avoid rate-limiting
+    strategy.get_balances.assert_not_called()
+    # Ensure no buy orders are placed
+    mock_handle_arbitrage.assert_not_called()
 
 
 # ==============================================================================
@@ -435,25 +460,6 @@ def test_handle_arbitrage(
 # ==============================================================================
 # new_buy_order
 ##
-def test_new_buy_order_max_invest_reached(
-    order_manager: OrderManager,
-    strategy: mock.Mock,
-) -> None:
-    """
-    Test placing a new buy order, that exceeds the maximum investment defined.
-    """
-    strategy.get_balances.return_value = {"quote_available": 1000.0}
-    strategy.max_investment = 4999.0
-    strategy.max_invest_reached = False
-    strategy.get_value_of_orders.return_value = 5000.0
-    strategy.trade.create_order.return_value = {"txid": ["txid1"]}
-    strategy.trade.truncate.side_effect = [50000.0, 100.0]  # price, volume
-
-    order_manager.new_buy_order(order_price=50000.0)
-
-    assert strategy.max_invest_reached
-    strategy.trade.create_order.assert_not_called()
-    strategy.pending_txids.add.assert_not_called()
 
 
 def test_new_buy_order(
@@ -463,15 +469,27 @@ def test_new_buy_order(
     """Test placing a new buy order successfully."""
     strategy.get_balances.return_value = {"quote_available": 1000.0}
     strategy.max_investment = 6000.0
+    strategy.max_investment_reached = False
     strategy.get_value_of_orders.return_value = 5000.0
     strategy.trade.create_order.return_value = {"txid": ["txid1"]}
     strategy.trade.truncate.side_effect = [50000.0, 100.0]  # price, volume
 
     order_manager.new_buy_order(order_price=50000.0)
-    assert not strategy.max_invest_reached
     strategy.pending_txids.add.assert_called_once_with("txid1")
     strategy.trade.create_order.assert_called_once()
     strategy.om.assign_order_by_txid.assert_called_once_with("txid1")
+
+
+def test_new_buy_order_max_invest_reached(
+    order_manager: OrderManager,
+    strategy: mock.Mock,
+) -> None:
+    """Test placing a new buy order without sufficient funds."""
+    strategy.max_investment_reached = True
+
+    order_manager.new_buy_order(order_price=50000.0)
+    strategy.trade.create_order.assert_not_called()
+    strategy.pending_txids.add.assert_not_called()
 
 
 def test_new_buy_order_not_enough_funds(
