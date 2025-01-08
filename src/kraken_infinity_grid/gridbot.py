@@ -565,8 +565,8 @@ class KrakenInfinityGridBot(SpotWSClient):
     @property
     def investment(self: Self) -> float:
         """Returns the current investment based on open orders."""
-        return self.__s.get_value_of_orders(  # type: ignore[no-any-return]
-            orders=self.__s.orderbook.get_orders(),
+        return self.get_value_of_orders(
+            orders=self.orderbook.get_orders(),
         )
 
     @property
