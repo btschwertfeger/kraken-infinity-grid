@@ -190,6 +190,39 @@ def test_get_value_of_orders(instance: KrakenInfinityGridBot) -> None:
     assert value == 0
 
 
+def test_investment(instance: KrakenInfinityGridBot) -> None:
+    """Test the investment property."""
+    instance.orderbook.get_orders.return_value = [
+        {"price": 50000.0, "volume": 0.1},
+        {"price": 49000.0, "volume": 0.2},
+    ]
+    assert instance.investment == 14800.0
+
+    instance.orderbook.get_orders.return_value = []
+    assert instance.investment == 0.0
+
+
+def test_max_investment_reached(instance: KrakenInfinityGridBot) -> None:
+    """Test the max_investment_reached property."""
+    instance.amount_per_grid = 1000.0
+    instance.fee = 0.01
+    instance.max_investment = 20000.0
+
+    # Case where max investment is not reached
+    instance.orderbook.get_orders.return_value = [
+        {"price": 50000.0, "volume": 0.1},
+        {"price": 49000.0, "volume": 0.2},
+    ]
+    assert not instance.max_investment_reached
+
+    # Case where max investment is reached
+    instance.orderbook.get_orders.return_value = [
+        {"price": 50000.0, "volume": 0.3},
+        {"price": 49000.0, "volume": 0.2},
+    ]
+    assert instance.max_investment_reached
+
+
 # ==============================================================================
 # on_message
 ##
