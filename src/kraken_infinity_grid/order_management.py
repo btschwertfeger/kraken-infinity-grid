@@ -156,7 +156,7 @@ class OrderManager:
             len(active_buy_orders) < self.__s.n_open_buy_orders
             and can_place_buy_order
             and self.__s.pending_txids.count() == 0
-            and not self.__s.max_invest_reached
+            and not self.__s.max_investment_reached
         ):
 
             fetched_balances: dict[str, float] = self.__s.get_balances()
@@ -344,7 +344,7 @@ class OrderManager:
             self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
         # Check if algorithm reached the max_investment value
-        if self.__s.max_invest_reached:
+        if self.__s.max_investment_reached:
             return
 
         current_balances = self.__s.get_balances()
