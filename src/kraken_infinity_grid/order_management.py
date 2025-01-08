@@ -389,7 +389,8 @@ class OrderManager:
                     message = str(
                         "Bot reached maximum value, not buying. (max value:"
                         f" {self.__s.max_investment} {self.__s.quote_currency},"
-                        f" current invested value: {value_of_open_orders}"
+                        " current invested value:"
+                        f"{round(value_of_open_orders, self.__s.cost_decimals)}"
                         f" {self.__s.quote_currency})",
                     )
                     self.__s.t.send_to_telegram(message=message)
