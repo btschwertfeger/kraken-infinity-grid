@@ -573,9 +573,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     def max_investment_reached(self: Self) -> bool:
         """Returns True if the maximum investment is reached."""
         # TODO: put this as class variable
-        new_position_value = (
-            self.__s.amount_per_grid + self.__s.amount_per_grid * self.__s.fee
-        )
+        new_position_value = self.amount_per_grid + self.amount_per_grid * self.fee
 
         return (self.max_investment <= self.investment + new_position_value) or (
             self.max_investment <= self.investment
