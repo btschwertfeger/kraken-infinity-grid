@@ -152,8 +152,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.amount_per_grid: float = float(config["amount_per_grid"])
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
-        self.max_invest_reached: bool = False
-        self.investment: float = 0
         self.fee: float | None = None
         self.base_currency: str = config["base_currency"]
         self.quote_currency: str = config["quote_currency"]
@@ -558,8 +556,27 @@ class KrakenInfinityGridBot(SpotWSClient):
     def get_value_of_orders(self: Self, orders: Iterable) -> float:
         """Returns the overall invested quote that is invested"""
         LOG.debug("Getting value of open orders...")
-        investment = 0.0
-        for order in orders:
-            investment += float(order["price"]) * float(order["volume"])
+        investment = sum(
+            float(order["price"]) * float(order["volume"]) for order in orders
+        )
         LOG.debug("Value of open orders: %d %s", investment, self.quote_currency)
         return investment
+
+    @property
+    def investment(self: Self) -> float:
+        """Returns the current investment based on open orders."""
+        return self.__s.get_value_of_orders(  # type: ignore[no-any-return]
+            orders=self.__s.orderbook.get_orders(),
+        )
+
+    @property
+    def max_investment_reached(self: Self) -> bool:
+        """Returns True if the maximum investment is reached."""
+        # TODO: put this as class variable
+        new_position_value = (
+            self.__s.amount_per_grid + self.__s.amount_per_grid * self.__s.fee
+        )
+
+        return (self.max_investment <= self.investment + new_position_value) or (
+            self.max_investment <= self.investment
+        )

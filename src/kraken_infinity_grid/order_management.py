@@ -76,9 +76,6 @@ class OrderManager:
                 self.__s.orderbook.update(order_to_assign, filters={"txid": txid})
                 LOG.info("%s: Updated order in orderbook.", txid)
 
-            self.__s.investment = self.__s.get_value_of_orders(
-                orders=self.__s.orderbook.get_orders().all(),  # type: ignore[no-untyped-call]
-            )
             LOG.info(
                 "Current invested value: %f / %d %s",
                 self.__s.investment,
@@ -159,7 +156,6 @@ class OrderManager:
             len(active_buy_orders) < self.__s.n_open_buy_orders
             and can_place_buy_order
             and self.__s.pending_txids.count() == 0
-            and self.__s.max_investment > self.__s.investment
             and not self.__s.max_invest_reached
         ):
 
@@ -344,6 +340,13 @@ class OrderManager:
             # FIXME: do proper dryrun
             return
 
+        if txid_to_delete is not None:
+            self.__s.orderbook.remove(filters={"txid": txid_to_delete})
+
+        # Check if algorithm reached the max_investment value
+        if self.__s.max_invest_reached:
+            return
+
         current_balances = self.__s.get_balances()
 
         # Compute the target price for the upcoming buy order.
@@ -369,76 +372,44 @@ class OrderManager:
             self.__s.amount_per_grid + self.__s.amount_per_grid * self.__s.fee
         )
 
-        # Compute the value of all open orders.
-        value_of_open_orders = self.__s.get_value_of_orders(
-            orders=self.__s.orderbook.get_orders(exclude={"txid": txid_to_delete}),
-        )
-
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
         if current_balances["quote_available"] > new_position_value:
-            # Check if algorithm reached the max_investment value
-            if self.__s.max_investment <= value_of_open_orders + new_position_value:
-                if not self.__s.max_invest_reached:
-                    # Ensuring the message below is only sent once
-                    self.__s.max_invest_reached = True
+            LOG.info(
+                "Placing order to buy %s %s @ %s %s.",
+                volume,
+                self.__s.base_currency,
+                order_price,
+                self.__s.quote_currency,
+            )
 
-                    if txid_to_delete is not None:
-                        self.__s.orderbook.remove(filters={"txid": txid_to_delete})
+            # Place a new buy order, append txid to pending list and delete
+            # corresponding sell order from local orderbook.
+            placed_order = self.__s.trade.create_order(
+                ordertype="limit",
+                side="buy",
+                volume=volume,
+                pair=self.__s.symbol,
+                price=order_price,
+                userref=self.__s.userref,
+                validate=self.__s.dry_run,
+            )
 
-                    message = str(
-                        "Bot reached maximum value, not buying. (max value:"
-                        f" {self.__s.max_investment} {self.__s.quote_currency},"
-                        " current invested value:"
-                        f"{round(value_of_open_orders, self.__s.cost_decimals)}"
-                        f" {self.__s.quote_currency})",
-                    )
-                    self.__s.t.send_to_telegram(message=message)
-                    return
-
-            # ==============================================================
-            # Algorithm has not reached max_investment yet and is ready to buy.
-            else:
-                self.__s.max_invest_reached = False
-                LOG.info(
-                    "Placing order to buy %s %s @ %s %s.",
-                    volume,
-                    self.__s.base_currency,
-                    order_price,
-                    self.__s.quote_currency,
-                )
-
-                # Place a new buy order, append txid to pending list and delete
-                # corresponding sell order from local orderbook.
-                placed_order = self.__s.trade.create_order(
-                    ordertype="limit",
-                    side="buy",
-                    volume=volume,
-                    pair=self.__s.symbol,
-                    price=order_price,
-                    userref=self.__s.userref,
-                    validate=self.__s.dry_run,
-                )
-
-                self.__s.pending_txids.add(placed_order["txid"][0])
-                if txid_to_delete is not None:
-                    self.__s.orderbook.remove(filters={"txid": txid_to_delete})
-                self.__s.om.assign_order_by_txid(placed_order["txid"][0])
-                return
+            self.__s.pending_txids.add(placed_order["txid"][0])
+            # if txid_to_delete is not None:
+            #     self.__s.orderbook.remove(filters={"txid": txid_to_delete})
+            self.__s.om.assign_order_by_txid(placed_order["txid"][0])
+            return
 
         # ======================================================================
         # Not enough available funds to place a buy order.
-        else:
-            if txid_to_delete is not None:
-                self.__s.orderbook.remove(filters={"txid": txid_to_delete})
-
-            message = f"⚠️ {self.__s.symbol}"
-            message += f"├ Not enough {self.__s.quote_currency}"
-            message += f"├ to buy {volume} {self.__s.base_currency}"
-            message += f"└ for {order_price} {self.__s.quote_currency}"
-            self.__s.t.send_to_telegram(message)
-            LOG.warning("Current balances: %s", current_balances)
-            return
+        message = f"⚠️ {self.__s.symbol}"
+        message += f"├ Not enough {self.__s.quote_currency}"
+        message += f"├ to buy {volume} {self.__s.base_currency}"
+        message += f"└ for {order_price} {self.__s.quote_currency}"
+        self.__s.t.send_to_telegram(message)
+        LOG.warning("Current balances: %s", current_balances)
+        return
 
     def new_sell_order(  # noqa: C901
         self: OrderManager,

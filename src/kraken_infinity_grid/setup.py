@@ -268,13 +268,6 @@ class SetupManager:
 
         self.__s.ticker = SimpleNamespace(last=float(ticker["c"][0]))
 
-        # Check how much is actual invested in this asset pair based on the open
-        # orders of this instance.
-        ##
-        self.__s.investment = self.__s.get_value_of_orders(
-            orders=self.__s.orderbook.get_orders(),
-        )
-
         # Update the orderbook, check for closed, filled, cancelled trades,
         # and submit new orders if necessary.
         ##
