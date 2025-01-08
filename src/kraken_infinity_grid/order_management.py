@@ -160,6 +160,7 @@ class OrderManager:
             and can_place_buy_order
             and self.__s.pending_txids.count() == 0
             and self.__s.max_investment > self.__s.investment
+            and not self.__s.max_invest_reached
         ):
 
             fetched_balances: dict[str, float] = self.__s.get_balances()
@@ -370,7 +371,7 @@ class OrderManager:
 
         # Compute the value of all open orders.
         value_of_open_orders = self.__s.get_value_of_orders(
-            orders=self.__s.orderbook.get_orders(),
+            orders=self.__s.orderbook.get_orders(exclude={"txid": txid_to_delete}),
         )
 
         # ======================================================================
@@ -381,7 +382,7 @@ class OrderManager:
                 if not self.__s.max_invest_reached:
                     # Ensuring the message below is only sent once
                     self.__s.max_invest_reached = True
-                    # FIXME: is txid_to_delete even possible with buy orders?
+
                     if txid_to_delete is not None:
                         self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
@@ -406,8 +407,8 @@ class OrderManager:
                     self.__s.quote_currency,
                 )
 
-                # Place new buy order, append id to pending list and delete
-                # corresponding sell order from local orderbook
+                # Place a new buy order, append txid to pending list and delete
+                # corresponding sell order from local orderbook.
                 placed_order = self.__s.trade.create_order(
                     ordertype="limit",
                     side="buy",
@@ -428,7 +429,6 @@ class OrderManager:
         # Not enough available funds to place a buy order.
         else:
             if txid_to_delete is not None:
-                # FIXME: does that make sense in buy orders?
                 self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
             message = f"⚠️ {self.__s.symbol}"

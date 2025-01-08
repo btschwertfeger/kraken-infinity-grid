@@ -78,6 +78,7 @@ class DBConnect:
         self: Self,
         table: Table,
         filters: dict | None = None,
+        exclude: dict | None = None,
     ) -> MappingResult:
         """Fetch rows from the specified table with optional filters."""
         LOG.debug(
@@ -88,7 +89,9 @@ class DBConnect:
         query = select(table)
         if filters:
             for column, value in filters.items():
-                query = query.where(table.c[column] == value)
+                query = query.where(
+                    table.c[column] == value and table.c[column] != exclude,
+                )
         return self.session.execute(query).mappings()
 
     def update_row(
@@ -150,7 +153,11 @@ class Orderbook:
             volume=order["vol"],
         )
 
-    def get_orders(self: Self, filters: dict | None = None) -> MappingResult:
+    def get_orders(
+        self: Self,
+        filters: dict | None = None,
+        exclude: dict | None = None,
+    ) -> MappingResult:
         """Get orders from the orderbook."""
         LOG.debug("Getting orders from the orderbook with filters: %s", filters)
         if not filters:
@@ -158,6 +165,7 @@ class Orderbook:
         return self.__db.get_rows(
             self.__table,
             filters=filters | {"userref": self.__userref},
+            exclude=exclude,
         )
 
     def remove(self: Self, filters: dict) -> None:
