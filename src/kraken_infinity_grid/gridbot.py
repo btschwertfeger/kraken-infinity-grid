@@ -11,6 +11,7 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
+from functools import cache
 from logging import getLogger
 from time import sleep
 from types import SimpleNamespace
@@ -570,11 +571,14 @@ class KrakenInfinityGridBot(SpotWSClient):
         )
 
     @property
+    @cache  # noqa: B019
+    def amount_per_grid_plus_fee(self: Self) -> float:
+        """Returns the estimated quote volume of a newly placed buy order."""
+        return self.amount_per_grid * (1 + self.fee)
+
+    @property
     def max_investment_reached(self: Self) -> bool:
         """Returns True if the maximum investment is reached."""
-        # TODO: put this as class variable
-        new_position_value = self.amount_per_grid + self.amount_per_grid * self.fee
-
-        return (self.max_investment <= self.investment + new_position_value) or (
-            self.max_investment <= self.investment
-        )
+        return (
+            self.max_investment <= self.investment + self.amount_per_grid_plus_fee
+        ) or (self.max_investment <= self.investment)

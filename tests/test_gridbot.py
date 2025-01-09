@@ -223,6 +223,27 @@ def test_max_investment_reached(instance: KrakenInfinityGridBot) -> None:
     assert instance.max_investment_reached
 
 
+def test_amount_per_grid_plus_fee(instance: KrakenInfinityGridBot) -> None:
+    """Test the amount_per_grid_plus_fee property."""
+    instance.amount_per_grid = 100
+    instance.fee = 0.01
+    assert instance.amount_per_grid_plus_fee == 101.0
+
+    # Ensure that caching works, i.e., the property is not recomputed
+    instance.amount_per_grid = 1000
+    assert instance.amount_per_grid_plus_fee == 101.0
+
+    type(instance).amount_per_grid_plus_fee.fget.cache_clear()
+    instance.amount_per_grid = 200
+    instance.fee = 0.02
+    assert instance.amount_per_grid_plus_fee == 204.0
+
+    type(instance).amount_per_grid_plus_fee.fget.cache_clear()
+    instance.amount_per_grid = 200
+    instance.fee = 0.00
+    assert instance.amount_per_grid_plus_fee == 200.0
+
+
 # ==============================================================================
 # on_message
 ##
