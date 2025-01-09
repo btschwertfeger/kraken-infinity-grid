@@ -160,10 +160,7 @@ class OrderManager:
         ):
 
             fetched_balances: dict[str, float] = self.__s.get_balances()
-            if (
-                fetched_balances["quote_available"]
-                > self.__s.amount_per_grid + self.__s.amount_per_grid * self.__s.fee
-            ):
+            if fetched_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
                 order_price: float = self.__s.get_order_price(
                     side="buy",
                     last_price=(
@@ -236,7 +233,7 @@ class OrderManager:
 
             if (
                 fetched_balances["base_available"] * self.__s.ticker.last
-                > self.__s.amount_per_grid + self.__s.amount_per_grid * self.__s.fee
+                > self.__s.amount_per_grid_plus_fee
             ):
                 order_price = self.__s.get_order_price(
                     side="sell",
@@ -367,14 +364,9 @@ class OrderManager:
             ),
         )
 
-        # Compute the quote volume for the upcoming buy order.
-        new_position_value = (
-            self.__s.amount_per_grid + self.__s.amount_per_grid * self.__s.fee
-        )
-
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
-        if current_balances["quote_available"] > new_position_value:
+        if current_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
                 volume,
@@ -460,8 +452,7 @@ class OrderManager:
                     corresponding_buy_order,
                 )
                 sleep(1)
-                self.__s.om.handle_arbitrage(
-                    side="sell",
+                self.__s.om.new_sell_order(
                     order_price=order_price,
                     txid_id_to_delete=txid_id_to_delete,
                 )

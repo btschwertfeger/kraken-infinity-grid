@@ -49,6 +49,7 @@ def strategy() -> mock.Mock:
     strategy.ticker = mock.Mock()
     strategy.ticker.last = 50000.0
     strategy.save_exit = sys.exit
+    strategy.amount_per_grid_plus_fee = strategy.amount_per_grid * (1 + strategy.fee)
     return strategy
 
 

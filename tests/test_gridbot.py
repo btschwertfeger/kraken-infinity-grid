@@ -207,6 +207,7 @@ def test_max_investment_reached(instance: KrakenInfinityGridBot) -> None:
     instance.amount_per_grid = 1000.0
     instance.fee = 0.01
     instance.max_investment = 20000.0
+    instance.amount_per_grid_plus_fee = instance.amount_per_grid * (1 + instance.fee)
 
     # Case where max investment is not reached
     instance.orderbook.get_orders.return_value = [

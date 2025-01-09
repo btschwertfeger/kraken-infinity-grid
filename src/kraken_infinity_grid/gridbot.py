@@ -136,7 +136,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     ) -> None:
         super().__init__(key=key, secret=secret)
         LOG.info("Initiate the Kraken Infinity Grid Algorithm instance...")
-        LOG.info("Config: %s", config)
+        LOG.debug("Config: %s", config)
         self.init_done: bool = False
         self.dry_run: bool = dry_run
 
@@ -150,6 +150,9 @@ class KrakenInfinityGridBot(SpotWSClient):
         ##
         self.interval: float = float(config["interval"])
         self.amount_per_grid: float = float(config["amount_per_grid"])
+
+        self.amount_per_grid_plus_fee: float | None = None
+
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
         self.fee: float | None = None
@@ -572,9 +575,6 @@ class KrakenInfinityGridBot(SpotWSClient):
     @property
     def max_investment_reached(self: Self) -> bool:
         """Returns True if the maximum investment is reached."""
-        # TODO: put this as class variable
-        new_position_value = self.amount_per_grid + self.amount_per_grid * self.fee
-
-        return (self.max_investment <= self.investment + new_position_value) or (
-            self.max_investment <= self.investment
-        )
+        return (
+            self.max_investment <= self.investment + self.amount_per_grid_plus_fee
+        ) or (self.max_investment <= self.investment)
