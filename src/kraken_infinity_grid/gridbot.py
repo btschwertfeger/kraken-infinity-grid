@@ -11,7 +11,6 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
-from functools import cache
 from logging import getLogger
 from time import sleep
 from types import SimpleNamespace
@@ -137,7 +136,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     ) -> None:
         super().__init__(key=key, secret=secret)
         LOG.info("Initiate the Kraken Infinity Grid Algorithm instance...")
-        LOG.info("Config: %s", config)
+        LOG.debug("Config: %s", config)
         self.init_done: bool = False
         self.dry_run: bool = dry_run
 
@@ -151,6 +150,9 @@ class KrakenInfinityGridBot(SpotWSClient):
         ##
         self.interval: float = float(config["interval"])
         self.amount_per_grid: float = float(config["amount_per_grid"])
+
+        self.amount_per_grid_plus_fee: float | None = None
+
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
         self.fee: float | None = None
@@ -569,12 +571,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         return self.get_value_of_orders(
             orders=self.orderbook.get_orders(),
         )
-
-    @property
-    @cache  # noqa: B019
-    def amount_per_grid_plus_fee(self: Self) -> float:
-        """Returns the estimated quote volume of a newly placed buy order."""
-        return self.amount_per_grid * (1 + self.fee)
 
     @property
     def max_investment_reached(self: Self) -> bool:

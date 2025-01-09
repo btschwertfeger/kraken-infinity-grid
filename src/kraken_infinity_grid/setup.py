@@ -197,11 +197,15 @@ class SetupManager:
 
         self.__s.xsymbol = next(iter(pair_data.keys()))
         data = pair_data[self.__s.xsymbol]
-        self.__s.fee = float(data["fees_maker"][0][1]) / 100
+
         self.__s.altname = data["altname"]
         self.__s.zbase_currency = data["base"]  # XXBT
         self.__s.xquote_currency = data["quote"]  # ZEUR
         self.__s.cost_decimals = data["cost_decimals"]  # 5, i.e., 0.00001 EUR
+        self.__s.fee = float(data["fees_maker"][0][1]) / 100
+        self.__s.amount_per_grid_plus_fee = self.__s.amount_per_grid * (
+            1 + self.__s.fee
+        )
 
     def __check_configuration_changes(self: Self) -> None:
         """

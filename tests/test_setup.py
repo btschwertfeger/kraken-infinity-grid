@@ -245,6 +245,7 @@ def test_check_asset_pair_parameter(
         },
     }
     strategy.symbol = "BTC/USD"
+    strategy.amount_per_grid = 100
 
     setup_manager._SetupManager__check_asset_pair_parameter()
 
@@ -253,6 +254,7 @@ def test_check_asset_pair_parameter(
     assert strategy.zbase_currency == "XXBT"
     assert strategy.xquote_currency == "ZEUR"
     assert strategy.cost_decimals == 5
+    assert strategy.amount_per_grid_plus_fee == pytest.approx(100.26)
 
 
 def test_check_configuration_changes(
