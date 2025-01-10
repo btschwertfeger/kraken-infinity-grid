@@ -39,6 +39,7 @@ def strategy() -> mock.Mock:
     strategy.dry_run = False
     strategy.max_investment = 10000
     strategy.amount_per_grid = 100
+    strategy.n_open_buy_orders = 5
     strategy.interval = 0.01
     strategy.fee = 0.0026
     strategy.symbol = "BTC/USD"
@@ -474,6 +475,8 @@ def test_new_buy_order(
     strategy.get_value_of_orders.return_value = 5000.0
     strategy.trade.create_order.return_value = {"txid": ["txid1"]}
     strategy.trade.truncate.side_effect = [50000.0, 100.0]  # price, volume
+    # No other open orders
+    strategy.get_active_buy_orders.return_value.all.return_value = []
 
     order_manager.new_buy_order(order_price=50000.0)
     strategy.pending_txids.add.assert_called_once_with("txid1")
@@ -487,6 +490,8 @@ def test_new_buy_order_max_invest_reached(
 ) -> None:
     """Test placing a new buy order without sufficient funds."""
     strategy.max_investment_reached = True
+    # No other open orders
+    strategy.get_active_buy_orders.return_value.all.return_value = []
 
     order_manager.new_buy_order(order_price=50000.0)
     strategy.trade.create_order.assert_not_called()
@@ -502,6 +507,8 @@ def test_new_buy_order_not_enough_funds(
     strategy.get_value_of_orders.return_value = 5000.0
     strategy.trade.create_order.return_value = {"txid": ["txid1"]}
     strategy.trade.truncate.side_effect = [50000.0, 100.0]  # price, volume
+    # No other open orders
+    strategy.get_active_buy_orders.return_value.all.return_value = []
 
     order_manager.new_buy_order(order_price=50000.0)
     strategy.trade.create_order.assert_not_called()

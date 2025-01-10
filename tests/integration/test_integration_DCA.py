@@ -51,13 +51,7 @@ async def test_integration_DCA(  # noqa: PLR0915
 
     # Mock the initial setup
     instance.market.get_ticker.return_value = {"XXBTZUSD": {"c": ["50000.0"]}}
-
-    await instance.on_message(
-        {
-            "channel": "ticker",
-            "data": [{"symbol": "BTC/USD", "last": 50000.0}],
-        },
-    )
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
     assert not instance.is_ready_to_trade
 
     # ==========================================================================
@@ -103,12 +97,7 @@ async def test_integration_DCA(  # noqa: PLR0915
     # ==========================================================================
     # 2. SHIFTING UP BUY ORDERS
     # Check if shifting up the buy orders works
-    await instance.on_message(
-        {
-            "channel": "ticker",
-            "data": [{"symbol": "BTC/USD", "last": 60000.0}],
-        },
-    )
+    await instance.trade.on_ticker_update(instance.on_message, 60000.0)
 
     # We should now still have 5 buy orders, but at a higher price. The other
     # orders should be canceled.
@@ -129,20 +118,14 @@ async def test_integration_DCA(  # noqa: PLR0915
     # ==========================================================================
     # 3. FILLING A BUY ORDER
     # Now lets let the price drop a bit so that a buy order gets triggered.
-    await instance.on_message(
-        {
-            "channel": "ticker",
-            "data": [{"symbol": "BTC/USD", "last": 59000.0}],
-        },
-    )
+    await instance.trade.on_ticker_update(instance.on_message, 59900.0)
 
     # Quick re-check ... the price update should not affect any orderbook
     # changes when dropping.
-    current_orders = instance.orderbook.get_orders().all()
     for order, price, volume in zip(
-        current_orders,
-        [59405.9, 58817.7, 58235.3, 57658.7, 57087.8],
-        [0.00168333, 0.00170016, 0.00171717, 0.00173434, 0.00175168],
+        instance.orderbook.get_orders().all(),
+        (59405.9, 58817.7, 58235.3, 57658.7, 57087.8),
+        (0.00168333, 0.00170016, 0.00171717, 0.00173434, 0.00175168),
         strict=False,
     ):
         assert order.userref == instance.userref
@@ -151,22 +134,15 @@ async def test_integration_DCA(  # noqa: PLR0915
         assert order.price == price
         assert order.volume == volume
 
-    # Now trigger the execution of the first buy order
-    instance.trade.fill_order(current_orders[0].txid)  # fill in "upstream"
-    await instance.on_message(  # notify downstream
-        {
-            "channel": "executions",
-            "type": "update",
-            "data": [{"exec_type": "filled", "order_id": current_orders[0].txid}],
-        },
-    )
+    # Filling the first order
+    await instance.trade.on_ticker_update(instance.on_message, 59000.0)
     assert instance.orderbook.count() == 4
 
     # Ensure that we have 4 buy orders and *no* sell order
     for order, price, volume in zip(
         instance.orderbook.get_orders().all(),
-        [58817.7, 58235.3, 57658.7, 57087.8],
-        [0.00170016, 0.00171717, 0.00173434, 0.00175168],
+        (58817.7, 58235.3, 57658.7, 57087.8),
+        (0.00170016, 0.00171717, 0.00173434, 0.00175168),
         strict=True,
     ):
         assert order.userref == instance.userref
@@ -180,16 +156,12 @@ async def test_integration_DCA(  # noqa: PLR0915
     # ==========================================================================
     # 4. ENSURING N OPEN BUY ORDERS
     # If there is a new price event, the algorithm will place the 5th buy order.
-    await instance.on_message(
-        {
-            "channel": "ticker",
-            "data": [{"symbol": "BTC/USD", "last": 59100.0}],
-        },
-    )
+    await instance.trade.on_ticker_update(instance.on_message, 59100.0)
+
     for order, price, volume, side in zip(
         instance.orderbook.get_orders().all(),
-        [58817.7, 58235.3, 57658.7, 57087.8, 56522.5],
-        [0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.0017692],
+        (58817.7, 58235.3, 57658.7, 57087.8, 56522.5),
+        (0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.0017692),
         ["buy"] * 5,
         strict=True,
     ):
@@ -204,38 +176,18 @@ async def test_integration_DCA(  # noqa: PLR0915
     # ==========================================================================
     # 5. RAPID PRICE DROP - FILLING ALL BUY ORDERS
     # Now check the behavior for a rapid price drop.
-    await instance.on_message(
-        {
-            "channel": "ticker",
-            "data": [{"symbol": "BTC/USD", "last": 50000.0}],
-        },
-    )
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
     assert instance.ticker.last == 50000.0
-    for order in instance.orderbook.get_orders().all():
-        instance.trade.fill_order(order.txid)
-        await instance.on_message(
-            {
-                "channel": "executions",
-                "type": "update",
-                "data": [{"exec_type": "filled", "order_id": order.txid}],
-            },
-        )
-    current_orders = instance.orderbook.get_orders().all()
-    assert len(current_orders) == 0
+    assert len(instance.orderbook.get_orders().all()) == 0
     assert instance.orderbook.count() == 0
 
     # ==========================================================================
     # 6. ENSURE N OPEN BUY ORDERS
-    await instance.on_message(
-        {
-            "channel": "ticker",
-            "data": [{"symbol": "BTC/USD", "last": 50100.0}],
-        },
-    )
+    await instance.trade.on_ticker_update(instance.on_message, 50100.0)
     for order, price, volume in zip(
         instance.orderbook.get_orders().all(),
-        [49603.9, 49112.7, 48626.4, 48144.9, 47668.2],
-        [0.00201597, 0.00203613, 0.00205649, 0.00207706, 0.00209783],
+        (49603.9, 49112.7, 48626.4, 48144.9, 47668.2),
+        (0.00201597, 0.00203613, 0.00205649, 0.00207706, 0.00209783),
         strict=True,
     ):
         assert order.userref == instance.userref

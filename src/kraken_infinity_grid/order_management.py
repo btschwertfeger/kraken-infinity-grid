@@ -340,6 +340,9 @@ class OrderManager:
         if txid_to_delete is not None:
             self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
+        if len(self.__s.get_active_buy_orders().all()) >= self.__s.n_open_buy_orders:  # type: ignore[no-untyped-call]
+            return
+
         # Check if algorithm reached the max_investment value
         if self.__s.max_investment_reached:
             return
