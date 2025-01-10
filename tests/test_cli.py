@@ -62,7 +62,7 @@ def test_cli_run(mock_bot: MagicMock, runner: CliRunner, sqlite_file: Path) -> N
         "--sqlite-file",
         sqlite_file,
         "--strategy",
-        "DCA",
+        "cDCA",
     ]
     mock_bot.return_value.run = AsyncMock()
     result = runner.invoke(cli, command)

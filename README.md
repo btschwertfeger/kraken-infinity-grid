@@ -3,7 +3,8 @@
 <div align="center">
 
 [![GitHub](https://badgen.net/badge/icon/github?icon=github&label)](https://github.com/btschwertfeger/kraken-infinity-grid)
-[![Generic badge](https://img.shields.io/badge/python-3.11+-blue.svg)](https://shields.io/)
+[![Generic
+badge](https://img.shields.io/badge/python-3.11+-blue.svg)](https://shields.io/)
 
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Typing](https://img.shields.io/badge/typing-mypy-informational)](https://mypy-lang.org/)
@@ -25,37 +26,40 @@
 > times. Of course, no responsibility is taken for possible profits or losses.
 > This software probably has some errors in it, so use it at your own risk. Also
 > no one should be motivated or tempted to invest assets in speculative forms of
-> investment. By using this software you release the author(s) from any liability
-> regarding the use of this software.
+> investment. By using this software you release the author(s) from any
+> liability regarding the use of this software.
 
-The Infinity Grid Trading Algorithm is a trading bot that uses grid trading
-strategies to trade cryptocurrencies on the [Kraken](https://pro.kraken.com)
-Spot exchange. The algorithm is written in Python and uses the
+The kraken-infinity-grid is a trading algorithm that uses grid trading
+strategies that places buy and sell orders in a grid-like manner, while
+following the principle of buying low and selling high. It is designed for
+trading cryptocurrencies on the [Kraken](https://pro.kraken.com) Spot exchange,
+is written in Python and uses the
 [python-kraken-sdk](https://github.com/btschwertfeger/python-kraken-sdk) library
 to interact with the Kraken API.
 
-The algorithm requires a PostgreSQL database and can be run either locally or in
-a Docker container (recommended). The algorithm can be configured to use
-different trading strategies, such as GridHODL, GridSell, SWING, and DCA.
+The algorithm requires a PostgreSQL or SQLite database and can be run either
+locally or in a Docker container (recommended). The algorithm can be configured
+to use different trading strategies, such as GridHODL, GridSell, SWING, and
+cDCA.
 
-While the verbosity levels of logging provide useful insights into the bot's
-behavior, the Telegram notifications can be used to receive updates on the bot's
-activity and exceptions. For this the algorithm requires two different Telegram
-bot tokens and chat IDs, one for regular notifications and one for exception
-notifications (see [Setup](#Setup) for more information).
+While the verbosity levels of logging provide useful insights into the
+algorithms's behavior, the Telegram notifications can be used to receive updates
+on the algorithms's activity and exceptions. For this the algorithm requires two
+different Telegram bot tokens and chat IDs, one for regular notifications and
+one for exception notifications (see [Setup](#Setup) for more information).
 
 # 📍 Strategy Overview
 
 ## Information about terms used
 
-- **Base currency**: The base currency is the currency that is being bought
-  and sold, e.g. BTC. for the symbol BTC/EUR.
+- **Base currency**: The base currency is the currency that is being bought and
+  sold, e.g. BTC. for the symbol BTC/EUR.
 
-- **Quote currency**: The quote currency is the currency that is being used
-  to buy and sell the base currency, e.g. EUR. for the symbol BTC/EUR.
+- **Quote currency**: The quote currency is the currency that is being used to
+  buy and sell the base currency, e.g. EUR. for the symbol BTC/EUR.
 
-- **Price**: The price is the current price of the base currency in terms of
-  the quote currency, e.g. 100,000 USD for 1 BTC, 100,000 is the price.
+- **Price**: The price is the current price of the base currency in terms of the
+  quote currency, e.g. 100,000 USD for 1 BTC, 100,000 is the price.
 
 - **Grid interval**: The grid interval is the percentage difference between the
   placed buy orders, e.g. 4 %. If the current price rises 'to high', the placed
@@ -68,8 +72,8 @@ notifications (see [Setup](#Setup) for more information).
   the buy price, e.g. if the buy price was 100,000 USD, the sell order will be
   placed for 104,000 USD.
 
-- **Shifting up**: Shifting up is the process of canceling and replacing the
-  buy orders if the current price rises above a certain threshold, which is
+- **Shifting up**: Shifting up is the process of canceling and replacing the buy
+  orders if the current price rises above a certain threshold, which is
   $(p\cdot(1+i))^2*1.001$ where $p$ is the highest price of an existing,
   unfilled buy order and $i$ is the interval (e.g. 4 %, i.e. 0.04). This
   technique ensures that buy orders don't get out of scope.
@@ -78,43 +82,44 @@ notifications (see [Setup](#Setup) for more information).
 
 **GridHODL**
 
-The _GridHODL_ strategy is a grid trading strategy that buys and
-sells at fixed intervals, e.g. every 4 %. The algorithm places $n$ buy orders
-below the current price and waits for their execution to then execute the
-arbitrage and place a sell order for the bought base currency at 4 % higher.
-The key idea here is to accumulate a bit of the base currency over time, as the
-order size in terms of quote volume is fixed, e.g. to 100 USD.
+The _GridHODL_ strategy is a grid trading strategy that buys and sells at fixed
+intervals, e.g. every 4 %. The algorithm places $n$ buy orders below the current
+price and waits for their execution to then execute the arbitrage and place a
+sell order for the bought base currency at 4 % higher. The key idea here is to
+accumulate a bit of the base currency over time, as the order size in terms of
+quote volume is fixed, e.g. to 100 USD.
 
 **GridSell**
 
-The _GridSell_ strategy is the counterpart of the GridHODL strategy,
-as it creates a sell order for 100 % of the base currency bought by a single buy
+The _GridSell_ strategy is the counterpart of the GridHODL strategy, as it
+creates a sell order for 100 % of the base currency bought by a single buy
 order, e.g. if a buy order for 100 USD worth of BTC is executed and the interval
 is set to 4 %, the sell order size will be 104 USD worth of BTC.
 
 **SWING**
 
-<!--
-⚠️ It also starts selling the already existing base currency above the current
-price.
--->
-
-The _SWING_ strategy is another variation of the GridHODL strategy,
-as it does the same but with a twist. The idea is to sell the base currency if
-the price rises above the highest price for which the algorithm has bought the
-currency, e.g. if the algorithm traded and accumulated a lot of BTC/USD between
+The _SWING_ strategy is another variation of the GridHODL strategy, as it does
+the same but with a twist. The idea is to sell the base currency if the price
+rises above the highest price for which the algorithm has bought the currency,
+e.g. if the algorithm traded and accumulated a lot of BTC/USD between
 40,000-80,000 USD and the highest price for which the algorithm has bought BTC
 was 80,000 USD, the algorithm will start placing sell orders at a fixed interval
 (e.g. 4 %) if the price rises above 80,000 USD, e.g. to sell 100 USD worth of
 BTC at 83,200 USD while further accumulating the currency trades below the
 highest buy price.
 
-**DCA**
+> ⚠️ It also starts selling the already existing base currency above the
+> current price. This should be kept in mind when choosing this
+> strategy.
 
-The _DCA_ strategy is a dollar-cost averaging strategy that buys at
-fixed intervals for a fixed size, e.g. 100 USD worth of BTC every 4 % without
-placing sell orders in order to accumulate the base currency over team for
-speculating on rising value in the long run.
+**cDCA**
+
+The _cDCA_ strategy is a dollar-cost averaging strategy that buys at fixed
+intervals for a fixed size, e.g. 100 USD worth of BTC every 4 % without placing
+sell orders in order to accumulate the base currency over team for speculating
+on rising value in the long run. The difference to classical DCA strategies is
+that even if the price rises, the algorithm will shift-up buy orders instead of
+getting out of scope.
 
 <a name="setup"></a>
 
@@ -175,7 +180,7 @@ these steps:
 | `KRAKEN_RUN_INTERVAL`          | `float`            | The interval between orders e.g., `0.04` to have 4 % intervals).                                                                                             |
 | `KRAKEN_RUN_N_OPEN_BUY_ORDERS` | `int`              | The number of concurrent open buy orders, e.g., `3`.                                                                                                         |
 | `KRAKEN_RUN_MAX_INVESTMENT`    | `str`              | The maximum investment amount, e.g. `1000` USD.                                                                                                              |
-| `KRAKEN_RUN_STRATEGY`          | `str`              | The trading strategy (e.g., `GridHODL`, `GridSell`, `SWING`, or `DCA`).                                                                                      |
+| `KRAKEN_RUN_STRATEGY`          | `str`              | The trading strategy (e.g., `GridHODL`, `GridSell`, `SWING`, or `cDCA`).                                                                                     |
 | `KRAKEN_RUN_TELEGRAM_TOKEN`    | `str`              | The Telegram bot token for notifications.                                                                                                                    |
 | `KRAKEN_RUN_TELEGRAM_CHAT_ID`  | `str`              | The Telegram chat ID for notifications.                                                                                                                      |
 | `KRAKEN_RUN_EXCEPTION_TOKEN`   | `str`              | The Telegram bot token for exception notifications.                                                                                                          |

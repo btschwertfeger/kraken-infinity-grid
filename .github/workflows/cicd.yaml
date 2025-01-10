@@ -46,6 +46,15 @@ jobs:
     with:
       TAG: dev
 
+  ##    Build the documentation
+  ##
+  Build-Doc:
+    needs: [Pre-Commit]
+    uses: ./.github/workflows/_build_doc.yaml
+    with:
+      os: "ubuntu-latest"
+      python-version: "3.11"
+
   ##    Run the unit and integration tests
   ##
   Test:

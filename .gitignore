@@ -45,7 +45,7 @@ coverage.xml
 pytest.xml
 
 # Sphinx documentation
-docs/_build/
+doc/_build/
 
 # CSV and pickle files
 *.csv

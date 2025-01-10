@@ -515,8 +515,8 @@ def test_new_sell_order_skip_dca(
     order_manager: OrderManager,
     strategy: mock.Mock,
 ) -> None:
-    """Test placing a new sell order - skip for DCA strategy."""
-    strategy.strategy = "DCA"
+    """Test placing a new sell order - skip for cDCA strategy."""
+    strategy.strategy = "cDCA"
     order_manager.new_sell_order(order_price=51000.0, txid_id_to_delete="txid1")
     strategy.orderbook.remove.assert_called_once_with(filters={"txid": "txid1"})
     strategy.trade.create_order.assert_not_called()

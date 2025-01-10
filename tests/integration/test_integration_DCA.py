@@ -4,7 +4,7 @@
 # GitHub: https://github.com/btschwertfeger
 #
 
-"""Integration test for the DCA strategy."""
+"""Integration test for the cDCA strategy."""
 
 import logging
 from unittest import mock
@@ -18,7 +18,7 @@ from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 def config() -> dict:
     """Fixture to create a mock configuration."""
     return {
-        "strategy": "DCA",
+        "strategy": "cDCA",
         "userref": 123456789,
         "name": "TestBot",
         "interval": 0.01,
@@ -38,14 +38,14 @@ def config() -> dict:
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)
-async def test_integration_DCA(  # noqa: PLR0915
+async def test_integration_cDCA(  # noqa: PLR0915
     mock_sleep_gridbot: mock.Mock,  # noqa: ARG001
     mock_sleep_order_management: mock.Mock,  # noqa: ARG001
     instance: KrakenInfinityGridBot,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """
-    Integration test for DCA strategy using pre-generated websocket messages.
+    Integration test for cDCA strategy using pre-generated websocket messages.
     """
     caplog.set_level(logging.INFO)
 

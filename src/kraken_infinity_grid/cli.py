@@ -128,7 +128,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 )
 @option(
     "--strategy",
-    type=Choice(choices=("DCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
+    type=Choice(choices=("cDCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
     help="The strategy to run.",
     required=True,
 )
@@ -260,7 +260,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 )
 @pass_context
 def run(ctx: Context, **kwargs: dict) -> None:
-    """Run the trading algorithm using the specified options"""
+    """Run the trading algorithm using the specified options."""
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
     import traceback  # noqa: PLC0415
