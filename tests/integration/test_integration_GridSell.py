@@ -271,104 +271,105 @@ async def test_integration_GridSell(  # noqa: PLR0915
     assert instance.orderbook.count() == 6
 
 
-# @pytest.mark.wip
-# @pytest.mark.integration
-# @pytest.mark.asyncio
-# @mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
-# @mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)
-# async def test_integration_GridSell_unfilled_surplus(
-#     mock_sleep_gridbot: mock.Mock,
-#     mock_sleep_order_management: mock.Mock,
-#     instance: KrakenInfinityGridBot,
-#     caplog: pytest.LogCaptureFixture,
-# ) -> None:
-#     """
-#     Integration test for the GridSell strategy using pre-generated websocket
-#     messages.
+@pytest.mark.integration
+@pytest.mark.asyncio
+@mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)
+async def test_integration_GridSell_unfilled_surplus(
+    mock_sleep_gridbot: mock.Mock,  # noqa: ARG001
+    mock_sleep_order_management: mock.Mock,  # noqa: ARG001
+    instance: KrakenInfinityGridBot,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """
+    Integration test for the GridSell strategy using pre-generated websocket
+    messages.
 
-#     This test checks if the unfilled surplus is handled correctly.
+    This test checks if the unfilled surplus is handled correctly.
 
-#     unfilled surplus: The base currency volume that was partly filled by an buy
-#     order, before the order was cancelled.
-#     """
-#     caplog.set_level(logging.INFO)
+    unfilled surplus: The base currency volume that was partly filled by an buy
+    order, before the order was cancelled.
+    """
+    caplog.set_level(logging.INFO)
 
-#     # Mock the initial setup
-#     instance.market.get_ticker.return_value = {"XXBTZUSD": {"c": ["50000.0"]}}
+    # Mock the initial setup
+    instance.market.get_ticker.return_value = {"XXBTZUSD": {"c": ["50000.0"]}}
 
-#     await instance.trade.on_ticker_update(instance.on_message, 50000.0)
-#     assert not instance.is_ready_to_trade
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
+    assert not instance.is_ready_to_trade
 
-#     # ==========================================================================
-#     # During the following processing, the following steps are done:
-#     # 1. The algorithm prepares for trading (see setup)
-#     # 2. The order manager checks the price range
-#     # 3. The order manager checks for n open buy orders
-#     # 4. The order manager places new orders
-#     await instance.on_message(
-#         {
-#             "channel": "executions",
-#             "type": "snapshot",
-#             "data": [{"exec_type": "canceled", "order_id": "txid0"}],
-#         },
-#     )
+    # ==========================================================================
+    # During the following processing, the following steps are done:
+    # 1. The algorithm prepares for trading (see setup)
+    # 2. The order manager checks the price range
+    # 3. The order manager checks for n open buy orders
+    # 4. The order manager places new orders
+    await instance.on_message(
+        {
+            "channel": "executions",
+            "type": "snapshot",
+            "data": [{"exec_type": "canceled", "order_id": "txid0"}],
+        },
+    )
 
-#     # The algorithm should already be ready to trade
-#     assert instance.is_ready_to_trade
+    # The algorithm should already be ready to trade
+    assert instance.is_ready_to_trade
 
-#     # ==========================================================================
-#     # 1. PLACEMENT OF INITIAL N BUY ORDERS
-#     # After both fake-websocket channels are connected, the algorithm went
-#     # through its full setup and placed orders against the fake Kraken API and
-#     # finally saved those results into the local orderbook table.
+    # ==========================================================================
+    # 1. PLACEMENT OF INITIAL N BUY ORDERS
+    # After both fake-websocket channels are connected, the algorithm went
+    # through its full setup and placed orders against the fake Kraken API and
+    # finally saved those results into the local orderbook table.
 
-#     # Check if the five initial buy orders are placed with the expected price
-#     # and volume. Note that the interval is not exactly 0.01 due to the fee
-#     # which is taken into account.
-#     for order, price, volume in zip(
-#         instance.orderbook.get_orders().all(),
-#         (49504.9, 49014.7, 48529.4, 48048.9, 47573.1),
-#         (0.00202, 0.0020402, 0.0020606, 0.00208121, 0.00210202),
-#         strict=True,
-#     ):
-#         assert order.price == price
-#         assert order.volume == volume
-#         assert order.side == "buy"
-#         assert order.symbol == "BTCUSD"
-#         assert order.userref == instance.userref
+    # Check if the five initial buy orders are placed with the expected price
+    # and volume. Note that the interval is not exactly 0.01 due to the fee
+    # which is taken into account.
+    for order, price, volume in zip(
+        instance.orderbook.get_orders().all(),
+        (49504.9, 49014.7, 48529.4, 48048.9, 47573.1),
+        (0.00202, 0.0020402, 0.0020606, 0.00208121, 0.00210202),
+        strict=True,
+    ):
+        assert order.price == price
+        assert order.volume == volume
+        assert order.side == "buy"
+        assert order.symbol == "BTCUSD"
+        assert order.userref == instance.userref
 
-#     # ==========================================================================
-#     # 2. BUYING PARTLY FILLED and ensure that the unfilled surplus is handled
-#     instance.trade.fill_order(instance.orderbook.get_orders().first().txid, 0.002)
-#     assert instance.orderbook.count() == 5
+    # ==========================================================================
+    # 2. BUYING PARTLY FILLED and ensure that the unfilled surplus is handled
+    instance.trade.fill_order(instance.orderbook.get_orders().first().txid, 0.002)
+    assert instance.orderbook.count() == 5
 
-#     balances = instance.trade.get_balances()
-#     assert balances["XXBT"]["balance"] == "100.002"
-#     assert float(balances["ZUSD"]["balance"]) == pytest.approx(999400.99)
+    balances = instance.trade.get_balances()
+    assert balances["XXBT"]["balance"] == "100.002"
+    assert float(balances["ZUSD"]["balance"]) == pytest.approx(999400.99)
 
-#     instance.om.handle_cancel_order(
-#         instance.orderbook.get_orders().first().txid
-#     )
+    instance.om.handle_cancel_order(
+        instance.orderbook.get_orders().first().txid,
+    )
 
-#     assert instance.configuration.get()["vol_of_unfilled_remaining"] == 0.002
-#     assert instance.configuration.get()["vol_of_unfilled_remaining_max_price"] == 49504.9
+    assert instance.configuration.get()["vol_of_unfilled_remaining"] == 0.002
+    assert (
+        instance.configuration.get()["vol_of_unfilled_remaining_max_price"] == 49504.9
+    )
 
-#     # ==========================================================================
-#     # 3. SELLING THE UNFILLED SURPLUS
-#     #    The sell-check is done only during cancelling orders, as this is the
-#     #    only time where this amount is touched. So we need to create another
-#     #    partly filled order.
+    # ==========================================================================
+    # 3. SELLING THE UNFILLED SURPLUS
+    #    The sell-check is done only during cancelling orders, as this is the
+    #    only time where this amount is touched. So we need to create another
+    #    partly filled order.
 
-#     instance.om.new_buy_order(49504.9)
-#     assert len(instance.trade.get_open_orders()["open"]) == 5
+    instance.om.new_buy_order(49504.9)
+    assert len(instance.trade.get_open_orders()["open"]) == 5
 
-#     order = next(o for o in instance.orderbook.get_orders().all() if o.price == 49504.9)
-#     instance.trade.fill_order(order["txid"], 0.002)
-#     instance.om.handle_cancel_order(order["txid"])
+    order = next(o for o in instance.orderbook.get_orders().all() if o.price == 49504.9)
+    instance.trade.fill_order(order["txid"], 0.002)
+    instance.om.handle_cancel_order(order["txid"])
 
-#     assert len(instance.trade.get_open_orders()["open"]) == 5
-#     assert instance.configuration.get()["vol_of_unfilled_remaining"] == 0.0
+    assert len(instance.trade.get_open_orders()["open"]) == 5
+    assert instance.configuration.get()["vol_of_unfilled_remaining"] == 0.0
 
-#     sell_orders = instance.orderbook.get_orders(filters={"side": "sell"}).all()
-#     assert sell_orders[0].price == 50500.0
-#     assert sell_orders[0].volume == pytest.approx(0.00199014)
+    sell_orders = instance.orderbook.get_orders(filters={"side": "sell"}).all()
+    assert sell_orders[0].price == 50500.0
+    assert sell_orders[0].volume == pytest.approx(0.00199014)
