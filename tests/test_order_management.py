@@ -50,6 +50,7 @@ def strategy() -> mock.Mock:
     strategy.ticker = mock.Mock()
     strategy.ticker.last = 50000.0
     strategy.save_exit = sys.exit
+    strategy.max_investment_reached = False
     strategy.amount_per_grid_plus_fee = strategy.amount_per_grid * (1 + strategy.fee)
     return strategy
 
@@ -498,6 +499,7 @@ def test_new_buy_order_max_invest_reached(
     strategy.pending_txids.add.assert_not_called()
 
 
+@pytest.mark.wip
 def test_new_buy_order_not_enough_funds(
     order_manager: OrderManager,
     strategy: mock.Mock,
@@ -513,6 +515,7 @@ def test_new_buy_order_not_enough_funds(
     order_manager.new_buy_order(order_price=50000.0)
     strategy.trade.create_order.assert_not_called()
     strategy.pending_txids.add.assert_not_called()
+    strategy.t.send_to_telegram.assert_called_once()
 
 
 # ==============================================================================

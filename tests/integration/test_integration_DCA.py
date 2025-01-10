@@ -4,7 +4,7 @@
 # GitHub: https://github.com/btschwertfeger
 #
 
-"""Integration test for the DCA strategy."""
+""" Integration test for the DCA strategy. """
 
 import logging
 from unittest import mock
@@ -197,3 +197,23 @@ async def test_integration_DCA(  # noqa: PLR0915
         assert order.volume == volume
 
     assert instance.orderbook.count() == 5
+
+    # ==========================================================================
+    # 7. MAX INVESTMENT REACHED
+
+    # First ensure that new buy orders can be placed...
+    assert not instance.max_investment_reached
+    instance.om.cancel_all_open_buy_orders()
+    assert instance.orderbook.count() == 0
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
+    assert instance.orderbook.count() == 5
+
+    # Now with a different max investment, the max investment should be reached
+    # and no further orders be placed.
+    assert not instance.max_investment_reached
+    instance.max_investment = 202  # 200 USD + fee
+    instance.om.cancel_all_open_buy_orders()
+    assert instance.orderbook.count() == 0
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
+    assert instance.orderbook.count() == 2
+    assert instance.max_investment_reached

@@ -4,12 +4,7 @@
 # GitHub: https://github.com/btschwertfeger
 #
 
-""" GridSell Integration test for GridSell strategy.
-
-TODOs:
-
-- [ ] Check for unfilled surplus due to partly filled buy orders
-"""
+""" GridSell Integration test for GridSell strategy. """
 
 import logging
 from unittest import mock
@@ -58,11 +53,15 @@ async def test_integration_GridSell(  # noqa: PLR0915
     API, the algorithm and database. The test tries to cover almost all cases
     that could happen during the trading process.
 
-    It tests: * Handling of ticker updates * Handling of execution updates *
-    Initialization after the ticker and execution channels are connected *
-    Placing of buy orders and shifting them up * Execution of buy orders and
-    placement of corresponding sell orders * Execution of sell orders * Full
-    database interactions using in-memory SQLite
+    It tests:
+
+    * Handling of ticker updates
+    * Handling of execution updates
+    * Initialization after the ticker and execution channels are connected
+    * Placing of buy orders and shifting them up
+    * Execution of buy orders and placement of corresponding sell orders
+    * Execution of sell orders
+    * Full database interactions using SQLite
 
     It does not cover the following cases:
 
@@ -269,6 +268,26 @@ async def test_integration_GridSell(  # noqa: PLR0915
         assert order.side == "buy"
 
     assert instance.orderbook.count() == 6
+
+    # ==========================================================================
+    # 8. MAX INVESTMENT REACHED
+
+    # First ensure that new buy orders can be placed...
+    assert not instance.max_investment_reached
+    instance.om.cancel_all_open_buy_orders()
+    assert instance.orderbook.count() == 1
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
+    assert instance.orderbook.count() == 6
+
+    # Now with a different max investment, the max investment should be reached
+    # and no further orders be placed.
+    assert not instance.max_investment_reached
+    instance.max_investment = 202  # 200 USD + fee
+    instance.om.cancel_all_open_buy_orders()
+    assert instance.orderbook.count() == 1
+    await instance.trade.on_ticker_update(instance.on_message, 50000.0)
+    assert instance.orderbook.count() == 2
+    assert instance.max_investment_reached
 
 
 @pytest.mark.integration

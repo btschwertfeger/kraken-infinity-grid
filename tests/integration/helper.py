@@ -6,6 +6,7 @@
 # pylint: disable=arguments-differ
 
 """ Helper data structures used for integration testing. """
+
 import uuid
 from typing import Any, Callable, Self
 
@@ -73,41 +74,6 @@ class KrakenAPI(Trade, User):
 
         self.__orders[txid] = order
         return {"txid": [txid]}
-
-    def cancel_order(self: Self, txid: str) -> None:
-        """Cancel an order and update balances if needed."""
-        order = self.__orders.get(txid, {})
-        if not order:
-            return
-
-        order.update({"status": "canceled"})
-        self.__orders[txid] = order
-
-        if order["descr"]["type"] == "buy":
-            executed_cost = float(order["vol_exec"]) * float(order["descr"]["price"])
-            remaining_cost = (
-                float(order["vol"]) * float(order["descr"]["price"]) - executed_cost
-            )
-            self.__balances["ZUSD"]["balance"] = str(
-                float(self.__balances["ZUSD"]["balance"]) + remaining_cost,
-            )
-            self.__balances["ZUSD"]["hold_trade"] = str(
-                float(self.__balances["ZUSD"]["hold_trade"]) - remaining_cost,
-            )
-            self.__balances["XXBT"]["balance"] = str(
-                float(self.__balances["XXBT"]["balance"]) - float(order["vol_exec"]),
-            )
-        elif order["descr"]["type"] == "sell":
-            remaining_volume = float(order["vol"]) - float(order["vol_exec"])
-            self.__balances["XXBT"]["balance"] = str(
-                float(self.__balances["XXBT"]["balance"]) + remaining_volume,
-            )
-            self.__balances["XXBT"]["hold_trade"] = str(
-                float(self.__balances["XXBT"]["hold_trade"]) - remaining_volume,
-            )
-            self.__balances["ZUSD"]["balance"] = str(
-                float(self.__balances["ZUSD"]["balance"]) - float(order["cost"]),
-            )
 
     def fill_order(self: Self, txid: str, volume: float | None = None) -> None:
         """Fill an order and update balances."""
@@ -189,6 +155,41 @@ class KrakenAPI(Trade, User):
             ):
                 await fill_order(order["txid"])
 
+    def cancel_order(self: Self, txid: str) -> None:
+        """Cancel an order and update balances if needed."""
+        order = self.__orders.get(txid, {})
+        if not order:
+            return
+
+        order.update({"status": "canceled"})
+        self.__orders[txid] = order
+
+        if order["descr"]["type"] == "buy":
+            executed_cost = float(order["vol_exec"]) * float(order["descr"]["price"])
+            remaining_cost = (
+                float(order["vol"]) * float(order["descr"]["price"]) - executed_cost
+            )
+            self.__balances["ZUSD"]["balance"] = str(
+                float(self.__balances["ZUSD"]["balance"]) + remaining_cost,
+            )
+            self.__balances["ZUSD"]["hold_trade"] = str(
+                float(self.__balances["ZUSD"]["hold_trade"]) - remaining_cost,
+            )
+            self.__balances["XXBT"]["balance"] = str(
+                float(self.__balances["XXBT"]["balance"]) - float(order["vol_exec"]),
+            )
+        elif order["descr"]["type"] == "sell":
+            remaining_volume = float(order["vol"]) - float(order["vol_exec"])
+            self.__balances["XXBT"]["balance"] = str(
+                float(self.__balances["XXBT"]["balance"]) + remaining_volume,
+            )
+            self.__balances["XXBT"]["hold_trade"] = str(
+                float(self.__balances["XXBT"]["hold_trade"]) - remaining_volume,
+            )
+            self.__balances["ZUSD"]["balance"] = str(
+                float(self.__balances["ZUSD"]["balance"]) - float(order["cost"]),
+            )
+
     def cancel_all_orders(self: Self, **kwargs: Any) -> None:  # noqa: ARG002
         """Cancel all open orders."""
         for txid in self.__orders:
@@ -199,13 +200,6 @@ class KrakenAPI(Trade, User):
         return {
             "open": {k: v for k, v in self.__orders.items() if v["status"] == "open"},
         }
-
-    # def update_order(self: Self, txid: str, **kwargs: Any) -> dict:
-    #     """ Update an order. """
-    #     order = self.__orders.get(txid, {})
-    #     order.update(kwargs)
-    #     self.__orders[txid] = order
-    #     return {txid: order}
 
     def get_orders_info(self: Self, txid: str) -> dict:
         """Get information about a specific order."""
