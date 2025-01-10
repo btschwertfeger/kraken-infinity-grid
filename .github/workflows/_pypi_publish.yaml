@@ -1,0 +1,56 @@
+# -*- coding: utf-8 -*-
+# Copyright (C) 2023 Benjamin Thomas Schwertfeger
+# GitHub: https://github.com/btschwertfeger
+#
+# Template workflow to build the project and publish
+# the package to PyPI.
+#
+
+name: PyPI Publish
+
+on:
+  workflow_call:
+    secrets:
+      API_TOKEN:
+        required: true
+
+permissions: read-all
+
+jobs:
+  publish-to-pypi:
+    name: Publish Python distribution to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # IMPORTANT: this permission is mandatory for OIDC publishing
+    environment:
+      name: pypi
+      url: https://pypi.org/p/kraken-infinity-grid
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          disable-sudo: true
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            fulcio.sigstore.dev
+            ghcr.io
+            github.com:443
+            pkg-containers.githubusercontent.com:443
+            pypi.org
+            rekor.sigstore.dev
+            tuf-repo-cdn.sigstore.dev
+            upload.pypi.org
+            uploads.github.com:443
+
+      - name: Download all the distributions
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@67339c736fd9354cd4f8cb0b744f2b82a74b5c70 # release/v1
+        with:
+          password: ${{ secrets.API_TOKEN }}
+          repository-url: https://upload.pypi.org/legacy/
