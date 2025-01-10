@@ -43,7 +43,7 @@ def config() -> dict:
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)
-async def test_integration_HODL(  # noqa: C901,PLR0915
+async def test_integration_GridHODL(  # noqa: C901,PLR0915
     mock_sleep_gridbot: mock.Mock,  # noqa: ARG001
     mock_sleep_order_management: mock.Mock,  # noqa: ARG001
     instance: KrakenInfinityGridBot,
@@ -314,3 +314,76 @@ async def test_integration_HODL(  # noqa: C901,PLR0915
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)
+async def test_integration_GridHODL_unfilled_surplus(
+    mock_sleep_gridbot: mock.Mock,  # noqa: ARG001
+    mock_sleep_order_management: mock.Mock,  # noqa: ARG001
+    instance: KrakenInfinityGridBot,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """
+    Integration test for the GridHODL strategy using pre-generated websocket
+    messages.
+
+    This test checks if the unfilled surplus is handled correctly.
+
+    unfilled surplus: The base currency volume that was partly filled by an buy
+    order, before the order was cancelled.
+    """
+    caplog.set_level(logging.INFO)
+
+    # Mock the initial setup
+    instance.market.get_ticker.return_value = {"XXBTZUSD": {"c": ["50000.0"]}}
+
+    await instance.on_message(
+        {
+            "channel": "ticker",
+            "data": [{"symbol": "BTC/USD", "last": 50000.0}],
+        },
+    )
+    assert not instance.is_ready_to_trade
+
+    # ==========================================================================
+    # During the following processing, the following steps are done:
+    # 1. The algorithm prepares for trading (see setup)
+    # 2. The order manager checks the price range
+    # 3. The order manager checks for n open buy orders
+    # 4. The order manager places new orders
+    await instance.on_message(
+        {
+            "channel": "executions",
+            "type": "snapshot",
+            "data": [{"exec_type": "canceled", "order_id": "txid0"}],
+        },
+    )
+
+    # The algorithm should already be ready to trade
+    assert instance.is_ready_to_trade
+
+    # ==========================================================================
+    # 1. PLACEMENT OF INITIAL N BUY ORDERS
+    # After both fake-websocket channels are connected, the algorithm went
+    # through its full setup and placed orders against the fake Kraken API and
+    # finally saved those results into the local orderbook table.
+
+    # Check if the five initial buy orders are placed with the expected price
+    # and volume. Note that the interval is not exactly 0.01 due to the fee
+    # which is taken into account.
+    for order, price, volume in zip(
+        instance.orderbook.get_orders().all(),
+        [49504.9, 49014.7, 48529.4, 48048.9, 47573.1],
+        [0.00202, 0.0020402, 0.0020606, 0.00208121, 0.00210202],
+        strict=True,
+    ):
+        assert order.price == price
+        assert order.volume == volume
+        assert order.side == "buy"
+        assert order.symbol == "BTCUSD"
+        assert order.userref == instance.userref
+
+    # ==========================================================================

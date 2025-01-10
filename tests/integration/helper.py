@@ -6,9 +6,8 @@
 # pylint: disable=arguments-differ
 
 """ Helper data structures used for integration testing. """
-
 import uuid
-from typing import Self
+from typing import Any, Self
 
 from kraken.spot import Trade, User
 
@@ -50,11 +49,22 @@ class KrakenAPI(Trade, User):
                 "fee": "0.0",
             },
         }
-
         return {"txid": [txid]}
 
     def cancel_order(self: Self, txid: str) -> None:
-        self.__orders.get(txid, {}).update({"status": "canceled"})
+        order = self.__orders.get(txid, {})
+        order.update({"status": "canceled"})
+        self.__orders[txid] = order
+
+        if order["vol_exec"] != "0.0" and order["descr"]["type"] == "buy":
+            self.__balances["XXBT"]["balance"] = float(
+                self.__balances["ZUSD"]["balance"],
+            ) + float(order["vol_exec"])
+            self.__balances["ZUSD"]["balance"] = float(
+                self.__balances["ZUSD"]["balance"],
+            ) - float(order["cost"])
+
+        # Sell orders do not get canceled...
 
     def fill_order(self: Self, txid: str) -> None:
         order = self.__orders.get(txid, {})
@@ -64,20 +74,33 @@ class KrakenAPI(Trade, User):
             "vol_exec": order["vol"],
             "cost": str(float(order["vol"]) + float(order["fee"])),
         }
+        self.__orders[txid] = order
+        self.__balances["XXBT"]["balance"] = str(
+            float(self.__balances["XXBT"]["balance"]) - float(order["vol_exec"]),
+        )
+        self.__balances["ZUSD"]["balance"] = str(
+            float(self.__balances["ZUSD"]["balance"]) - float(order["cost"]),
+        )
 
-    def cancel_all_orders(self, **kwargs) -> None:  # noqa: ARG002,ANN003
+    def cancel_all_orders(self: Self, **kwargs: Any) -> None:  # noqa: ARG002
         for txid in self.__orders:
             self.cancel_order(txid)
 
-    def get_open_orders(self, **kwargs) -> dict:  # noqa: ARG002,ANN003
+    def get_open_orders(self, **kwargs: Any) -> dict:  # noqa: ARG002
         return {
             "open": {k: v for k, v in self.__orders.items() if v["status"] == "open"},
         }
+
+    def update_order(self: Self, txid: str, **kwargs: Any) -> dict:
+        order = self.__orders.get(txid, {})
+        order.update(kwargs)
+        self.__orders[txid] = order
+        return {txid: order}
 
     def get_orders_info(self: Self, txid: str) -> dict:
         if (order := self.__orders.get(txid, None)) is not None:
             return {txid: order}
         return {}
 
-    def get_balances(self, **kwargs) -> dict:  # noqa: ARG002, ANN003
+    def get_balances(self: Self, **kwargs: Any) -> dict:  # noqa: ARG002
         return self.__balances

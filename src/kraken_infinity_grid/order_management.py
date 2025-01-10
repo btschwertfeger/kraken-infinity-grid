@@ -675,6 +675,7 @@ class OrderManager:
             if self.__s.dry_run:
                 LOG.info("DRY RUN: Not cancelling order: %s", txid)
                 return
+
             self.__s.trade.cancel_order(txid=txid)
             self.__s.orderbook.remove(filters={"txid": txid})
 
