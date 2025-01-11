@@ -173,15 +173,13 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     type=INT,
     default=3,
     callback=ensure_larger_than_zero,
-    help="The number of concurrent open buy orders.",
-)
-@option(
-    "--cancel-all-open-buy-orders",
-    required=True,
-    type=BOOL,
-    default=False,
-    is_flag=True,
-    help="Cancel all open buy orders on start.",
+    help="""
+    The number of concurrent open buy orders e.g., ``5``. The number of
+    always open buy positions specifies how many buy positions should be
+    open at the same time. If the interval is defined to 2%, a number of 5
+    open buy positions ensures that a rapid price drop of almost 10% that
+    can be caught immediately.
+    """,
 )
 @option(
     "--telegram-token",

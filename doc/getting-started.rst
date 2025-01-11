@@ -109,3 +109,11 @@ the PostgreSQL database. To run the algorithm, follow these steps:
 
 .. NOTE:: In the future, there will be a Docker image available including
           `kraken-infinity-grid`_! Stay tuned!
+
+Monitoring
+----------
+
+Trades as well as open positions can be monitored via the `Kraken`_ website.
+Additionally, `kraken-infinity-grid`_ can be configured to send notifications
+about the current state of the algorithm via Telegram Bots (see
+:ref:`Preparation <getting-started-section>`).

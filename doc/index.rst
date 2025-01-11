@@ -19,9 +19,9 @@ Welcome to kraken-infinity-grid's documentation!
    :maxdepth: 2
 
    introduction.rst
+   strategies.rst
    getting-started.rst
    configuration.rst
-   strategies.rst
    license.rst
 
 Indices and tables
