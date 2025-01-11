@@ -62,7 +62,7 @@ one for exception notifications (see [Setup](#Setup) for more information).
   quote currency, e.g. 100,000 USD for 1 BTC, 100,000 is the price.
 
 - **Grid interval**: The grid interval is the percentage difference between the
-  placed buy orders, e.g. 4 %. If the current price rises 'to high', the placed
+  placed buy orders, e.g. 4 %. If the current price rises 'too high', the placed
   buy orders will be cancelled and new buy orders will be placed 'interval' %
   below the current price (shifting up). The interval for buy orders is always
   based on the current price _or_ the next higher buy order, e.g. if the current

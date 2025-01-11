@@ -13,6 +13,8 @@ needs. The following configuration variables can be either set as command-line
 arguments or via environment variables. They are mapped to the corresponding
 command-line arguments internally.
 
+.. _database-configuration-section:
+
 Database Configuration
 ----------------------
 
@@ -23,7 +25,7 @@ set via environment variables or command-line arguments.
 PostgreSQL
 ----------
 
-When using the algorithm as proposed in :ref:`Getting started
+When using the algorithm as proposed in :ref:`Getting Started
 <getting-started-docker-compose-section>` via the provided Docker Compose file,
 the PostgreSQL database is automatically configured.
 
@@ -47,8 +49,8 @@ For this purpose, the option ``--sqlite-file`` can be used to specify the path
 to the SQLite database file. The SQLite database is created automatically if it
 does not exist.
 
-Alternatively, the ``KRAKEN_RUN_QLITE_FILE`` environment variable can be used to
-specify the path to the SQLite database file.
+Alternatively, the ``KRAKEN_RUN_SQLITE_FILE`` environment variable can be used
+to specify the path to the SQLite database file.
 
 .. NOTE:: Do not use ``:memory:`` for an in-memory database, as this will
           result in data loss when the algorithm is restarted.
@@ -78,10 +80,13 @@ Environment Variables
       - Your Kraken secret key.
     * - ``KRAKEN_RUN_NAME``
       - ``str``
-      - The name of the bot, displayed in telegram to differentiate between different instances.
+      - The name of the instance. Can be any name that is used to differentiate
+        between instances of the kraken-infinity-grid.
     * - ``KRAKEN_RUN_USERREF``
       - ``int``
-      - A reference number to identify the algorithm's orders. This can be a timestamp or any integer number. **Use different userref's for different algorithms!**
+      - A reference number to identify the algorithm's orders. This can be a
+        timestamp or any integer number.
+        **Use different userref's for different algorithms!**
     * - ``KRAKEN_BOT_VERBOSE``
       - ``int`` / (``-v``, ``-vv``)
       - Enable verbose logging.
@@ -141,5 +146,5 @@ Environment Variables
       - The PostgreSQL database port.
     * - ``KRAKEN_RUN_SQLITE_FILE``
       - ``str``
-      - The path to a local SQLite database file., e.g., ``/path/to/sqlite.db``,
+      - The path to a local SQLite database file, e.g., ``/path/to/sqlite.db``,
         will be created if it does not exist.

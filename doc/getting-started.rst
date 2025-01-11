@@ -18,24 +18,34 @@ Preparation
 
 1. In order to trade at the `Kraken`_ Cryptocurrency Exchange, you need to
    generate API keys for the Kraken exchange. You can do this by following the
-   instructions on the `Kraken`_ website. Make sure to generate keys with the
-   required permissions for trading and querying orders.
+   instructions on the `Kraken`_ website (see `How to create an API key
+   <https://support.kraken.com/hc/en-us/articles/360000919966-How-to-create-an-API-key>`_).
+   Make sure to generate keys with the required permissions for trading and
+   querying orders:
 
-2. The algorithm leverages Telegram Bots to send notifications about the current
-   state of the algorithm. We need two telegram bots, one for the notifications
+    .. figure:: _static/images/Kraken_api_key_permissions.png
+        :width: 600
+        :align: center
+        :alt: Kraken API Key Permissions
+
+2. [optional] The algorithm leverages Telegram Bots to send notifications about
+   the current state of the algorithm. We need two, one for the notifications
    about the algorithm's state and trades and one for notifications about
    errors.
 
    - Create two bots, name as you wish via: https://telegram.me/BotFather.
-   - Start the chat with both new telegram bots.
+   - Start the chat with both new Telegram bots and write any message to ensure
+     that the chat ID is available in the next step.
    - Get the bot token from the BotFather and access
      ``https://api.telegram.org/bot<your bot token here>/getUpdates`` to receive
      your chat ID.
-   - Save the chat_id as well as the bot tokens for both of them, we'll need
-     them later.
+   - Save the chat IDs as well as the bot tokens for both of them, we'll
+     need them later.
 
 Running as pure Python process
 ------------------------------
+
+To run the algorithm as a pure Python process, follow these steps:
 
 1. Install the package via pip:
 
@@ -45,28 +55,30 @@ Running as pure Python process
         source venv/bin/activate
         pip install kraken-infinity-grid
 
-2. Run the algorithm via command-line while using a local sqlite database:
+2. The algorithm can be started via the command-line interface. For using a
+   local SQLite database, you can specify the path to the SQLite database file
+   via the ``--sqlite-file`` option. The SQLite database is created
+   automatically if it does not exist, otherwise the existing database is used
+   (see :ref:`Database Configuration <database-configuration-section>`).
 
     .. code-block:: bash
 
         kraken-infinity-grid \
             --api-key <your-api-key> \
-            --api-secret <your-api-secret> \
-            --telegram-bot-token <your-telegram-bot-token> \
-            --telegram-chat-id <your-telegram-chat-id> \
+            --secret-key <your-api-secret> \
             run \
+            --strategy "GridHODL"
             ...
             --sqlite-file=/path/to/sqlite.db
-
 
 .. _getting-started-docker-compose-section:
 
 Running via Docker Compose
 --------------------------
 
-This repository of this project (`kraken-infinity-grid`_) contains a
-``docker-compose.yaml`` file that can be used to run the algorithm using docker
-compose. The ``docker-compose.yaml`` also provides a default configuration for
+This repository of the `kraken-infinity-grid`_ contains a
+``docker-compose.yaml`` file that can be used to run the algorithm using Docker
+Compose. The ``docker-compose.yaml`` also provides a default configuration for
 the PostgreSQL database. To run the algorithm, follow these steps:
 
 1. Clone the repository:
@@ -82,9 +94,9 @@ the PostgreSQL database. To run the algorithm, follow these steps:
        docker system prune -a
        docker compose build --no-cache
 
-3. Configure the algorithm by either by ensuring the environment variables
+3. Configure the algorithm either by ensuring the environment variables
    documented in the :ref:`Configuration <configuration-section>` section are
-   set.
+   set or by setting them directly within the ``docker-compose.yaml``.
 
 4. Run the algorithm:
 
@@ -96,4 +108,4 @@ the PostgreSQL database. To run the algorithm, follow these steps:
 5. Check the logs of the container and the Telegram chat for updates.
 
 .. NOTE:: In the future, there will be a Docker image available including
-          kraken-infinity-grid.
+          `kraken-infinity-grid`_! Stay tuned!

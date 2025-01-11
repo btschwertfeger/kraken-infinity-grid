@@ -45,10 +45,10 @@ to use different trading strategies, such as :ref:`GridHODL
 <strategies-cdca-section>`.
 
 While the verbosity levels of logging provide useful insights into the
-algorithm's behavior, the Telegram notifications can be used to receive updates
-on the algorithm's activity and exceptions. For this, the algorithm requires two
-different Telegram bot tokens and chat IDs, one for regular notifications and
-one for exception notifications (see :ref:`Getting started
+algorithm's behavior, the optional Telegram notifications can be used to receive
+updates on the algorithm's activity and exceptions. For this, the algorithm
+requires two different Telegram bot tokens and chat IDs, one for regular
+notifications and one for exception notifications (see :ref:`Getting started
 <getting-started-section>` for more information).
 
 Troubleshooting

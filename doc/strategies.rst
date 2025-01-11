@@ -6,6 +6,7 @@
 Strategies
 ==========
 
+
 Information about terms used
 ----------------------------
 
@@ -19,7 +20,7 @@ Information about terms used
   quote currency, e.g. 100,000 USD for 1 BTC, 100,000 is the price.
 
 - **Grid interval**: The grid interval is the percentage difference between the
-  placed buy orders, e.g. 4 %. If the current price rises 'to high', the placed
+  placed buy orders, e.g. 4 %. If the current price rises 'too high', the placed
   buy orders will be cancelled and new buy orders will be placed 'interval' %
   below the current price (shifting up). The interval for buy orders is always
   based on the current price _or_ the next higher buy order, e.g. if the current
@@ -34,6 +35,81 @@ Information about terms used
   :math:`(p\cdot(1+i))^2*1.001` where :math:`p` is the highest price of an
   existing, unfilled buy order and :math:`i` is the interval (e.g. 4 %, i.e.
   0.04). This technique ensures that buy orders don't get out of scope.
+
+Fundamental concepts
+--------------------
+
+`kraken-infinity-grid`_ enables automatic trading of a cryptocurrency pair. A
+currency pair consists of a base currency and a quote currency. The currency
+pair, e.g. BTC/USD has as base currency BTC and USD as quote currency.
+Basically, this algorithm follows a grid strategy, in which trading takes place
+at fixed intervals. This means that assets with very high volatility are
+significantly more profitable than those that are subject to lower fluctuation.
+The volume of each position always has approximately the same amount. This can
+be set by the user or dynamically adjusted by the algorithm (depending on the
+strategy used).
+
+If a purchase was made, depending on the strategy, a part of the purchased base
+currency is immediately offered for sale in the amount of the specified position
+size above the current price. Above means that the size of the specified
+interval is adhered to. This interval must be set by the user before the start
+(e.g., in 2 % intervals between orders).
+
+Due to the increased price when selling, while the volume in the quote currency
+remains the same (depending on the strategy), less of the base currency is sold
+than was bought, causing a portion of the base currency to accumulate in the
+portfolio each time it is bought (which is true for the `GirdHODL
+<strategies-gridhodl-section>`_ strategy).
+
+By default, the accumulated base currency is not further used by the algorithm.
+However, there is a possibility to reinvest it. In this case, as soon as there
+is no open sell position, a new sell position is set in the amount of the
+defined position volume, above the highest buy price corresponding to the
+trading interval. This procedure is the part of the optional swing strategy,
+which sells the accumulated base currency to increase the stock of the quote
+currency. If by selling the
+
+accumulated base currency several times the quota currency exceeds a certain
+threshold, the size of the set volume per position will be increased. This new
+position size is valid for all positions opened afterwards.
+
+A. CUSTOMIZATION
+
+The following parameters must be defined before starting the algorithm.
+
+- Trading interval
+- Number of concurrent open buy orders
+- The order volume
+
+The trading interval determines the intervals at which to buy and sell. For some
+currency pairs it is worth setting this interval very high (5-10%). Others have
+many smaller movements, so for them a lower interval of 0.5-2% can be more
+profitable. It should be noted that this interval must be higher than the
+transaction fee for the respective assets on the exchange. The number of open
+positions indicates the proportion of the available capital to be divided. Here,
+a value of 120 should not be exceeded in order to comply with the limits of many
+exchanges. The number of always open buy positions specifies how many buy
+positions should be open at the same time. If the position interval is defined
+to 2%, a number of 5 open buy positions ensures that a rapid price drop of
+almost 10% can be caught immediately. After a buy has been triggered, new
+positions are placed accordingly. The number of open buy positions should be
+kept low to keep the transaction time as short as possible. The following is an
+example configuration of the algorithm described herein.
+
+It should be noted that this is spot trading and no leverage products are used.
+furthermore, all currencies remain on the user's account. The algorithm can only
+trade the currencies there and is not able to send them to other accounts. Users
+have the possibility to transfer their assets, which are not in open positions,
+back and forth between the accounts at any time. Thus, profits can be realized
+or the investment amount can be increased.
+
+All currency pairs mentioned here are for illustrative purposes only.
+
+.. figure:: _static/images/blsh.png
+   :width: 600
+   :align: center
+   :alt: Buying low and selling high
+
 
 Available strategies
 --------------------

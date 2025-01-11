@@ -136,7 +136,10 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     "--name",
     required=True,
     type=STRING,
-    help="The name of the bot.",
+    help="""
+    The name of the instance. Can be any name that is used to differentiate
+    between instances of the kraken-infinity-grid.
+    """,
 )
 @option(
     "--base-currency",
@@ -184,7 +187,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     "--telegram-token",
     required=False,
     type=STRING,
-    help="The telegram token to use.",
+    help="The Telegram token to use.",
 )
 @option(
     "--telegram-chat-id",
