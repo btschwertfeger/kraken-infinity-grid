@@ -64,14 +64,15 @@ within a "grid" of prices, purchasing assets when prices dip and selling them as
 prices rise. This systematic approach helps in capturing small gains repeatedly,
 leveraging the natural oscillations in market prices.
 
-<figure>
-  <img
-  src="doc/_static/images/blsh.png?raw=true"
-  alt="Buying low and selling high in high-volatile markets"
-  style="background-color: white; border-radius: 7px">
-  <figcaption>Figure 1: Buying low and selling high in high-volatile markets</figcaption>
-</figure>
-
+<div align="center">
+  <figure>
+    <img
+    src="doc/_static/images/blsh.png?raw=true"
+    alt="Buying low and selling high in high-volatile markets"
+    style="background-color: white; border-radius: 7px">
+    <figcaption>Figure 1: Buying low and selling high in high-volatile markets</figcaption>
+  </figure>
+</div>
 _All currency pairs mentioned here are for illustrative purposes only._
 
 ### 📊 Key Elements of Grid Trading
@@ -230,13 +231,15 @@ algorithm's behavior and performance!
    Make sure to generate keys with the required permissions for trading and
    querying orders:
 
-<figure>
-  <img
-  src="doc/_static/images/kraken_api_key_permissions.png?raw=true"
-  alt="Required API key permissions"
-  style="background-color: white; border-radius: 7px">
-  <figcaption>Figure 2: Required API key permissions</figcaption>
-</figure>
+<div align="center">
+  <figure>
+    <img
+    src="doc/_static/images/kraken_api_key_permissions.png?raw=true"
+    alt="Required API key permissions"
+    style="background-color: white; border-radius: 7px">
+    <figcaption>Figure 2: Required API key permissions</figcaption>
+  </figure>
+</div>
 
 2. [optional] The algorithm leverages Telegram Bots to send notifications about
    the current state of the algorithm. We need two, one for the notifications
@@ -326,23 +329,31 @@ PostgreSQL database. To run the algorithm, follow these steps:
 ## 📡 Monitoring
 
 Trades as well as open positions can be monitored at
-[Kraken](https://pro.kraken.com). Additionally, the algorithm can be configured
-to send notifications about the current state of the algorithm via Telegram Bots
-(see [Preparation](#preparation)).
+[Kraken](https://pro.kraken.com).
 
-<figure>
-  <img
-  src="doc/_static/images/kraken_dashboard.png?raw=true"
-  alt="Monitoring orders via Kraken's web UI"
-  style="background-color: white; border-radius: 7px; display: inline-block; height: 300px; width: 500px">
-  <img
-  src="doc/_static/images/telegram_update.png?raw=true"
-  alt="Telegram update notification"
-  style="background-color: white; border-radius: 7px; display: inline-block; height: 300px;">
-  <figcaption>Figure 3: Monitoring orders via Kraken's web UI and Telegram</figcaption>
-</figure>
+<div align="center">
+  <figure>
+    <img
+    src="doc/_static/images/kraken_dashboard.png?raw=true"
+    alt="Required API key permissions"
+    style="background-color: white; border-radius: 7px">
+    <figcaption>Figure 3: Monitoring orders via Kraken's web UI</figcaption>
+  </figure>
+</div>
 
-<a name="trouble"></a>
+Additionally, the algorithm can be configured to send notifications about the
+current state of the algorithm via Telegram Bots (see
+[Preparation](#preparation)).
+
+<div align="center">
+  <figure>
+    <img
+    src="doc/_static/images/telegram_update.png?raw=true"
+    alt="Required API key permissions"
+    style="background-color: white; border-radius: 7px; height: 500px">
+    <figcaption>Figure 4: Monitoring orders and trades via Telegram</figcaption>
+  </figure>
+</div>
 
 ## 🚨 Troubleshooting
 
