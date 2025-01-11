@@ -334,7 +334,7 @@ to send notifications about the current state of the algorithm via Telegram Bots
   <img
   src="doc/_static/images/kraken_dashboard.png?raw=true"
   alt="Monitoring orders via Kraken's web UI"
-  style="background-color: white; border-radius: 7px; display: inline-block; height: 300px;">
+  style="background-color: white; border-radius: 7px; display: inline-block; height: 300px; width: 500px">
   <img
   src="doc/_static/images/telegram_update.png?raw=true"
   alt="Telegram update notification"
