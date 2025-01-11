@@ -73,6 +73,7 @@ leveraging the natural oscillations in market prices.
     <figcaption>Figure 1: Buying low and selling high in high-volatile markets</figcaption>
   </figure>
 </div>
+
 _All currency pairs mentioned here are for illustrative purposes only._
 
 ### 📊 Key Elements of Grid Trading
@@ -225,8 +226,7 @@ algorithm's behavior and performance!
 
 1. In order to trade at the [Kraken Cryptocurrency
    Exchange](https://pro.kraken.com), you need to generate API keys for the
-   Kraken exchange. You can do this by following the instructions on the
-   `Kraken`\_ website (see [How to create an API
+   Kraken exchange (see [How to create an API
    key](https://support.kraken.com/hc/en-us/articles/360000919966-How-to-create-an-API-key)).
    Make sure to generate keys with the required permissions for trading and
    querying orders:
