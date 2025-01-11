@@ -14,7 +14,7 @@ arguments or via environment variables. They are mapped to the corresponding
 command-line arguments internally.
 
 Command-line Interface
------------------------
+----------------------
 
 `kraken-infinity-grid`_ provides a command-line interface (CLI) to configure and
 run the trading algorithm. The CLI is based on the `Click
@@ -90,7 +90,7 @@ naming convention.
       - A custom fee percentage, e.g. ``0.0026`` for 0.26 % fee.
     * - ``KRAKEN_RUN_STRATEGY``
       - ``str``
-      - The trading strategy (e.g., ``GridHODL``, ``GridSell``, ``SWING``, or ``cDCA``).
+      - The trading strategy, e.g., ``GridHODL``, ``GridSell``, ``SWING``, or ``cDCA``
     * - ``KRAKEN_RUN_TELEGRAM_TOKEN``
       - ``str``
       - The Telegram bot token for notifications.
@@ -121,7 +121,7 @@ naming convention.
     * - ``KRAKEN_RUN_SQLITE_FILE``
       - ``str``
       - The path to a local SQLite database file, e.g., ``/path/to/sqlite.db``,
-        will be created if it does not exist.
+        will be created if it does not exist. If a SQLite database is used, the PostgreSQL database configuration is ignored.
 
 .. _database-configuration-section:
 

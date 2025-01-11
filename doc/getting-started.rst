@@ -8,7 +8,7 @@
 Getting Started
 ===============
 
-Before installing and running the `kraken-infinity-grid`_ package, you need to
+Before installing and running the `kraken-infinity-grid`_, you need to
 make sure to clearly understand the available trading strategies and their
 configuration. Avoid running the algorithm with real money before you are
 confident in the algorithm's behavior and performance!
@@ -39,8 +39,8 @@ Preparation
    - Get the bot token from the BotFather and access
      ``https://api.telegram.org/bot<your bot token here>/getUpdates`` to receive
      your chat ID.
-   - Save the chat IDs as well as the bot tokens for both of them, we'll
-     need them later.
+   - Save the chat IDs as well as the bot tokens for both of them, we'll need
+     them later.
 
 Running as pure Python process
 ------------------------------
@@ -76,10 +76,10 @@ To run the algorithm as a pure Python process, follow these steps:
 Running via Docker Compose
 --------------------------
 
-This repository of the `kraken-infinity-grid`_ contains a
-``docker-compose.yaml`` file that can be used to run the algorithm using Docker
-Compose. The ``docker-compose.yaml`` also provides a default configuration for
-the PostgreSQL database. To run the algorithm, follow these steps:
+The repository of the `kraken-infinity-grid`_ contains a ``docker-compose.yaml``
+file that can be used to run the algorithm using Docker Compose. This file also
+provides a default configuration for the PostgreSQL database. To run the
+algorithm, follow these steps:
 
 1. Clone the repository:
 
@@ -113,7 +113,7 @@ the PostgreSQL database. To run the algorithm, follow these steps:
 Monitoring
 ----------
 
-Trades as well as open positions can be monitored via the `Kraken`_ website.
-Additionally, `kraken-infinity-grid`_ can be configured to send notifications
-about the current state of the algorithm via Telegram Bots (see
-:ref:`Preparation <getting-started-section>`).
+Trades as well as open positions can be monitored at `Kraken`_. Additionally,
+the algorithm can be configured to send notifications about the current state of
+the algorithm via Telegram Bots (see :ref:`Preparation
+<getting-started-section>`).

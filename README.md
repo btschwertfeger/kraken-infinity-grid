@@ -48,87 +48,222 @@ on the algorithms's activity and exceptions. For this the algorithm requires two
 different Telegram bot tokens and chat IDs, one for regular notifications and
 one for exception notifications (see [Setup](#Setup) for more information).
 
-# 📍 Strategy Overview
+## 📚 Fundamental concepts
 
-## Information about terms used
+`kraken-infinity-grid` is a sophisticated trading algorithm designed for
+automated cryptocurrency trading using a grid strategy. This approach is
+particularly effective in volatile markets, where frequent price fluctuations
+allow for consistent profit opportunities through structured buying and selling
+patterns.
 
-- **Base currency**: The base currency is the currency that is being bought and
-  sold, e.g. BTC. for the symbol BTC/EUR.
+### 📈 The core idea: Grid trading
 
-- **Quote currency**: The quote currency is the currency that is being used to
-  buy and sell the base currency, e.g. EUR. for the symbol BTC/EUR.
+At its essence, grid trading aims to capitalize on market volatility by setting
+a series of buy and sell orders at predefined intervals. The algorithm operates
+within a "grid" of prices, purchasing assets when prices dip and selling them as
+prices rise. This systematic approach helps in capturing small gains repeatedly,
+leveraging the natural oscillations in market prices.
 
-- **Price**: The price is the current price of the base currency in terms of the
-  quote currency, e.g. 100,000 USD for 1 BTC, 100,000 is the price.
+<figure>
+  <img
+  src="doc/_static/images/blsh.png?raw=true"
+  alt="Buying low and selling high in high-volatile markets"
+  style="background-color: white; border-radius: 7px">
+  <figcaption>Figure 1: Buying low and selling high in high-volatile markets</figcaption>
+</figure>
 
-- **Grid interval**: The grid interval is the percentage difference between the
-  placed buy orders, e.g. 4 %. If the current price rises 'too high', the placed
-  buy orders will be cancelled and new buy orders will be placed 'interval' %
-  below the current price (shifting up). The interval for buy orders is always
-  based on the current price _or_ the next higher buy order, e.g. if the current
-  price is 100,000 USD and the interval is 4 %, the first buy order will be
-  placed at 96,000 USD, the second buy order at 92,160 USD, the third buy order
-  at 88,4736 USD, and so on. The interval for sell orders is usually based on
-  the buy price, e.g. if the buy price was 100,000 USD, the sell order will be
-  placed for 104,000 USD.
+_All currency pairs mentioned here are for illustrative purposes only._
 
-- **Shifting up**: Shifting up is the process of canceling and replacing the buy
-  orders if the current price rises above a certain threshold, which is
-  $(p\cdot(1+i))^2*1.001$ where $p$ is the highest price of an existing,
-  unfilled buy order and $i$ is the interval (e.g. 4 %, i.e. 0.04). This
-  technique ensures that buy orders don't get out of scope.
+### 📊 Key Elements of Grid Trading
 
-## Available Strategies
+1. **Intervals**: Unlike fully static systems, `kraken-infinity-grid` uses
+   fixed intervals that shift up or down based on price movements, ensuring
+   continuous trading and avoids manual interactions. This flexibility is
+   crucial for maintaining profitability in diverse market environments.
 
-**GridHODL**
+2. **Volatility Advantage**: High volatility is a friend to grid traders. The
+   more the price oscillates, the more opportunities arise to buy low and sell
+   high. The algorithm thrives in such conditions, with each price movement
+   potentially triggering a profitable trade.
 
-The _GridHODL_ strategy is a grid trading strategy that buys and sells at fixed
-intervals, e.g. every 4 %. The algorithm places $n$ buy orders below the current
-price and waits for their execution to then execute the arbitrage and place a
-sell order for the bought base currency at 4 % higher. The key idea here is to
-accumulate a bit of the base currency over time, as the order size in terms of
-quote volume is fixed, e.g. to 100 USD.
+3. **Consistent Position Sizing**: Each trade involves a consistent volume in
+   terms of the quote currency (e.g., $100 per trade). This uniformity
+   simplifies the management of trades and helps in maintaining a balanced
+   portfolio.
 
-**GridSell**
+### 📉 Risk Management and Reinvestment
 
-The _GridSell_ strategy is the counterpart of the GridHODL strategy, as it
-creates a sell order for 100 % of the base currency bought by a single buy
-order, e.g. if a buy order for 100 USD worth of BTC is executed and the interval
-is set to 4 %, the sell order size will be 104 USD worth of BTC.
+1. **Risk Mitigation**: The algorithm inherently incorporates risk management by
+   spreading investments across multiple price levels and maintaining almost
+   consistent trade sizes. This diversification reduces the impact of adverse
+   market movements on the overall portfolio.
 
-**SWING**
+2. **Reinvestment Mechanism**: Accumulated profits can be reinvested, enhancing
+   the trading capital and potential returns. The algorithm automatically
+   adjusts buy and and places sell orders to reflect the increased capital, thus
+   compounding growth over time.
 
-The _SWING_ strategy is another variation of the GridHODL strategy, as it does
-the same but with a twist. The idea is to sell the base currency if the price
-rises above the highest price for which the algorithm has bought the currency,
-e.g. if the algorithm traded and accumulated a lot of BTC/USD between
-40,000-80,000 USD and the highest price for which the algorithm has bought BTC
-was 80,000 USD, the algorithm will start placing sell orders at a fixed interval
-(e.g. 4 %) if the price rises above 80,000 USD, e.g. to sell 100 USD worth of
-BTC at 83,200 USD while further accumulating the currency trades below the
-highest buy price.
+## 📊 Available strategies
+
+Each of the following strategies is designed to leverage different aspects of
+market behavior, providing flexibility and adaptability to traders depending on
+their risk tolerance, market outlook, and investment goals.
+
+### `GridHODL`
+
+The _GridHODL_ strategy operates on a predefined grid system where buy and sell
+orders are placed at fixed intervals below and above the current market price,
+respectively. This strategy is designed to capitalize on market fluctuations by
+buying low and selling high, ensuring gradual accumulation of the base currency
+over time.
+
+Technical Breakdown:
+
+- **Order Placement**: The algorithm dynamically adjusts $n$ buy orders
+  below the current market price. For example, with a 4% interval, if the
+  current BTC price is $50,000, the first buy order is set at $48,000, the
+  second at $46,080, and so on.
+- **Execution**: Upon execution of a buy order, a corresponding sell order is
+  immediately placed at 4% above the purchase price respecting a fixed quote
+  volume. This creates a cycle of continuous buying and selling, with each cycle
+  aiming to yield a small portion in the base currency.
+- **Accumulation**: Unlike traditional trading strategies, GridHODL is designed
+  to accumulate the base currency gradually. Each buy order slightly increases
+  the holdings, while the fixed order size in terms of quote currency (e.g.,
+  $100) ensures consistent exposure.
+
+This strategy is particularly effective in sideways, slightly, and high volatile
+markets, where frequent price oscillations allow for regular execution of the
+grid orders. Accumulating the base currency over time can lead to significant
+gains, especially when prices rise after a long accumulation phase.
+
+### `GridSell`
+
+The _GridSell_ is a complementary approach to `GridHODL`, focusing on
+liquidating the purchased base currency in each trade cycle to realize immediate
+profits. The key distinction is that each sell order matches the total quantity
+bought in the preceding buy order.
+
+Technical Breakdown:
+
+- **Order Logic**: For every buy order executed (e.g., purchasing $100 worth of
+  BTC at $48,000), a sell order is placed for the entire amount of BTC acquired
+  at a 4% higher price. This ensures that each trade cycle results in a complete
+  turnover of the base currency.
+- **Profit Realization**: The strategy ensures that profits are locked in at
+  each cycle, reducing the need for long-term accumulation or holding. It is
+  particularly suitable for traders who prioritize short-term gains over base
+  currency accumulation.
+- **Risk Mitigation**: By liquidating the entire bought amount, the GridSell
+  strategy minimizes exposure to prolonged market downturns, ensuring that the
+  trader consistently realizes profits without holding onto assets for extended
+  periods.
+
+### `SWING`
+
+The _SWING_ strategy builds upon `GridHODL` but introduces a mechanism to
+capitalize on significant upward price movements by selling accumulated base
+currency at higher levels.
+
+Technical Breakdown:
+
+- **Market Adaptation**: This strategy tracks the highest buy price within a
+  defined range (e.g., $40,000 to $80,000). If the market price exceeds this
+  range (e.g., rises to $83,200), the algorithm initiates sell orders at
+  predefined intervals (e.g., 4% above the highest buy price).
+- **Sell Execution**: Unlike `GridHODL`, which focuses on buying and selling in
+  cycles, SWING starts selling accumulated base currency once the price
+  surpasses the highest recorded buy price. This ensures that profits are
+  captured during bullish market trends.
+- **Continuous Accumulation**: Even as it initiates sell orders above the
+  highest buy price, the algorithm continues to place buy orders below it,
+  ensuring that base currency accumulation continues during market dips.
+- **Profit Maximization**: This dual approach allows traders to benefit from
+  both upward trends (through sell orders) and downward corrections (through
+  continued accumulation).
 
 > ⚠️ It also starts selling the already existing base currency above the
 > current price. This should be kept in mind when choosing this
 > strategy.
 
-**cDCA**
+### `cDCA`
 
-The _cDCA_ strategy is a dollar-cost averaging strategy that buys at fixed
-intervals for a fixed size, e.g. 100 USD worth of BTC every 4 % without placing
-sell orders in order to accumulate the base currency over team for speculating
-on rising value in the long run. The difference to classical DCA strategies is
-that even if the price rises, the algorithm will shift-up buy orders instead of
-getting out of scope.
+The _cDCA_ (Custom Dollar-Cost Averaging) strategy diverges from traditional DCA
+by incorporating dynamic interval adjustments to optimize long-term accumulation
+of the base currency.
+
+Technical Breakdown:
+
+- **Fixed Interval Purchases**: Unlike time-based DCA, cDCA places buy orders at
+  fixed percentage intervals (e.g., every 4% price movement) rather than at
+  regular time intervals. This ensures that purchases are made in response to
+  market movements rather than arbitrary time frames.
+- **No Sell Orders**: cDCA focuses purely on accumulation. It consistently buys
+  the base currency (e.g., $100 worth of BTC) at each interval without placing
+  corresponding sell orders, banking on long-term price appreciation.
+- **Adaptive Buy Orders**: The algorithm adapts to rising prices by shifting buy
+  orders upward rather than letting them fall out of scope. For instance, if the
+  price exceeds $60,000, new buy orders are placed at 4% intervals below this
+  new level, maintaining relevance in the current market context.
+- **Long-Term Growth**: This strategy is ideal for traders with a long-term
+  investment horizon, aiming to build a significant position in the base
+  currency over time, with the expectation of future price increases.
 
 <a name="setup"></a>
 
-# 🚀 Setup
+## 🚀 Setup
+
+<a name="preparation"></a>
+
+### Preparation
+
+Before installing and running the `kraken-infinity-grid`, you need to make sure
+to clearly understand the available trading strategies and their configuration.
+Avoid running the algorithm with real money before you are confident in the
+algorithm's behavior and performance!
+
+1. In order to trade at the [Kraken Cryptocurrency
+   Exchange](https://pro.kraken.com), you need to generate API keys for the
+   Kraken exchange. You can do this by following the instructions on the
+   `Kraken`\_ website (see [How to create an API
+   key](https://support.kraken.com/hc/en-us/articles/360000919966-How-to-create-an-API-key)).
+   Make sure to generate keys with the required permissions for trading and
+   querying orders:
+
+<figure>
+  <img
+  src="doc/_static/images/Kraken_api_key_permissions.png?raw=true"
+  alt="Required API key permissions"
+  style="background-color: white; border-radius: 7px">
+  <figcaption>Figure 2: Required API key permissions</figcaption>
+</figure>
+
+2. [optional] The algorithm leverages Telegram Bots to send notifications about
+   the current state of the algorithm. We need two, one for the notifications
+   about the algorithm's state and trades and one for notifications about
+   errors.
+
+   - Create two bots, name as you wish via: https://telegram.me/BotFather.
+   - Start the chat with both new Telegram bots and write any message to ensure
+     that the chat ID is available in the next step.
+   - Get the bot token from the BotFather and access
+     `https://api.telegram.org/bot<your bot token here>/getUpdates` to receive
+     your chat ID.
+   - Save the chat IDs as well as the bot tokens for both of them, we'll need
+     them later.
 
 This repository contains a `docker-compose.yaml` file that can be used to run
 the algorithm using docker compose. The `docker-compose.yaml` also provides a
 default configuration for the PostgreSQL database. To run the algorithm, follow
 these steps:
+
+### Running the algorithm
+
+The repository of the
+[`kraken-infinity-grid`](https://github.com/btschwertfeger/kraken-infinity-grid)
+contains a `docker-compose.yaml` file that can be used to run the algorithm
+using Docker Compose. This file also provides a default configuration for the
+PostgreSQL database. To run the algorithm, follow these steps:
 
 1. Clone the repository:
 
@@ -136,65 +271,72 @@ these steps:
    git clone https://github.com/btschwertfeger/kraken-infinity-grid.git
    ```
 
-2. Build the Docker images: # FIXME: use public docker registry:
+2. Build the Docker images:
 
    ```bash
    docker system prune -a
    docker compose build --no-cache
    ```
 
-3. Setup the Telegram bots:
+3. Configure the algorithm either by ensuring the environment variables
+   documented further down are set or by setting them directly within the
+   `docker-compose.yaml`..
 
-   - Create two new bots, one for regular trading and balance update
-     information, and one for receiving messages about errors that might happen
-     by talking to the [Botfather](https://telegram.me/BotFather).
-   - Start the chat with both new telegram bots.
-   - Get the bot token from the BotFather and access
-     https://api.telegram.org/bot<your bot token here>/getUpdates to receive
-     your chat ID.
-
-4. Configure the algorithm by either by ensuring the environment variables
-   documented in the [Configuration](#configuration) section are set.
-
-5. Run the algorithm:
+4. Run the algorithm:
 
    ```bash
    docker compose up # -d
    ```
 
-6. Check the logs of the container and the Telegram chat for updates.
+5. Check the logs of the container and the Telegram chat for updates.
 
-# 🛠 Configuration
+> ⚠️ **Note**: In the future, there will be a Docker image available including
+> the kraken-infinity-grid! Stay tuned!
 
-| Variable                       | Type               | Description                                                                                                                                                  |
-| ------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `KRAKEN_API_KEY`               | `str`              | Your Kraken API key.                                                                                                                                         |
-| `KRAKEN_SECRET_KEY`            | `str`              | Your Kraken secret key.                                                                                                                                      |
-| `KRAKEN_RUN_NAME`              | `str`              | The name of the bot.                                                                                                                                         |
-| `KRAKEN_RUN_USERREF`           | `int`              | A reference number to identify the algorithms's orders. This can be a timestamp or any integer number. **Use different userref's for different algorithms!** |
-| `KRAKEN_BOT_VERBOSE`           | `int`/(`-v`,`-vv`) | Enable verbose logging.                                                                                                                                      |
-| `KRAKEN_DRY_RUN`               | `bool`             | Enable dry-run mode (no actual trades).                                                                                                                      |
-| `KRAKEN_RUN_BASE_CURRENCY`     | `str`              | The base currency e.g., `BTC`.                                                                                                                               |
-| `KRAKEN_RUN_QUOTE_CURRENCY`    | `str`              | The quote currency e.g., `USD`.                                                                                                                              |
-| `KRAKEN_RUN_AMOUNT_PER_GRID`   | `float`            | The amount to use per grid interval e.g., `100` (USD).                                                                                                       |
-| `KRAKEN_RUN_INTERVAL`          | `float`            | The interval between orders e.g., `0.04` to have 4 % intervals).                                                                                             |
-| `KRAKEN_RUN_N_OPEN_BUY_ORDERS` | `int`              | The number of concurrent open buy orders, e.g., `3`.                                                                                                         |
-| `KRAKEN_RUN_MAX_INVESTMENT`    | `str`              | The maximum investment amount, e.g. `1000` USD.                                                                                                              |
-| `KRAKEN_RUN_STRATEGY`          | `str`              | The trading strategy (e.g., `GridHODL`, `GridSell`, `SWING`, or `cDCA`).                                                                                     |
-| `KRAKEN_RUN_TELEGRAM_TOKEN`    | `str`              | The Telegram bot token for notifications.                                                                                                                    |
-| `KRAKEN_RUN_TELEGRAM_CHAT_ID`  | `str`              | The Telegram chat ID for notifications.                                                                                                                      |
-| `KRAKEN_RUN_EXCEPTION_TOKEN`   | `str`              | The Telegram bot token for exception notifications.                                                                                                          |
-| `KRAKEN_RUN_EXCEPTION_CHAT_ID` | `str`              | The Telegram chat ID for exception notifications.                                                                                                            |
-| `KRAKEN_RUN_DB_USER`           | `str`              | The PostgreSQL database user.                                                                                                                                |
-| `KRAKEN_RUN_DB_NAME`           | `str`              | The PostgreSQL database name.                                                                                                                                |
-| `KRAKEN_RUN_DB_PASSWORD`       | `str`              | The PostgreSQL database password.                                                                                                                            |
-| `KRAKEN_RUN_DB_HOST`           | `str`              | The PostgreSQL database host.                                                                                                                                |
-| `KRAKEN_RUN_DB_PORT`           | `int`              | The PostgreSQL database port.                                                                                                                                |
+## 🛠 Configuration
+
+| Variable                       | Type               | Description                                                                                                                                                                                                                                                                                                    |
+| ------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KRAKEN_API_KEY`               | `str`              | Your Kraken API key.                                                                                                                                                                                                                                                                                           |
+| `KRAKEN_SECRET_KEY`            | `str`              | Your Kraken secret key.                                                                                                                                                                                                                                                                                        |
+| `KRAKEN_RUN_NAME`              | `str`              | The name of the instance. Can be any name that is used to differentiate between instances of the kraken-infinity-grid.                                                                                                                                                                                         |
+| `KRAKEN_RUN_USERREF`           | `int`              | A reference number to identify the algorithms's orders. This can be a timestamp or any integer number. **Use different userref's for different algorithms!**                                                                                                                                                   |
+| `KRAKEN_BOT_VERBOSE`           | `int`/(`-v`,`-vv`) | Enable verbose logging.                                                                                                                                                                                                                                                                                        |
+| `KRAKEN_DRY_RUN`               | `bool`             | Enable dry-run mode (no actual trades).                                                                                                                                                                                                                                                                        |
+| `KRAKEN_RUN_BASE_CURRENCY`     | `str`              | The base currency e.g., `BTC`.                                                                                                                                                                                                                                                                                 |
+| `KRAKEN_RUN_QUOTE_CURRENCY`    | `str`              | The quote currency e.g., `USD`.                                                                                                                                                                                                                                                                                |
+| `KRAKEN_RUN_AMOUNT_PER_GRID`   | `float`            | The amount to use per grid interval e.g., `100` (USD).                                                                                                                                                                                                                                                         |
+| `KRAKEN_RUN_INTERVAL`          | `float`            | The interval between orders e.g., `0.04` to have 4 % intervals.                                                                                                                                                                                                                                                |
+| `KRAKEN_RUN_N_OPEN_BUY_ORDERS` | `int`              | The number of concurrent open buy orders e.g., `5`. The number of always open buy positions specifies how many buy positions should be open at the same time. If the interval is defined to 2%, a number of 5 open buy positions ensures that a rapid price drop of almost 10% that can be caught immediately. |
+| `KRAKEN_RUN_MAX_INVESTMENT`    | `str`              | The maximum investment amount, e.g. `1000` USD.                                                                                                                                                                                                                                                                |
+| `KRAKEN_RUN_STRATEGY`          | `str`              | The trading strategy (e.g., `GridHODL`, `GridSell`, `SWING`, or `cDCA`).                                                                                                                                                                                                                                       |
+| `KRAKEN_RUN_TELEGRAM_TOKEN`    | `str`              | The Telegram bot token for notifications.                                                                                                                                                                                                                                                                      |
+| `KRAKEN_RUN_TELEGRAM_CHAT_ID`  | `str`              | The Telegram chat ID for notifications.                                                                                                                                                                                                                                                                        |
+| `KRAKEN_RUN_EXCEPTION_TOKEN`   | `str`              | The Telegram bot token for exception notifications.                                                                                                                                                                                                                                                            |
+| `KRAKEN_RUN_EXCEPTION_CHAT_ID` | `str`              | The Telegram chat ID for exception notifications.                                                                                                                                                                                                                                                              |
+| `KRAKEN_RUN_DB_USER`           | `str`              | The PostgreSQL database user.                                                                                                                                                                                                                                                                                  |
+| `KRAKEN_RUN_DB_NAME`           | `str`              | The PostgreSQL database name.                                                                                                                                                                                                                                                                                  |
+| `KRAKEN_RUN_DB_PASSWORD`       | `str`              | The PostgreSQL database password.                                                                                                                                                                                                                                                                              |
+| `KRAKEN_RUN_DB_HOST`           | `str`              | The PostgreSQL database host.                                                                                                                                                                                                                                                                                  |
+| `KRAKEN_RUN_DB_PORT`           | `int`              | The PostgreSQL database port.                                                                                                                                                                                                                                                                                  |
+| `KRAKEN_RUN_SQLITE_FILE`       | `str`              | The path to a local SQLite database file, e.g., `/path/to/sqlite.db`, will be created if it does not exist. If a SQLite database is used, the PostgreSQL database configuration is ignored.                                                                                                                    |
+
+<a name="monitoring"></a>
+
+## 📡 Monitoring
+
+Trades as well as open positions can be monitored at
+[Kraken](https://pro.kraken.com). Additionally, the algorithm can be configured
+to send notifications about the current state of the algorithm via Telegram Bots
+(see [Preparation](#preparation)).
 
 <a name="trouble"></a>
 
-# 🚨 Troubleshooting
+## 🚨 Troubleshooting
 
+- Only use release versions of the `kraken-infinity-grid`. The `master` branch
+  might contain unstable code! Also pin the the dependencies used in order to
+  avoid unexpected behavior.
 - Check the **permissions of your API keys** and the required permissions on the
   respective endpoints.
 - If you get some Cloudflare or **rate limit errors**, please check your Kraken
@@ -208,7 +350,7 @@ these steps:
 
 <a name="notes"></a>
 
-# 📝 Notes
+## 📝 Notes
 
 The versioning scheme follows the pattern `v<Major>.<Minor>.<Patch>`. Here's
 what each part signifies:
@@ -225,6 +367,6 @@ what each part signifies:
 
 <a name="references"></a>
 
-# 🔭 References
+## 🔭 References
 
 - https://github.com/btschwertfegr/python-kraken-sdk

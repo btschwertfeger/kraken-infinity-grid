@@ -54,8 +54,9 @@ notifications and one for exception notifications (see :ref:`Getting started
 Troubleshooting
 ---------------
 
-- Check if you downloaded and installed the **latest version** of the
-  kraken-infinity-grid.
+- Only use release versions of the ``kraken-infinity-grid``. The ``master``
+  branch might contain unstable code! Also pin the the dependencies used in
+  order to avoid unexpected behavior.
 - Check the **permissions of your API keys** and the required permissions on the
   respective endpoints.
 - If you get some Cloudflare or **rate limit errors**, please check your
