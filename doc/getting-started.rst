@@ -23,7 +23,7 @@ Preparation
    Make sure to generate keys with the required permissions for trading and
    querying orders:
 
-    .. figure:: _static/images/Kraken_api_key_permissions.png
+    .. figure:: _static/images/kraken_api_key_permissions.png
         :width: 600
         :align: center
         :alt: Kraken API Key Permissions
@@ -113,7 +113,19 @@ algorithm, follow these steps:
 Monitoring
 ----------
 
-Trades as well as open positions can be monitored at `Kraken`_. Additionally,
-the algorithm can be configured to send notifications about the current state of
-the algorithm via Telegram Bots (see :ref:`Preparation
+Trades as well as open positions can be monitored at `Kraken`_.
+
+
+.. figure:: _static/images/kraken_dashboard.png
+    :width: 600
+    :align: center
+    :alt: Monitoring orders via Kraken's web UI
+
+Additionally, the algorithm can be configured to send notifications about the
+current state of the algorithm via Telegram Bots (see :ref:`Preparation
 <getting-started-section>`).
+
+.. figure:: _static/images/telegram_update.png
+    :width: 400
+    :align: center
+    :alt: Monitoring orders and trades via Telegram

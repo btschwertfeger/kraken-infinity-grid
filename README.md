@@ -232,7 +232,7 @@ algorithm's behavior and performance!
 
 <figure>
   <img
-  src="doc/_static/images/Kraken_api_key_permissions.png?raw=true"
+  src="doc/_static/images/kraken_api_key_permissions.png?raw=true"
   alt="Required API key permissions"
   style="background-color: white; border-radius: 7px">
   <figcaption>Figure 2: Required API key permissions</figcaption>
@@ -329,6 +329,18 @@ Trades as well as open positions can be monitored at
 [Kraken](https://pro.kraken.com). Additionally, the algorithm can be configured
 to send notifications about the current state of the algorithm via Telegram Bots
 (see [Preparation](#preparation)).
+
+<figure>
+  <img
+  src="doc/_static/images/kraken_dashboard.png?raw=true"
+  alt="Monitoring orders via Kraken's web UI"
+  style="background-color: white; border-radius: 7px; display: inline-block; height: 300px;">
+  <img
+  src="doc/_static/images/telegram_update.png?raw=true"
+  alt="Telegram update notification"
+  style="background-color: white; border-radius: 7px; display: inline-block; height: 300px;">
+  <figcaption>Figure 3: Monitoring orders via Kraken's web UI and Telegram</figcaption>
+</figure>
 
 <a name="trouble"></a>
 
