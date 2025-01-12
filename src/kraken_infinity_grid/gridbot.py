@@ -108,14 +108,14 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     New execution message - new order:
 
-    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the init is not done yet, the algorithm ignores the message.
     - The algorithm ties to assign the new order to the orderbook. In some cases
       this fails, as newly placed orders may not be fetchable via REST API for
       some time. For this reason, there are some retries implemented.
 
     New execution message - filled order:
 
-    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the init is not done yet, the algorithm ignores the message.
     - If the filled order was a buy order (depending on the strategy), the
       algorithm places a sell order and updates the local orderbook.
     - If the filled order was a sell order (depending on the strategy), the
@@ -123,7 +123,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     New execution message - cancelled order:
 
-    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the init is not done yet, the algorithm ignores the message.
     - The algorithm removes the order from the local orderbook and ensures that
       in case of a partly filled order, the remaining volume is saved and placed
       as sell order somewhen later (if it was a buy order). Sell orders usually
@@ -312,7 +312,6 @@ class KrakenInfinityGridBot(SpotWSClient):
                             )
 
         except Exception as exc:  # noqa: BLE001
-            # FIXME: this is not a beauty
             LOG.error(msg="Exception while processing message.", exc_info=exc)
             self.save_exit(reason=traceback.format_exc())
 

@@ -270,7 +270,6 @@ def run(ctx: Context, **kwargs: dict) -> None:
     ctx.obj |= kwargs
 
     if ctx.obj["sqlite_file"]:
-        # FIXME: Maybe use in_memory for dry-run?
         db_config = {"sqlite_file": ctx.obj["sqlite_file"]}
     else:
         db_config = {
