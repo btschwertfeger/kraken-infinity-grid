@@ -9,6 +9,7 @@
 import asyncio
 import sys
 import traceback
+from contextlib import suppress
 from datetime import datetime, timedelta
 from decimal import Decimal
 from logging import getLogger
@@ -16,7 +17,11 @@ from time import sleep
 from types import SimpleNamespace
 from typing import Iterable, Optional, Self
 
-from kraken.exceptions import KrakenAuthenticationError
+from kraken.exceptions import (
+    KrakenAuthenticationError,
+    KrakenInvalidOrderError,
+    KrakenPermissionDeniedError,
+)
 from kraken.spot import Market, SpotWSClient, Trade, User
 from sqlalchemy.engine.result import MappingResult
 
@@ -323,7 +328,19 @@ class KrakenInfinityGridBot(SpotWSClient):
         # Try to connect to the Kraken API and validate credentials
         ##
         self.__check_kraken_status()
-        self.__check_credentials()
+
+        try:
+            self.__check_api_keys()
+        except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
+            await self.stop()  # Stops the websocket connections
+            await self.async_close()  # Stops the aiohttp session
+            self.save_exit(
+                (
+                    "Passed API keys are invalid!"
+                    if isinstance(exc, KrakenAuthenticationError)
+                    else "Passed API keys are missing permissions!"
+                ),
+            )
 
         # ======================================================================
         # Create the event loop to run the main
@@ -444,20 +461,44 @@ class KrakenInfinityGridBot(SpotWSClient):
             sleep(3)
             self.__check_kraken_status(tries=tries + 1)
 
-    def __check_credentials(self: Self) -> None:
+    def __check_api_keys(self: Self) -> None:
         """
-        Checks if the credentials are valid by accessing a private endpoint.
+        Checks if the credentials are valid by accessing private endpoints.
         """
-        try:
-            self.user.get_account_balance()
-            LOG.info("- Passed API keys are valid.")
-        except KrakenAuthenticationError as exc:
-            LOG.debug(
-                "Exception while checking Kraken availability {exc} {traceback}",
-                extra={"exc": exc, "traceback": traceback.format_exc()},
+        LOG.info("- Checking permissions of API keys...")
+
+        LOG.info(" - Checking if 'Query Funds' permission set...")
+        self.user.get_account_balance()
+
+        LOG.info(" - Checking if 'Query open order & trades' permission set...")
+        self.user.get_open_orders(trades=True)
+
+        LOG.info(" - Checking if 'Query closed order & trades' permission set...")
+        self.user.get_closed_orders(trades=True)
+
+        LOG.info(" - Checking if 'Create & modify orders' permission set...")
+        self.trade.create_order(
+            pair=self.symbol,
+            side="buy",
+            ordertype="market",
+            volume="0.0001",
+            price="1",
+            validate=True,
+        )
+        LOG.info(" - Checking if 'Cancel & close orders' permission set...")
+        with suppress(KrakenInvalidOrderError):
+            self.trade.cancel_order(
+                txid="",
+                extra_params={"cl_ord_id": "kraken_infinity_grid_internal"},
             )
-            LOG.error("- Passed API keys are invalid!")
-            sys.exit(1)
+
+        LOG.info(" - Checking if 'Websocket interface' permission set...")
+        self.trade.request(
+            method="POST",
+            uri="/0/private/GetWebSocketsToken",
+        )
+
+        LOG.info(" - Passed API keys and permissions are valid!")
 
     # ======================================================================
     # Helper Functions
@@ -466,8 +507,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         """
         Returns the available and overall balances of the quote and base
         currency.
-        ! Hier aufpassen, denn wenn base_available falsch verwendet wird, werden
-        ! gehaltene Währungen verkauft.
         """
         LOG.debug("Retrieving the user's balances...")
 
