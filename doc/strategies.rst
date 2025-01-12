@@ -3,6 +3,8 @@
 .. GitHub: https://github.com/btschwertfeger
 ..
 
+.. _strategies-section:
+
 Strategies
 ==========
 

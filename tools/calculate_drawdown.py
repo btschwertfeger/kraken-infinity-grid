@@ -81,7 +81,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    levels, drawdown_pct, _ = calculate_grid_levels(
+    levels, drawdown_pct = calculate_grid_levels(
         args.price,
         args.interval,
         args.amount,

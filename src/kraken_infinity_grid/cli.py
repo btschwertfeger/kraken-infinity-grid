@@ -211,14 +211,20 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     type=FLOAT,
     default=10e10,
     callback=ensure_larger_than_zero,
-    help="The maximum quote investment of this bot.",
+    help="""
+    The maximum investment, e.g. 1000 USD that the algorithm will manage.
+    """,
 )
 @option(
     "--userref",
     required=True,
     type=INT,
     callback=ensure_larger_than_zero,
-    help="A reference number to identify the bots orders with.",
+    help="""
+    A reference number to identify the algorithm's orders. This can be a
+    timestamp or any integer number. Use different userref's for different
+    instances!
+    """,
 )
 @option(
     "--sqlite-file",

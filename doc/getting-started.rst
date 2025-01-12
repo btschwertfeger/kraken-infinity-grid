@@ -113,8 +113,10 @@ algorithm, follow these steps:
 Monitoring
 ----------
 
-Trades as well as open positions can be monitored at `Kraken`_.
-
+Trades as well as open positions can be monitored at `Kraken`_, where they can
+also be managed. Keep in mind that canceling via UI is possible, but placing
+orders that the algorithm will manage is not possible, as it only manages orders
+that it has placed.
 
 .. figure:: _static/images/kraken_dashboard.png
     :width: 600

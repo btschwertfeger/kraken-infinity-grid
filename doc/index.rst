@@ -1,11 +1,8 @@
 .. -*- coding: utf-8 -*-
-.. Copyright (C) 2023 Benjamin Thomas Schwertfeger
+.. Copyright (C) 2025 Benjamin Thomas Schwertfeger
 .. GitHub: https://github.com/btschwertfeger
 ..
-.. Python Kraken SDK documentation master file, created by
-   sphinx-quickstart on Sun Apr, 2 11:32:02 2023.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root ``toctree``` directive.
+.. kraken-infinity-grid documentation master file
 
 Welcome to kraken-infinity-grid's documentation!
 ================================================
@@ -22,6 +19,8 @@ Welcome to kraken-infinity-grid's documentation!
    strategies.rst
    getting-started.rst
    configuration.rst
+   need2knows.rst
+   backtesting.rst
    license.rst
 
 Indices and tables
