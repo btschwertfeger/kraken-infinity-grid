@@ -152,5 +152,3 @@ jobs:
       - CodeCov
       - CodeQL
     uses: ./.github/workflows/_docker_publish.yaml
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
