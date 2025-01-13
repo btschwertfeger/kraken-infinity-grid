@@ -32,7 +32,18 @@ def ensure_larger_than_zero(
 ) -> Any:  # noqa: ANN401
     """Ensure the value is larger than 0"""
     if value <= 0:
-        ctx.fail(f"Value for option '{param.name}' must be larger than 0")
+        ctx.fail(f"Value for option '{param.name}' must be larger than 0!")
+    return value
+
+
+def ensure_larger_equal_zero(
+    ctx: Context,
+    param: Any,  # noqa: ANN401
+    value: Any,  # noqa: ANN401
+) -> Any:  # noqa: ANN401
+    """Ensure the value is larger than 0"""
+    if value is not None and value < 0:
+        ctx.fail(f"Value for option '{param.name}' must be larger then or equal to 0!")
     return value
 
 
@@ -227,6 +238,17 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     """,
 )
 @option(
+    "--fee",
+    type=FLOAT,
+    required=False,
+    callback=ensure_larger_equal_zero,
+    help="""
+    The fee percentage to respect, e.g. '0.0026' for 0.26 %. This value does not
+    change the actual paid fee, instead it used to estimate order sizes. If not
+    passed, the highest maker fee will be used.
+    """,
+)
+@option(
     "--sqlite-file",
     type=STRING,
     help="SQLite file to use as database.",
@@ -277,7 +299,6 @@ def run(ctx: Context, **kwargs: dict) -> None:
     ctx.obj |= kwargs
 
     if ctx.obj["sqlite_file"]:
-        # FIXME: Maybe use in_memory for dry-run?
         db_config = {"sqlite_file": ctx.obj["sqlite_file"]}
     else:
         db_config = {

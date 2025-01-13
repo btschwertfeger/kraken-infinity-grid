@@ -226,7 +226,15 @@ def test_update_order_book(
     )
 
 
+@pytest.mark.wip
+@pytest.mark.parametrize(
+    "input_fee,asset_fee,order_size",  # noqa: PT006
+    [(None, 0.0026, 100.26), (0.02, 0.02, 102)],
+)
 def test_check_asset_pair_parameter(
+    input_fee: float,
+    asset_fee: float,
+    order_size: float,
     setup_manager: SetupManager,
     strategy: mock.Mock,
 ) -> None:
@@ -246,15 +254,16 @@ def test_check_asset_pair_parameter(
     }
     strategy.symbol = "BTC/USD"
     strategy.amount_per_grid = 100
+    strategy.fee = input_fee
 
     setup_manager._SetupManager__check_asset_pair_parameter()
 
-    assert strategy.fee == 0.0026
+    assert strategy.fee == asset_fee
     assert strategy.altname == "BTC/USD"
     assert strategy.zbase_currency == "XXBT"
     assert strategy.xquote_currency == "ZEUR"
     assert strategy.cost_decimals == 5
-    assert strategy.amount_per_grid_plus_fee == pytest.approx(100.26)
+    assert strategy.amount_per_grid_plus_fee == pytest.approx(order_size)
 
 
 def test_check_configuration_changes(
