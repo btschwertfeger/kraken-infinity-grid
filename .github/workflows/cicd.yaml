@@ -72,7 +72,7 @@ jobs:
   ##    Run the unit and integration tests
   ##
   Test:
-    needs: [Build]
+    needs: [Pre-Commit]
     uses: ./.github/workflows/_test.yaml
     strategy:
       fail-fast: true
@@ -91,8 +91,7 @@ jobs:
       success()
       && github.actor == 'btschwertfeger'
       && github.event_name != 'schedule'
-    needs:
-      - Test
+    needs: [Pre-Commit]
     uses: ./.github/workflows/_codecov.yaml
     with:
       os: "ubuntu-latest"
@@ -115,6 +114,7 @@ jobs:
       - Build-Docker
       - CodeCov
       - CodeQL
+      - Test
     uses: ./.github/workflows/_pypi_test_publish.yaml
     secrets:
       API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
@@ -133,6 +133,7 @@ jobs:
       - Build-Docker
       - CodeCov
       - CodeQL
+      - Test
     uses: ./.github/workflows/_pypi_publish.yaml
     secrets:
       API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
@@ -154,4 +155,8 @@ jobs:
       - Build-Docker
       - CodeCov
       - CodeQL
+      - Test
     uses: ./.github/workflows/_docker_publish.yaml
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
