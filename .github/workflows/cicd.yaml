@@ -90,7 +90,7 @@ jobs:
     if: |
       success()
       && github.actor == 'btschwertfeger'
-      && (github.event_name == 'push' || github.event_name == 'release')
+      && github.event_name != 'schedule'
     needs:
       - Test
     uses: ./.github/workflows/_codecov.yaml
