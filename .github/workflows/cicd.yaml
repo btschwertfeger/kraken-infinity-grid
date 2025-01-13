@@ -88,7 +88,8 @@ jobs:
   ##
   CodeCov:
     if: |
-      (success() && github.actor == 'btschwertfeger')
+      success()
+      && github.actor == 'btschwertfeger'
       && (github.event_name == 'push' || github.event_name == 'release')
     needs:
       - Test
@@ -105,7 +106,8 @@ jobs:
   ##
   UploadTestPyPI:
     if: |
-      (success() && github.ref == 'refs/heads/master')
+      success()
+      && github.ref == 'refs/heads/master'
       && (github.event_name == 'push' || github.event_name == 'release')
     needs:
       - Build
@@ -140,7 +142,8 @@ jobs:
   ##
   UploadDockerImage:
     if: |
-      (success() && github.actor == 'btschwertfeger')
+      success()
+      && github.actor == 'btschwertfeger'
       && (
         (github.event_name == 'push' && github.ref == 'refs/heads/master')
         || github.event_name == 'release'
