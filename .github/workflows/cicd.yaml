@@ -87,6 +87,22 @@ jobs:
       python-version: ${{ matrix.python-version }}
 
   ## ===========================================================================
+  ##    Generates and uploads the coverage statistics to codecov
+  ##
+  CodeCov:
+    if: |
+      (success() && github.actor == 'btschwertfeger')
+      && (github.event_name == 'push' || github.event_name == 'release')
+    needs:
+      - Test
+    uses: ./.github/workflows/_codecov.yaml
+    with:
+      os: "ubuntu-latest"
+      python-version: "3.11"
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  ## ===========================================================================
   ##    Uploads the package to test.pypi.org on master if triggered by
   ##    a regular commit/push.
   ##
@@ -97,7 +113,8 @@ jobs:
     needs:
       - Build
       - Build-Doc
-      - Test
+      - CodeCov
+      - CodeQL
     name: Upload development version to Test PyPI
     uses: ./.github/workflows/_pypi_test_publish.yaml
     secrets:
@@ -114,7 +131,8 @@ jobs:
     needs:
       - Build
       - Build-Doc
-      - Test
+      - CodeCov
+      - CodeQL
     name: Upload release to PyPI
     uses: ./.github/workflows/_pypi_publish.yaml
     secrets:
