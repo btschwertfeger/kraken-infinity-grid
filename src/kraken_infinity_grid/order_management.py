@@ -412,8 +412,8 @@ class OrderManager:
     ) -> None:
         """Places a new sell order."""
 
-        if self.__s.strategy == "DCA":
-            LOG.debug("DCA strategy, not placing sell order.")
+        if self.__s.strategy == "cDCA":
+            LOG.debug("cDCA strategy, not placing sell order.")
             if txid_id_to_delete is not None:
                 self.__s.orderbook.remove(filters={"txid": txid_id_to_delete})
             return

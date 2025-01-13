@@ -139,7 +139,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 )
 @option(
     "--strategy",
-    type=Choice(choices=("DCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
+    type=Choice(choices=("cDCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
     help="The strategy to run.",
     required=True,
 )
@@ -147,7 +147,10 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     "--name",
     required=True,
     type=STRING,
-    help="The name of the instance, displayed in telegram messages.",
+    help="""
+    The name of the instance. Can be any name that is used to differentiate
+    between instances of the kraken-infinity-grid.
+    """,
 )
 @option(
     "--base-currency",
@@ -181,21 +184,19 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     type=INT,
     default=3,
     callback=ensure_larger_than_zero,
-    help="The number of concurrent open buy orders.",
-)
-@option(
-    "--cancel-all-open-buy-orders",
-    required=True,
-    type=BOOL,
-    default=False,
-    is_flag=True,
-    help="Cancel all open buy orders on start.",
+    help="""
+    The number of concurrent open buy orders e.g., ``5``. The number of
+    always open buy positions specifies how many buy positions should be
+    open at the same time. If the interval is defined to 2%, a number of 5
+    open buy positions ensures that a rapid price drop of almost 10% that
+    can be caught immediately.
+    """,
 )
 @option(
     "--telegram-token",
     required=False,
     type=STRING,
-    help="The telegram token to use.",
+    help="The Telegram token to use.",
 )
 @option(
     "--telegram-chat-id",
@@ -221,14 +222,20 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     type=FLOAT,
     default=10e10,
     callback=ensure_larger_than_zero,
-    help="The maximum quote investment of this bot.",
+    help="""
+    The maximum investment, e.g. 1000 USD that the algorithm will manage.
+    """,
 )
 @option(
     "--userref",
     required=True,
     type=INT,
     callback=ensure_larger_than_zero,
-    help="A reference number to identify the bots orders with.",
+    help="""
+    A reference number to identify the algorithm's orders. This can be a
+    timestamp or any integer number. Use different userref's for different
+    instances!
+    """,
 )
 @option(
     "--fee",
@@ -282,7 +289,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 )
 @pass_context
 def run(ctx: Context, **kwargs: dict) -> None:
-    """Run the trading algorithm using the specified options"""
+    """Run the trading algorithm using the specified options."""
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
     import traceback  # noqa: PLC0415

@@ -573,7 +573,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                     )
 
             else:
-                # Regular sell order (even for SWING) (DCA will trigger this
+                # Regular sell order (even for SWING) (cDCA will trigger this
                 # but it will be filtered out by handle_arbitrage)
                 if last_price > price_of_highest_buy:
                     self.configuration.update(
