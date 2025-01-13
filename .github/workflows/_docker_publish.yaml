@@ -8,7 +8,6 @@ name: Build and push Docker image
 
 on:
   workflow_call:
-    secrets:
 
 env:
   REGISTRY: ghcr.io
