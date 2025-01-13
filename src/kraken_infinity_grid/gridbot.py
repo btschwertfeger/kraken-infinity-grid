@@ -9,6 +9,7 @@
 import asyncio
 import sys
 import traceback
+from contextlib import suppress
 from datetime import datetime, timedelta
 from decimal import Decimal
 from logging import getLogger
@@ -16,7 +17,11 @@ from time import sleep
 from types import SimpleNamespace
 from typing import Iterable, Optional, Self
 
-from kraken.exceptions import KrakenAuthenticationError
+from kraken.exceptions import (
+    KrakenAuthenticationError,
+    KrakenInvalidOrderError,
+    KrakenPermissionDeniedError,
+)
 from kraken.spot import Market, SpotWSClient, Trade, User
 from sqlalchemy.engine.result import MappingResult
 
@@ -103,14 +108,14 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     New execution message - new order:
 
-    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the init is not done yet, the algorithm ignores the message.
     - The algorithm ties to assign the new order to the orderbook. In some cases
       this fails, as newly placed orders may not be fetchable via REST API for
       some time. For this reason, there are some retries implemented.
 
     New execution message - filled order:
 
-    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the init is not done yet, the algorithm ignores the message.
     - If the filled order was a buy order (depending on the strategy), the
       algorithm places a sell order and updates the local orderbook.
     - If the filled order was a sell order (depending on the strategy), the
@@ -118,7 +123,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     New execution message - cancelled order:
 
-    - If the init is not done yet, the algorithm ignores the message. FIXME
+    - If the init is not done yet, the algorithm ignores the message.
     - The algorithm removes the order from the local orderbook and ensures that
       in case of a partly filled order, the remaining volume is saved and placed
       as sell order somewhen later (if it was a buy order). Sell orders usually
@@ -151,7 +156,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.interval: float = float(config["interval"])
         self.amount_per_grid: float = float(config["amount_per_grid"])
 
-        self.amount_per_grid_plus_fee: float | None = None
+        self.amount_per_grid_plus_fee: float | None = config.get("fee")
 
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
@@ -307,7 +312,6 @@ class KrakenInfinityGridBot(SpotWSClient):
                             )
 
         except Exception as exc:  # noqa: BLE001
-            # FIXME: this is not a beauty
             LOG.error(msg="Exception while processing message.", exc_info=exc)
             self.save_exit(reason=traceback.format_exc())
 
@@ -323,7 +327,19 @@ class KrakenInfinityGridBot(SpotWSClient):
         # Try to connect to the Kraken API and validate credentials
         ##
         self.__check_kraken_status()
-        self.__check_credentials()
+
+        try:
+            self.__check_api_keys()
+        except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
+            await self.stop()  # Stops the websocket connections
+            await self.async_close()  # Stops the aiohttp session
+            self.save_exit(
+                (
+                    "Passed API keys are invalid!"
+                    if isinstance(exc, KrakenAuthenticationError)
+                    else "Passed API keys are missing permissions!"
+                ),
+            )
 
         # ======================================================================
         # Create the event loop to run the main
@@ -444,20 +460,44 @@ class KrakenInfinityGridBot(SpotWSClient):
             sleep(3)
             self.__check_kraken_status(tries=tries + 1)
 
-    def __check_credentials(self: Self) -> None:
+    def __check_api_keys(self: Self) -> None:
         """
-        Checks if the credentials are valid by accessing a private endpoint.
+        Checks if the credentials are valid by accessing private endpoints.
         """
-        try:
-            self.user.get_account_balance()
-            LOG.info("- Passed API keys are valid.")
-        except KrakenAuthenticationError as exc:
-            LOG.debug(
-                "Exception while checking Kraken availability {exc} {traceback}",
-                extra={"exc": exc, "traceback": traceback.format_exc()},
+        LOG.info("- Checking permissions of API keys...")
+
+        LOG.info(" - Checking if 'Query Funds' permission set...")
+        self.user.get_account_balance()
+
+        LOG.info(" - Checking if 'Query open order & trades' permission set...")
+        self.user.get_open_orders(trades=True)
+
+        LOG.info(" - Checking if 'Query closed order & trades' permission set...")
+        self.user.get_closed_orders(trades=True)
+
+        LOG.info(" - Checking if 'Create & modify orders' permission set...")
+        self.trade.create_order(
+            pair=self.symbol,
+            side="buy",
+            ordertype="market",
+            volume="0.0001",
+            price="1",
+            validate=True,
+        )
+        LOG.info(" - Checking if 'Cancel & close orders' permission set...")
+        with suppress(KrakenInvalidOrderError):
+            self.trade.cancel_order(
+                txid="",
+                extra_params={"cl_ord_id": "kraken_infinity_grid_internal"},
             )
-            LOG.error("- Passed API keys are invalid!")
-            sys.exit(1)
+
+        LOG.info(" - Checking if 'Websocket interface' permission set...")
+        self.trade.request(
+            method="POST",
+            uri="/0/private/GetWebSocketsToken",
+        )
+
+        LOG.info(" - Passed API keys and permissions are valid!")
 
     # ======================================================================
     # Helper Functions
@@ -466,8 +506,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         """
         Returns the available and overall balances of the quote and base
         currency.
-        ! Hier aufpassen, denn wenn base_available falsch verwendet wird, werden
-        ! gehaltene Währungen verkauft.
         """
         LOG.debug("Retrieving the user's balances...")
 
