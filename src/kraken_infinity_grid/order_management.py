@@ -261,7 +261,6 @@ class OrderManager:
         LOG.debug("Check conditions for upgrading the grid...")
 
         if self.__check_pending_txids():
-            # FIXME: This should not return here, but need to be checked first.
             LOG.debug("Not checking price range because of pending txids.")
             return
 
@@ -755,7 +754,8 @@ class OrderManager:
 
             self.__s.orderbook.remove(filters={"side": "buy"})
         except Exception:  # noqa: BLE001
-            # FIXME: Check if this can still happen.
+            # FIXME: Check if this can still happen. Can't remember why this
+            #        was added.
             self.__s.save_exit(
                 str(
                     f"❌ Error in function >cancelAllOpenBuyOrders < \n"
