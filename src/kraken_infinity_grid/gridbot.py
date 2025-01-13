@@ -215,7 +215,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         )
         self.database.init_db()
 
-    async def on_message(  # noqa: C901,PLR0912,PLR0911
+    async def on_message(  # noqa: C901, PLR0912
         self: Self,
         message: dict | list,
     ) -> None:
@@ -281,10 +281,10 @@ class KrakenInfinityGridBot(SpotWSClient):
                 # 108297.6, 'change': -2800.0, 'change_pct': -2.62}]}
                 self.configuration.update({"last_price_time": datetime.now()})
 
-                last_price = self.ticker.last
+                # last_price = self.ticker.last
                 self.ticker = SimpleNamespace(last=float(data[0]["last"]))
-                if last_price == self.ticker.last:
-                    return
+                # if last_price == self.ticker.last:
+                #     return
 
                 if self.unsold_buy_order_txids.count() != 0:
                     self.om.add_missed_sell_orders()

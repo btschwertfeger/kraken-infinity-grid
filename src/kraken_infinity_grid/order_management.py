@@ -339,6 +339,9 @@ class OrderManager:
         if txid_to_delete is not None:
             self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
+        if len(self.__s.get_active_buy_orders().all()) >= self.__s.n_open_buy_orders:  # type: ignore[no-untyped-call]
+            return
+
         # Check if algorithm reached the max_investment value
         if self.__s.max_investment_reached:
             return
@@ -421,6 +424,8 @@ class OrderManager:
 
         # ======================================================================
         if txid_id_to_delete is not None:  # If corresponding buy order filled
+            # GridSell always has txid_id_to_delete set.
+
             # Add the txid of the corresponding buy order to the unsold buy
             # order txids in order to ensure that the corresponding sell order
             # will be placed - even if placing now fails.
@@ -476,7 +481,13 @@ class OrderManager:
             ),
         )
 
-        if self.__s.strategy in {"GridHODL", "SWING"}:
+        if self.__s.strategy in {"GridHODL", "SWING"} or (
+            self.__s.strategy == "GridSell" and volume is None
+        ):
+            # For GridSell: This is only the case if there is no corresponding
+            # buy order and the sell order was placed, e.g. due to an extra sell
+            # order via selling of partially filled buy orders.
+
             # Respect the fee to not reduce the quote currency over time, while
             # accumulating the base currency.
             volume = float(
@@ -487,7 +498,6 @@ class OrderManager:
                     pair=self.__s.symbol,
                 ),
             )
-
         # ======================================================================
 
         # Check if there is enough base currency available for selling.
@@ -674,6 +684,7 @@ class OrderManager:
             if self.__s.dry_run:
                 LOG.info("DRY RUN: Not cancelling order: %s", txid)
                 return
+
             self.__s.trade.cancel_order(txid=txid)
             self.__s.orderbook.remove(filters={"txid": txid})
 
