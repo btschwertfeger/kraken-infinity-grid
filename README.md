@@ -9,11 +9,11 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Typing](https://img.shields.io/badge/typing-mypy-informational)](https://mypy-lang.org/)
 [![CI/CD](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml/badge.svg?branch=master)](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml)
-
-<!-- [![codecov](https://codecov.io/gh/btschwertfeger/kraken-infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/kraken-infinity-grid) -->
+[![codecov](https://codecov.io/gh/btschwertfeger/kraken-infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/kraken-infinity-grid)
 
 [![release](https://shields.io/github/release-date/btschwertfeger/kraken-infinity-grid)](https://github.com/btschwertfeger/kraken-infinity-grid/releases)
 [![release](https://img.shields.io/pypi/v/kraken-infinity-grid)](https://pypi.org/project/kraken-infinity-grid/)
+[![Documentation Status Stable](https://readthedocs.org/projects/kraken-infinity-grid/badge/?version=stable)](https://kraken-infinity-grid.readthedocs.io/en/stable)
 
 </div>
 
@@ -49,6 +49,11 @@ algorithms's behavior, the Telegram notifications can be used to receive updates
 on the algorithms's activity and exceptions. For this the algorithm requires two
 different Telegram bot tokens and chat IDs, one for regular notifications and
 one for exception notifications (see [Setup](#Setup) for more information).
+
+Documentation:
+
+- https://kraken-infinity-grid.readthedocs.io/en/latest/
+- https://kraken-infinity-grid.readthedocs.io/en/stable/
 
 ## 📚 Fundamental concepts
 

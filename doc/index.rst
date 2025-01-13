@@ -8,7 +8,7 @@ Welcome to kraken-infinity-grid's documentation!
 ================================================
 
 |GitHub badge| |PyVersions badge| |Downloads badge|
-|CI/CD badge| |Typing badge|
+|CI/CD badge| |Typing badge| |codecov badge|
 |Release date badge| |Release version badge|
 
 .. toctree::

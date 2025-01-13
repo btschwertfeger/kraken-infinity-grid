@@ -280,11 +280,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                 # 5012.66172606, 'vwap': 106355.8, 'low': 103207.8, 'high':
                 # 108297.6, 'change': -2800.0, 'change_pct': -2.62}]}
                 self.configuration.update({"last_price_time": datetime.now()})
-
-                # last_price = self.ticker.last
                 self.ticker = SimpleNamespace(last=float(data[0]["last"]))
-                # if last_price == self.ticker.last:
-                #     return
 
                 if self.unsold_buy_order_txids.count() != 0:
                     self.om.add_missed_sell_orders()

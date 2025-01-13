@@ -390,8 +390,6 @@ class OrderManager:
             )
 
             self.__s.pending_txids.add(placed_order["txid"][0])
-            # if txid_to_delete is not None:
-            #     self.__s.orderbook.remove(filters={"txid": txid_to_delete})
             self.__s.om.assign_order_by_txid(placed_order["txid"][0])
             return
 
