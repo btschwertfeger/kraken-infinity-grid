@@ -91,7 +91,7 @@ class Telegram:
         )
         message += f"├ Available {self.__s.base_currency} » {balances['base_available'] - float(self.__s.configuration.get()['vol_of_unfilled_remaining'])}\n"  # noqa: E501
         message += f"├ Unfilled surplus of {self.__s.base_currency} » {self.__s.configuration.get()['vol_of_unfilled_remaining']}\n"  # noqa: E501
-        message += f"├ Bot-managed wealth » {round(balances['base_balance'] * self.__s.ticker.last + balances['quote_balance'], self.__s.cost_decimals)} {self.__s.quote_currency}\n"  # noqa: E501
+        message += f"├ Wealth » {round(balances['base_balance'] * self.__s.ticker.last + balances['quote_balance'], self.__s.cost_decimals)} {self.__s.quote_currency}\n"  # noqa: E501
         message += f"└ Investment » {round(self.__s.investment, self.__s.cost_decimals)} / {self.__s.max_investment} {self.__s.quote_currency}\n\n"  # noqa: E501
 
         message += "💠 Orders\n"

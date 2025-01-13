@@ -202,7 +202,12 @@ class SetupManager:
         self.__s.zbase_currency = data["base"]  # XXBT
         self.__s.xquote_currency = data["quote"]  # ZEUR
         self.__s.cost_decimals = data["cost_decimals"]  # 5, i.e., 0.00001 EUR
-        self.__s.fee = float(data["fees_maker"][0][1]) / 100
+
+        if self.__s.fee is None:
+            # This is the case if the '--fee' parameter was not passed, then we
+            # take the highest maker fee.
+            self.__s.fee = float(data["fees_maker"][0][1]) / 100
+
         self.__s.amount_per_grid_plus_fee = self.__s.amount_per_grid * (
             1 + self.__s.fee
         )
