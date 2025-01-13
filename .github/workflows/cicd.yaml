@@ -142,13 +142,13 @@ jobs:
   ##    Upload the package GitHub's Docker registry
   ##
   UploadDockerImage:
-    # if: |
-    #   success()
-    #   && github.actor == 'btschwertfeger'
-    #   && (
-    #     (github.event_name == 'push' && github.ref == 'refs/heads/master')
-    #     || github.event_name == 'release'
-    #   )
+    if: |
+      success()
+      && github.actor == 'btschwertfeger'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        || github.event_name == 'release'
+      )
     needs:
       - Build
       - Build-Doc
