@@ -20,13 +20,11 @@ class KrakenAPI(Trade, User):
 
     TODOs:
 
-    - [ ] Properly handle updating the user's current balances. While being at
-          it, ensure the integration tests cover cases where the balances are
-          not sufficient.
+    - [ ] Properly handle updating the user's current balances.
     """
 
-    def __init__(self: Self, **kwargs) -> None:  # noqa: ANN003
-        super().__init__(**kwargs)
+    def __init__(self: Self) -> None:
+        super().__init__()  # DONT PASS SECRETS!
         self.__orders = {}
         self.__balances = {
             "XXBT": {"balance": "100.0", "hold_trade": "0.0"},
