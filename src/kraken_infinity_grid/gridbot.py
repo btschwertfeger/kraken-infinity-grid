@@ -156,7 +156,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.interval: float = float(config["interval"])
         self.amount_per_grid: float = float(config["amount_per_grid"])
 
-        self.amount_per_grid_plus_fee: float | None = None
+        self.amount_per_grid_plus_fee: float | None = config.get("fee")
 
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
