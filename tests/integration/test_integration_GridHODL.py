@@ -123,7 +123,6 @@ async def test_integration_GridHODL(  # noqa: PLR0915
 
     # Quick re-check ... the price update should not affect any orderbook
     # changes when dropping.
-    current_orders = instance.orderbook.get_orders().all()
     for order, price, volume in zip(
         instance.orderbook.get_orders().all(),
         (59405.9, 58817.7, 58235.3, 57658.7, 57087.8),
