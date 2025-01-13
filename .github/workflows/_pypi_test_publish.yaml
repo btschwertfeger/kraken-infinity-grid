@@ -18,7 +18,7 @@ permissions: read-all
 
 jobs:
   publish-to-test-pypi:
-    name: Publish Python distribution to Test PyPI
+    name: Publish Python distribution to test.pypi.org
     runs-on: ubuntu-latest
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for OIDC publishing

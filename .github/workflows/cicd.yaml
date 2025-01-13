@@ -55,11 +55,8 @@ jobs:
   ##    Build the Docker image
   ##
   Build-Docker:
-    if: success() && github.ref != 'refs/heads/master'
     needs: [Pre-Commit]
     uses: ./.github/workflows/_build_docker.yaml
-    with:
-      TAG: dev
 
   ## ===========================================================================
   ##    Build the documentation
@@ -91,8 +88,9 @@ jobs:
   ##
   CodeCov:
     if: |
-      (success() && github.actor == 'btschwertfeger')
-      && (github.event_name == 'push' || github.event_name == 'release')
+      success()
+      && github.actor == 'btschwertfeger'
+      && github.event_name != 'schedule'
     needs:
       - Test
     uses: ./.github/workflows/_codecov.yaml
@@ -108,14 +106,15 @@ jobs:
   ##
   UploadTestPyPI:
     if: |
-      (success() && github.ref == 'refs/heads/master')
+      success()
+      && github.ref == 'refs/heads/master'
       && (github.event_name == 'push' || github.event_name == 'release')
     needs:
       - Build
       - Build-Doc
+      - Build-Docker
       - CodeCov
       - CodeQL
-    name: Upload development version to Test PyPI
     uses: ./.github/workflows/_pypi_test_publish.yaml
     secrets:
       API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
@@ -131,9 +130,28 @@ jobs:
     needs:
       - Build
       - Build-Doc
+      - Build-Docker
       - CodeCov
       - CodeQL
-    name: Upload release to PyPI
     uses: ./.github/workflows/_pypi_publish.yaml
     secrets:
       API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  ## ===========================================================================
+  ##    Upload the package GitHub's Docker registry
+  ##
+  UploadDockerImage:
+    if: |
+      success()
+      && github.actor == 'btschwertfeger'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        || github.event_name == 'release'
+      )
+    needs:
+      - Build
+      - Build-Doc
+      - Build-Docker
+      - CodeCov
+      - CodeQL
+    uses: ./.github/workflows/_docker_publish.yaml

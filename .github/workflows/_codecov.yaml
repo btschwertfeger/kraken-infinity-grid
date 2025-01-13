@@ -32,7 +32,9 @@ jobs:
     env:
       OS: ${{ inputs.os }}
       PYTHON: ${{ inputs.python-version }}
-
+    environment:
+      name: codecov
+      url: https://app.codecov.io/github/btschwertfeger/kraken-infinity-grid/
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
@@ -71,7 +73,7 @@ jobs:
           uv pip install ".[test,dev]"
 
       - name: Generate coverage report
-        run: pytest -vv --cov --cov-report=xml:coverage.xml tests
+        run: pytest -vv --cov=kraken_infinity_grid --cov-report=xml:coverage.xml tests
 
       - name: Export coverage report
         uses: actions/upload-artifact@v4

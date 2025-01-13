@@ -18,7 +18,7 @@ permissions: read-all
 
 jobs:
   publish-to-pypi:
-    name: Publish Python distribution to PyPI
+    name: Publish Python distribution to pypi.org
     runs-on: ubuntu-latest
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for OIDC publishing

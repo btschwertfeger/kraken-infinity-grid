@@ -11,6 +11,7 @@
 [![CI/CD](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml/badge.svg?branch=master)](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml)
 [![codecov](https://codecov.io/gh/btschwertfeger/kraken-infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/kraken-infinity-grid)
 
+[![OpenSSF ScoreCard](https://img.shields.io/ossf-scorecard/github.com/btschwertfeger/kraken-infinity-grid?label=openssf%20scorecard&style=flat)](https://securityscorecards.dev/viewer/?uri=github.com/btschwertfeger/kraken-infinity-grid)
 [![release](https://shields.io/github/release-date/btschwertfeger/kraken-infinity-grid)](https://github.com/btschwertfeger/kraken-infinity-grid/releases)
 [![release](https://img.shields.io/pypi/v/kraken-infinity-grid)](https://pypi.org/project/kraken-infinity-grid/)
 [![Documentation Status Stable](https://readthedocs.org/projects/kraken-infinity-grid/badge/?version=stable)](https://kraken-infinity-grid.readthedocs.io/en/stable)
