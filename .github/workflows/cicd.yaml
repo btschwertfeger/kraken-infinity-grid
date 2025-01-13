@@ -9,11 +9,17 @@ name: CI/CD
 
 on:
   push:
-    branches:
-      - "**"
+    branches: [master]
+  schedule:
+    - cron: "20 16 */7 * *"
+  release:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: ["**"]
 
 concurrency:
-  group: CICD-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +35,7 @@ jobs:
     needs: [Pre-Commit]
     uses: ./.github/workflows/_build.yaml
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
@@ -61,10 +67,42 @@ jobs:
     needs: [Build]
     uses: ./.github/workflows/_test.yaml
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
+
+  ## ===========================================================================
+  ##    Uploads the package to test.pypi.org on master if triggered by
+  ##    a regular commit/push.
+  ##
+  UploadTestPyPI:
+    if: |
+      (success() && github.ref == 'refs/heads/master')
+      && (github.event_name == 'push' || github.event_name == 'release')
+    needs:
+      - Build
+      - Test
+    name: Upload development version to Test PyPI
+    uses: ./.github/workflows/_pypi_test_publish.yaml
+    secrets:
+      API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+  ## ===========================================================================
+  ##    Upload the package to PyPI
+  ##
+  UploadPyPI:
+    if: |
+      success()
+      && github.actor == 'btschwertfeger'
+      && github.event_name == 'release'
+    needs:
+      - Build
+      - Test
+    name: Upload release to PyPI
+    uses: ./.github/workflows/_pypi_publish.yaml
+    secrets:
+      API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}

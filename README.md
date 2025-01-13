@@ -3,15 +3,17 @@
 <div align="center">
 
 [![GitHub](https://badgen.net/badge/icon/github?icon=github&label)](https://github.com/btschwertfeger/kraken-infinity-grid)
-[![Generic
-badge](https://img.shields.io/badge/python-3.11+-blue.svg)](https://shields.io/)
+[![Generic badge](https://img.shields.io/badge/python-3.11+-blue.svg)](https://shields.io/)
+[![Downloads](https://static.pepy.tech/personalized-badge/kraken-infinity-grid?period=total&units=abbreviation&left_color=grey&right_color=orange&left_text=downloads)](https://pepy.tech/project/kraken-infinity-grid)
 
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Typing](https://img.shields.io/badge/typing-mypy-informational)](https://mypy-lang.org/)
 [![CI/CD](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml/badge.svg?branch=master)](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml)
-[![codecov](https://codecov.io/gh/btschwertfeger/kraken-infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/kraken-infinity-grid)
+
+<!-- [![codecov](https://codecov.io/gh/btschwertfeger/kraken-infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/kraken-infinity-grid) -->
 
 [![release](https://shields.io/github/release-date/btschwertfeger/kraken-infinity-grid)](https://github.com/btschwertfeger/kraken-infinity-grid/releases)
+[![release](https://img.shields.io/pypi/v/kraken-infinity-grid)](https://pypi.org/project/kraken-infinity-grid/)
 
 </div>
 
