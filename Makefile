@@ -7,10 +7,11 @@ UV ?= uv
 PYTHON := python
 PYTEST := $(UV) run pytest
 PYTEST_OPTS := -vv --junit-xml=pytest.xml
-PYTEST_COV_OPTS := $(PYTEST_OPTS) --cov --cov-report=xml:coverage.xml --cov-report=term-missing
+PYTEST_COV_OPTS := $(PYTEST_OPTS) --cov=kraken_infinity_grid --cov-report=xml:coverage.xml --cov-report=term-missing
 TEST_DIR := tests
 
 ## ======= H E L P =======
+## help		Show this help message
 .PHONY: help
 help:
 	@grep "^##" Makefile | sed -e "s/##//"
@@ -62,7 +63,7 @@ wip:
 	@rm .cache/tests/*.log || true
 	$(PYTEST) -m "wip" -vv $(TEST_DIR)
 
-## coverage		Run all tests and generate the coverage report
+## coverage       Run all tests and generate the coverage report
 ##
 .PHONY: coverage
 coverage:
@@ -111,7 +112,7 @@ clean:
 	find tools -name "__pycache__" | xargs rm -rf
 	find tests -name "*.log" | xargs rm -rf
 
-## check-uv		Check if uv is installed
+## check-uv       Check if uv is installed
 ##
 .PHONY: check-uv
 check-uv:

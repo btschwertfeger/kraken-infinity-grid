@@ -73,7 +73,7 @@ jobs:
           uv pip install ".[test,dev]"
 
       - name: Generate coverage report
-        run: pytest -vv --cov=${{ github.repository }} --cov-report=xml:coverage.xml tests
+        run: pytest -vv --cov=kraken_infinity_grid --cov-report=xml:coverage.xml tests
 
       - name: Export coverage report
         uses: actions/upload-artifact@v4
