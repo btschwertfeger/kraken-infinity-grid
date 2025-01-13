@@ -315,19 +315,17 @@ async def test_on_message_ticker(instance: KrakenInfinityGridBot) -> None:
             ],
         },
     )
-    # == Ensure not checking price range if price does not change
-    instance.om.check_price_range.assert_not_called()
+    assert instance.ticker.last == 50000.0
+
+    # == Ensure checking price range if price does not change
+    instance.om.check_price_range.assert_called_once()
 
     # == Ensure saving the last price time
     instance.configuration.update.assert_called_once()
-    assert instance.ticker.last == 50000.0
-
-    # == Ensure doing nothing if the price did not change
-    instance.om.check_price_range.assert_not_called()
 
     # == Simulate a finished buy order which was missed to sell
     instance.unsold_buy_order_txids.count.return_value = 1
-    instance.om.add_missed_sell_orders.assert_not_called()
+    instance.om.add_missed_sell_orders.assert_called_once()
 
     # Trigger another price update
     await instance.on_message(
@@ -342,10 +340,10 @@ async def test_on_message_ticker(instance: KrakenInfinityGridBot) -> None:
         },
     )
     # == Ensure missed sell orders will be handled in case there are any
-    instance.om.add_missed_sell_orders.assert_called_once()
+    assert instance.om.add_missed_sell_orders.call_count == 2
 
     # == Ensure price range check is performed on new price
-    instance.om.check_price_range.assert_called_once()
+    assert instance.om.check_price_range.call_count == 2
 
 
 @pytest.mark.asyncio

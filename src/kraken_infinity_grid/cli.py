@@ -32,7 +32,18 @@ def ensure_larger_than_zero(
 ) -> Any:  # noqa: ANN401
     """Ensure the value is larger than 0"""
     if value <= 0:
-        ctx.fail(f"Value for option '{param.name}' must be larger than 0")
+        ctx.fail(f"Value for option '{param.name}' must be larger than 0!")
+    return value
+
+
+def ensure_larger_equal_zero(
+    ctx: Context,
+    param: Any,  # noqa: ANN401
+    value: Any,  # noqa: ANN401
+) -> Any:  # noqa: ANN401
+    """Ensure the value is larger than 0"""
+    if value is not None and value < 0:
+        ctx.fail(f"Value for option '{param.name}' must be larger then or equal to 0!")
     return value
 
 
@@ -128,7 +139,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 )
 @option(
     "--strategy",
-    type=Choice(choices=("DCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
+    type=Choice(choices=("cDCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
     help="The strategy to run.",
     required=True,
 )
@@ -136,7 +147,10 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     "--name",
     required=True,
     type=STRING,
-    help="The name of the bot.",
+    help="""
+    The name of the instance. Can be any name that is used to differentiate
+    between instances of the kraken-infinity-grid.
+    """,
 )
 @option(
     "--base-currency",
@@ -170,21 +184,19 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     type=INT,
     default=3,
     callback=ensure_larger_than_zero,
-    help="The number of concurrent open buy orders.",
-)
-@option(
-    "--cancel-all-open-buy-orders",
-    required=True,
-    type=BOOL,
-    default=False,
-    is_flag=True,
-    help="Cancel all open buy orders on start.",
+    help="""
+    The number of concurrent open buy orders e.g., ``5``. The number of
+    always open buy positions specifies how many buy positions should be
+    open at the same time. If the interval is defined to 2%, a number of 5
+    open buy positions ensures that a rapid price drop of almost 10% that
+    can be caught immediately.
+    """,
 )
 @option(
     "--telegram-token",
     required=False,
     type=STRING,
-    help="The telegram token to use.",
+    help="The Telegram token to use.",
 )
 @option(
     "--telegram-chat-id",
@@ -210,14 +222,31 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     type=FLOAT,
     default=10e10,
     callback=ensure_larger_than_zero,
-    help="The maximum quote investment of this bot.",
+    help="""
+    The maximum investment, e.g. 1000 USD that the algorithm will manage.
+    """,
 )
 @option(
     "--userref",
     required=True,
     type=INT,
     callback=ensure_larger_than_zero,
-    help="A reference number to identify the bots orders with.",
+    help="""
+    A reference number to identify the algorithm's orders. This can be a
+    timestamp or any integer number. Use different userref's for different
+    instances!
+    """,
+)
+@option(
+    "--fee",
+    type=FLOAT,
+    required=False,
+    callback=ensure_larger_equal_zero,
+    help="""
+    The fee percentage to respect, e.g. '0.0026' for 0.26 %. This value does not
+    change the actual paid fee, instead it used to estimate order sizes. If not
+    passed, the highest maker fee will be used.
+    """,
 )
 @option(
     "--sqlite-file",
@@ -260,7 +289,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 )
 @pass_context
 def run(ctx: Context, **kwargs: dict) -> None:
-    """Run the trading algorithm using the specified options"""
+    """Run the trading algorithm using the specified options."""
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
     import traceback  # noqa: PLC0415
@@ -270,7 +299,6 @@ def run(ctx: Context, **kwargs: dict) -> None:
     ctx.obj |= kwargs
 
     if ctx.obj["sqlite_file"]:
-        # FIXME: Maybe use in_memory for dry-run?
         db_config = {"sqlite_file": ctx.obj["sqlite_file"]}
     else:
         db_config = {

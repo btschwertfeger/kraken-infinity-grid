@@ -128,7 +128,7 @@ def test_send_bot_update(
     assert "├ Available USD » 50.0" in message
     assert "├ Available BTC » 0.4" in message
     assert "├ Unfilled surplus of BTC » 0.1" in message
-    assert "├ Bot-managed wealth » 50100.0 USD" in message
+    assert "├ Wealth » 50100.0 USD" in message
     assert "└ Investment » 1000.0 / 2000.0 USD" in message
     assert "💠 Orders" in message
     assert "├ Amount per Grid » 10.0 USD" in message
