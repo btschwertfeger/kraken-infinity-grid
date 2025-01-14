@@ -246,7 +246,7 @@ async def test_on_message(
 
     # Test ticker channel
     assert not instance._KrakenInfinityGridBot__ticker_channel_connected
-    await instance.on_message({"channel": "ticker", "data": {"last": 50000.0}})
+    await instance.on_message({"channel": "ticker", "data": [{"last": 50000.0}]})
     assert instance._KrakenInfinityGridBot__ticker_channel_connected
 
     # Ensure setup did not run yet
@@ -257,7 +257,7 @@ async def test_on_message(
     # start any trading actions. For the trades, we can ensure this by checking
     # if the configuration table was updated due to a new price update, where we
     # always save the time of the last price update.
-    await instance.on_message({"channel": "ticker", "data": {"last": 50000.0}})
+    await instance.on_message({"channel": "ticker", "data": [{"last": 50000.0}]})
     instance.configuration.update.assert_not_called()
 
     instance.sm.prepare_for_trading.assert_not_called()
@@ -292,7 +292,7 @@ async def test_on_message_ticker(instance: KrakenInfinityGridBot) -> None:
     """Test the on_message method and ticker behavior."""
 
     assert not instance._KrakenInfinityGridBot__ticker_channel_connected
-    await instance.on_message({"channel": "ticker", "data": {"last": 50000.0}})
+    await instance.on_message({"channel": "ticker", "data": [{"last": 50000.0}]})
     assert instance._KrakenInfinityGridBot__ticker_channel_connected
 
     # Just verify that ...

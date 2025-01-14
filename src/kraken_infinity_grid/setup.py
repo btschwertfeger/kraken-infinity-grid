@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import traceback
 from logging import getLogger
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
@@ -268,14 +267,6 @@ class SetupManager:
         # of "missing funds".
         ##
         self.__s.om.add_missed_sell_orders()
-
-        # Important first ticker fetch
-        ##
-        ticker = (ticker := self.__s.market.get_ticker(self.__s.symbol))[
-            next(iter(ticker))  # pylint: disable=used-before-assignment
-        ]
-
-        self.__s.ticker = SimpleNamespace(last=float(ticker["c"][0]))
 
         # Update the orderbook, check for closed, filled, cancelled trades,
         # and submit new orders if necessary.

@@ -496,8 +496,8 @@ class OrderManager:
                     pair=self.__s.symbol,
                 ),
             )
-        # ======================================================================
 
+        # ======================================================================
         # Check if there is enough base currency available for selling.
         if fetched_balances["base_available"] >= volume:
             # Place new sell order, append id to pending list, and delete

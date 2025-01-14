@@ -246,6 +246,8 @@ class KrakenInfinityGridBot(SpotWSClient):
             # Initial setup
             if channel == "ticker" and not self.__ticker_channel_connected:
                 self.__ticker_channel_connected = True
+                # Set ticker the first time to have the ticker set during setup.
+                self.ticker = SimpleNamespace(last=float(message["data"][0]["last"]))
                 LOG.info("- Subscribed to ticker channel successfully!")
 
             elif channel == "executions" and not self.__execution_channel_connected:
@@ -269,16 +271,12 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             # =====================================================================
             # Handle ticker and execution messages
+
             if (
                 channel == "ticker"
                 and (data := message.get("data"))
                 and data[0].get("symbol") == self.symbol
             ):
-                # {'channel': 'ticker', 'type': 'update', 'data': [{'symbol':
-                # 'BTC/USD', 'bid': 104179.9, 'bid_qty': 0.04216615, 'ask':
-                # 104180.0, 'ask_qty': 8.62255136, 'last': 104180.0, 'volume':
-                # 5012.66172606, 'vwap': 106355.8, 'low': 103207.8, 'high':
-                # 108297.6, 'change': -2800.0, 'change_pct': -2.62}]}
                 self.configuration.update({"last_price_time": datetime.now()})
                 self.ticker = SimpleNamespace(last=float(data[0]["last"]))
 
