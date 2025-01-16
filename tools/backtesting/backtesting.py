@@ -5,7 +5,27 @@
 #
 # pylint: disable=arguments-differ
 
-""" Backtesting script for the Kraken Infinity Grid Bot. """
+"""
+Backtesting script for the Kraken Infinity Grid Bot.
+
+The backtesting.py script can be used to backtest different strategies and their
+configuration against custom price movements. It is intended to be used as
+orientation and guidance in order to estimate profitability and the optimal
+configuration in different market situations.
+
+Except from the configuration, an iterable including float values for prices are
+the only inputs for running the backtest.
+
+It does not respect the following situations for simplicity:
+
+- Partly filled buy orders
+- External cancellation of orders
+- Interruptions
+- Failed orders (of any kind)
+- Telegram messaging
+- Real trading
+
+"""
 
 import asyncio
 import logging
@@ -19,12 +39,19 @@ from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 
 class KrakenAPIMock(Trade, User, Market):
     """
-    Class mocking the User and Trade client of the python-kraken-sdk to
+    Class mocking the User, Market and Trade client of the python-kraken-sdk to
     simulate real trading.
     """
 
     def __init__(self: Self, kraken_config: dict, callback: Callable) -> None:
-        super().__init__()  # DONT PASS SECRETS!
+        """
+        Initialize the KrakenAPIMock with the given configuration and callback.
+
+        Args:
+            kraken_config (dict): Configuration for the Kraken API mock.
+            callback (Callable): Callback function to handle ticker updates.
+        """
+        super().__init__()  # We don't want to pass secrets here!
         self.__callback = callback
 
         self.__orders = {}
@@ -49,8 +76,17 @@ class KrakenAPIMock(Trade, User, Market):
         self.n_exec_sell_orders = 0
         self.n_exec_buy_orders = 0
 
-    def create_order(self: Self, **kwargs) -> dict:  # noqa: ANN003
-        """Create a new order and update balances if needed."""
+    def create_order(self: Self, **kwargs: Any) -> dict:
+        """
+        Create a new order and update balances if needed.
+
+        Args:
+            kwargs: Order parameters including userref, side, ordertype, price,
+                    and volume.
+
+        Returns:
+            dict: Transaction ID of the created order.
+        """
         txid = str(uuid.uuid4()).upper()
         order = {
             "userref": kwargs["userref"],
@@ -90,11 +126,14 @@ class KrakenAPIMock(Trade, User, Market):
         return {"txid": [txid]}
 
     def fill_order(self: Self, txid: str) -> None:
-        """Fill an order and update balances."""
+        """
+        Fill an order and update balances.
+
+        Args:
+            txid (str): Transaction ID of the order to be filled.
+        """
         if not (order := self.__orders.get(txid)):
             return
-
-        self.__orders[txid] = order
 
         order["status"] = "closed"
         order["vol_exec"] = order["vol"]
@@ -105,6 +144,7 @@ class KrakenAPIMock(Trade, User, Market):
             float(order["vol_exec"]) * float(order["descr"]["price"])
             + float(order["fee"]),
         )
+        self.__orders[txid] = order
 
         if order["descr"]["type"] == "buy":
             self.n_exec_buy_orders += 1
@@ -133,7 +173,12 @@ class KrakenAPIMock(Trade, User, Market):
             )
 
     async def on_ticker_update(self: Self, last: float) -> None:
-        """Update the ticker and fill orders if needed."""
+        """
+        Update the ticker and fill orders if needed.
+
+        Args:
+            last (float): The latest price.
+        """
         await self.__callback(
             {
                 "channel": "ticker",
@@ -162,7 +207,12 @@ class KrakenAPIMock(Trade, User, Market):
                 await fill_order(order["txid"])
 
     def cancel_order(self: Self, txid: str) -> None:
-        """Cancel an order and update balances if needed."""
+        """
+        Cancel an order and update balances if needed.
+
+        Args:
+            txid (str): Transaction ID of the order to be canceled.
+        """
         order = self.__orders.get(txid, {})
         if not order:
             return
@@ -181,24 +231,44 @@ class KrakenAPIMock(Trade, User, Market):
             )
 
     def cancel_all_orders(self: Self, **kwargs: Any) -> None:  # noqa: ARG002
-        """Cancel all open orders."""
+        """
+        Cancel all open orders.
+        """
         for txid in self.__orders:
             self.cancel_order(txid)
 
     def get_open_orders(self, **kwargs: Any) -> dict:  # noqa: ARG002
-        """Get all open orders."""
+        """
+        Get all open orders.
+
+        Returns:
+            dict: Dictionary of open orders.
+        """
         return {
             "open": {k: v for k, v in self.__orders.items() if v["status"] == "open"},
         }
 
     def get_orders_info(self: Self, txid: str) -> dict:
-        """Get information about a specific order."""
+        """
+        Get information about a specific order.
+
+        Args:
+            txid (str): Transaction ID of the order.
+
+        Returns:
+            dict: Dictionary containing order information.
+        """
         if (order := self.__orders.get(txid, None)) is not None:
             return {txid: order}
         return {}
 
     def get_balances(self: Self, **kwargs: Any) -> dict:  # noqa: ARG002
-        """Get the user's current balances."""
+        """
+        Get the user's current balances.
+
+        Returns:
+            dict: Dictionary containing the user's balances.
+        """
         return {
             self.base: {
                 "balance": float(self.__balances[self.base]["balance"]),
@@ -212,6 +282,9 @@ class KrakenAPIMock(Trade, User, Market):
 
 
 class Backtest:
+    """
+    Class to perform backtesting of the Kraken Infinity Grid Bot.
+    """
 
     def __init__(
         self: Self,
@@ -219,6 +292,15 @@ class Backtest:
         db_config: dict,
         balances: dict,
     ) -> None:
+        """
+        Initialize the Backtest with the given strategy configuration, database
+        configuration, and balances.
+
+        Args:
+            strategy_config (dict): Configuration for the trading strategy.
+            db_config (dict): Configuration for the database. balances (dict):
+            Initial balances for the backtest.
+        """
         strategy_config |= {
             # Ignore Telegram stuff
             "telegram_token": "",
@@ -255,6 +337,13 @@ class Backtest:
         self.instance.trade = self.api
 
     async def run(self: Self, prices: Iterable) -> None:
+        """
+        Run the configured strategy against a series of prices.
+
+        Args:
+            prices (Iterable): Iterable of float values representing price
+                               movements.
+        """
         # Initialization
         await self.instance.on_message(
             {
@@ -263,11 +352,14 @@ class Backtest:
                 "data": [{"exec_type": "canceled", "order_id": "txid0"}],
             },
         )
+        # Run against prices
         for price in prices:
-            await self.api.on_ticker_update(float(price))
+            await self.api.on_ticker_update(price)
 
     def summary(self: Self) -> None:
-        """Print the summary of the backtest."""
+        """
+        Print the summary of the backtest.
+        """
         print("*" * 80)
         print(f"Strategy: {self.instance.strategy}")
         print(f"Final price: {self.instance.ticker.last}")
@@ -289,8 +381,9 @@ class Backtest:
 
 
 async def main() -> None:
-    """Main function to run the backtest."""
-
+    """
+    Main function to run the backtest.
+    """
     bt = Backtest(
         strategy_config={
             "strategy": "GridHODL",
