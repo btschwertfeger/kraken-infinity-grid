@@ -8,6 +8,8 @@
 """
 Backtesting script for the Kraken Infinity Grid Bot.
 
+NOTE: Please use the supplied Jupyter Notebook for running backtests.
+
 The backtesting.py script can be used to backtest different strategies and their
 configuration against custom price movements. It is intended to be used as
 orientation and guidance in order to estimate profitability and the optimal
@@ -24,17 +26,21 @@ It does not respect the following situations for simplicity:
 - Failed orders (of any kind)
 - Telegram messaging
 - Real trading
-
 """
 
 import asyncio
 import logging
+import time
 import uuid
 from typing import Any, Callable, Iterable, Self
 
 from kraken.spot import Market, Trade, User
+from tqdm import tqdm
 
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
+
+# Mock time.sleep to be a no-op function
+time.sleep = lambda _: None
 
 
 class KrakenAPIMock(Trade, User, Market):
@@ -353,8 +359,12 @@ class Backtest:
             },
         )
         # Run against prices
-        for price in prices:
-            await self.api.on_ticker_update(price)
+        if logging.getLogger(__name__).getEffectiveLevel() < logging.ERROR:
+            for price in prices:
+                await self.api.on_ticker_update(price)
+        else:
+            for price in tqdm(prices):
+                await self.api.on_ticker_update(price)
 
     def summary(self: Self) -> None:
         """

@@ -46,10 +46,11 @@ classifiers = [
 dev = ["mypy", "black", "ruff"]
 test = ["pytest", "pytest-cov", "pytest-asyncio"]
 backtest = [
-  "matplotlib",
   "ipython",
-  "ipykernel",  # python -m ipykernel install --user --name=kraken-infinity-grid
+  "ipykernel", # python -m ipykernel install --user --name=kraken-infinity-grid
   "jupyter",
+  "pandas",
+  "tqdm",
 ]
 
 [project.scripts]
@@ -244,6 +245,9 @@ task-tags = ["todo", "TODO", "fixme", "FIXME"]
 ]
 "tools/generate_ws_messages.py" = [
   "S311", # pseudo-random-generator
+]
+"tools/backtesting/Backtesting.ipynb" = [
+  "CPY001", # Copyright
 ]
 
 [tool.ruff.lint.flake8-copyright]

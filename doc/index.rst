@@ -20,7 +20,7 @@ Welcome to kraken-infinity-grid's documentation!
    getting-started.rst
    configuration.rst
    need2knows.rst
-   backtesting.rst
+   Backtesting.ipynb
    license.rst
 
 Indices and tables
