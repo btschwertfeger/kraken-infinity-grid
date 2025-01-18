@@ -88,10 +88,13 @@ class DBConnect:
         )
         query = select(table)
         if filters:
-            for column, value in filters.items():
-                query = query.where(
-                    table.c[column] == value and table.c[column] != exclude,
-                )
+            query = query.where(
+                *(table.c[column] == value for column, value in filters.items()),
+            )
+        if exclude:
+            query = query.where(
+                *(table.c[column] != value for column, value in exclude.items()),
+            )
         return self.session.execute(query).mappings()
 
     def update_row(
@@ -210,9 +213,17 @@ class Orderbook:
             updates=_updates,
         )
 
-    def count(self: Self, filters: dict | None = None) -> int:
+    def count(
+        self: Self,
+        filters: dict | None = None,
+        exclude: dict | None = None,
+    ) -> int:
         """Count orders in the orderbook."""
-        LOG.debug("Counting orders in the orderbook with filters: %s", filters)
+        LOG.debug(
+            "Counting orders in the orderbook with filters: %s and exclude: %s",
+            filters,
+            exclude,
+        )
         if not filters:
             filters = {}
         filters |= {"userref": self.__userref}
@@ -224,6 +235,10 @@ class Orderbook:
                 *(self.__table.c[column] == value for column, value in filters.items()),
             )
         )
+        if exclude:
+            query = query.where(
+                *(self.__table.c[column] != value for column, value in exclude.items()),
+            )
         return self.__db.session.execute(query).scalar()  # type: ignore[no-any-return]
 
 

@@ -23,7 +23,6 @@ from kraken.exceptions import (
     KrakenPermissionDeniedError,
 )
 from kraken.spot import Market, SpotWSClient, Trade, User
-from sqlalchemy.engine.result import MappingResult
 
 from kraken_infinity_grid.database import (
     Configuration,
@@ -278,8 +277,8 @@ class KrakenInfinityGridBot(SpotWSClient):
                 and data[0].get("symbol") == self.symbol
             ):
                 self.configuration.update({"last_price_time": datetime.now()})
-                self.ticker = SimpleNamespace(last=float(data[0]["last"]))
 
+                self.ticker = SimpleNamespace(last=float(data[0]["last"]))
                 if self.unsold_buy_order_txids.count() != 0:
                     self.om.add_missed_sell_orders()
 
@@ -525,20 +524,11 @@ class KrakenInfinityGridBot(SpotWSClient):
         LOG.debug("Retrieved balances: %s", balances)
         return balances
 
-    def get_current_buy_prices(self: Self) -> list[float]:
+    def get_current_buy_prices(self: Self) -> Iterable[float]:
         """Returns a list of the prices of open buy orders."""
         LOG.debug("Getting current buy prices...")
-        return [order["price"] for order in self.get_active_buy_orders()]
-
-    def get_active_buy_orders(self: Self) -> MappingResult:
-        """Returns the list of active buy orders."""
-        LOG.debug("Getting active buy orders...")
-        return self.orderbook.get_orders(filters={"side": "buy"})
-
-    def get_active_sell_orders(self: Self) -> MappingResult:
-        """Returns the list of active sell orders."""
-        LOG.debug("Getting active sell orders...")
-        return self.orderbook.get_orders(filters={"side": "sell"})
+        for order in self.orderbook.get_orders(filters={"side": "buy"}):
+            yield order["price"]
 
     def get_order_price(
         self: Self,

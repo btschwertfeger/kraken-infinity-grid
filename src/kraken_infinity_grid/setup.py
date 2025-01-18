@@ -89,14 +89,9 @@ class SetupManager:
             # high, that all buy orders will be canceled anyway and new buy
             # orders will be placed in ``check_price_range`` during shift-up.
             if (
-                len(
-                    [
-                        o
-                        for o in self.__s.orderbook.get_orders(
-                            filters={"side": "sell"},
-                        ).all()  # type: ignore[no-untyped-call]
-                        if o["txid"] != local_order["txid"]
-                    ],
+                self.__s.orderbook.count(
+                    filters={"side": "sell"},
+                    exclude={"txid": local_order["txid"]},
                 )
                 != 0
             ):
@@ -134,7 +129,7 @@ class SetupManager:
         # Orders of the upstream which are not yet tracked in the local
         # orderbook will now be added to the local orderbook.
         ##
-        local_txids = [order["txid"] for order in self.__s.orderbook.get_orders().all()]  # type: ignore[no-untyped-call]
+        local_txids = (order["txid"] for order in self.__s.orderbook.get_orders().all())  # type: ignore[no-untyped-call]
         something_changed = False
         for order in open_orders:
             if order["txid"] not in local_txids:
