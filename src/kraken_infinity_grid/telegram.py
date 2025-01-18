@@ -44,6 +44,8 @@ class Telegram:
         if exception:
             if log:
                 LOG.error(message)
+            if not (self.__exception_token and self.__exception_chat_id):
+                return
             response = requests.post(
                 url=f"https://api.telegram.org/bot{self.__exception_token}/sendMessage",
                 params={
@@ -56,6 +58,8 @@ class Telegram:
         else:
             if log:
                 LOG.info(message)
+            if not (self.__telegram_token and self.__telegram_chat_id):
+                return
             response = requests.post(
                 url=f"https://api.telegram.org/bot{self.__telegram_token}/sendMessage",
                 params={

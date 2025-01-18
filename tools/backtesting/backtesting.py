@@ -30,17 +30,27 @@ It does not respect the following situations for simplicity:
 
 import asyncio
 import logging
-import time
 import uuid
-from typing import Any, Callable, Iterable, Self
+from contextlib import contextmanager
+from typing import Any, Callable, Generator, Iterable, Self
+from unittest.mock import patch
 
 from kraken.spot import Market, Trade, User
 from tqdm import tqdm
 
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 
-# Mock time.sleep to be a no-op function
-time.sleep = lambda _: None
+
+@contextmanager
+def no_sleep() -> Generator:
+    """Context manager to disable all sleep calls during backtesting"""
+    with (
+        patch("time.sleep", return_value=None),
+        patch("asyncio.sleep", return_value=None),
+        patch("kraken_infinity_grid.gridbot.sleep", return_value=None),
+        patch("kraken_infinity_grid.order_management.sleep", return_value=None),
+    ):
+        yield
 
 
 class KrakenAPIMock(Trade, User, Market):
@@ -350,21 +360,22 @@ class Backtest:
             prices (Iterable): Iterable of float values representing price
                                movements.
         """
-        # Initialization
-        await self.instance.on_message(
-            {
-                "channel": "executions",
-                "type": "snapshot",
-                "data": [{"exec_type": "canceled", "order_id": "txid0"}],
-            },
-        )
-        # Run against prices
-        if logging.getLogger(__name__).getEffectiveLevel() < logging.ERROR:
-            for price in prices:
-                await self.api.on_ticker_update(price)
-        else:
-            for price in tqdm(prices):
-                await self.api.on_ticker_update(price)
+        with no_sleep():
+            # Initialization
+            await self.instance.on_message(
+                {
+                    "channel": "executions",
+                    "type": "snapshot",
+                    "data": [{"exec_type": "canceled", "order_id": "txid0"}],
+                },
+            )
+            # Run against prices
+            if logging.getLogger(__name__).getEffectiveLevel() < logging.ERROR:
+                for price in prices:
+                    await self.api.on_ticker_update(price)
+            else:
+                for price in tqdm(prices):
+                    await self.api.on_ticker_update(price)
 
     def summary(self: Self) -> None:
         """

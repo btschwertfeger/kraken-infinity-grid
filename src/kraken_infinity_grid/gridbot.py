@@ -139,6 +139,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         dry_run: bool = False,
     ) -> None:
         super().__init__(key=key, secret=secret)
+
         LOG.info("Initiate the Kraken Infinity Grid Algorithm instance...")
         LOG.debug("Config: %s", config)
         self.init_done: bool = False
