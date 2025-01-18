@@ -32,3 +32,21 @@ In case of uncertainty, the kraken-infinity-grid can be started with verbose
 logging to see the reconnection process (and more). The verbose logging can be
 enabled via ``-v`` for debug logging of the kraken-infinity-grid or ``-vv`` for
 even more logging of used packages.
+
+Hidden tax benefits
+-------------------
+
+.. WARNING:: This is not financial advice. The authors of this software are not
+             tax advisors. The following scenario may not apply universally.
+             Users should conduct their own research.
+
+In many countries, the tax principle of First In, First Out (FIFO) is applied to
+cryptocurrency trading. The kraken-infinity-grid benefits from this, as the
+first purchased assets are the first to be sold. This means that in sideways or
+downward-trending markets over the medium to long term, sell orders may
+liquidate assets bought at higher price levels (from a tax perspective).
+Consequently, even if actual profits are made by selling at a higher price than
+the last buy order, no taxes may be due, as the transaction could be considered
+a loss for tax purposes. This approach can be utilized to accumulate
+cryptocurrencies in declining markets, such as with the :ref:`GridHODL`
+strategy, potentially without incurring any tax liabilities.

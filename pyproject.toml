@@ -45,6 +45,13 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["mypy", "black", "ruff"]
 test = ["pytest", "pytest-cov", "pytest-asyncio"]
+backtest = [
+  "ipython",
+  "ipykernel", # python -m ipykernel install --user --name=kraken-infinity-grid
+  "jupyter",
+  "pandas",
+  "tqdm",
+]
 
 [project.scripts]
 kraken-infinity-grid = "kraken_infinity_grid.cli:cli"
@@ -238,6 +245,9 @@ task-tags = ["todo", "TODO", "fixme", "FIXME"]
 ]
 "tools/generate_ws_messages.py" = [
   "S311", # pseudo-random-generator
+]
+"tools/backtesting/Backtesting.ipynb" = [
+  "CPY001", # Copyright
 ]
 
 [tool.ruff.lint.flake8-copyright]

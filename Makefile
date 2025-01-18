@@ -43,7 +43,7 @@ install: check-uv
 ##
 .PHONY: dev
 dev: check-uv
-	$(UV) pip install -e ".[dev,test]"
+	$(UV) pip install -e ".[dev,test,backtest]"
 
 ## ======= T E S T I N G =======
 ## test		Run the unit tests
