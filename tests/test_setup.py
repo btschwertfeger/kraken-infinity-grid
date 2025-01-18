@@ -195,7 +195,7 @@ def test_update_order_book(
     strategy.altname = "BTC/USD"
     strategy.orderbook.get_orders.side_effect = [
         # This is the local order book:
-        mock.Mock(all=mock.Mock(return_value=[{"txid": "txid3"}, {"txid": "txid4"}])),
+        [{"txid": "txid3"}, {"txid": "txid4"}],
         # This are the updated local orders:
         [{"txid": "txid3"}, {"txid": "txid4"}],
     ]
