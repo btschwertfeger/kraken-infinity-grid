@@ -160,6 +160,8 @@ def test_orderbook_count(orderbook: Orderbook) -> None:
     assert count == 2
     count = orderbook.count(filters={"txid": "txid1"})
     assert count == 1
+    count = orderbook.count(filters={"txid": "txid1"}, exclude={"symbol": "BTC/USD"})
+    assert count == 0
 
 
 def test_configuration_get(configuration: Configuration) -> None:

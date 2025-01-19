@@ -177,7 +177,7 @@ def test_check_near_buy_orders_cancel(
 ) -> None:
     """Test checking near buy orders to cancel orders to close to each other."""
     strategy.get_current_buy_prices.return_value = [50000.0, 49950.0, 49940.0]
-    strategy.get_active_buy_orders.return_value = [
+    strategy.orderbook.get_orders.return_value = [
         {"txid": "txid1", "price": 50000.0},
         {"txid": "txid2", "price": 49950.0},
         {"txid": "txid3", "price": 49940.0},
@@ -233,6 +233,7 @@ def test_check_n_open_buy_orders(
     The scenario already has 1 open buy order, so 4 more buy orders should be
     placed.
     """
+
     # Number of desired open buy orders
     strategy.n_open_buy_orders = 5
     # Current investment
@@ -280,6 +281,7 @@ def test_check_n_open_buy_orders(
             {"txid": "txid4", "price": 49600.0},
         ],
     ]
+    strategy.orderbook.count.side_effect = [1, 2, 3, 4, 5]
 
     order_manager._OrderManager__check_n_open_buy_orders()
     for price in (49900.0, 49800.0, 49700.0, 49600.0):
@@ -324,7 +326,7 @@ def test_check_lowest_cancel_of_more_than_n_buy_orders(
         [50000.0, 49900.0],
         [50000.0],
     ]
-    strategy.get_active_buy_orders.return_value.all.return_value = [
+    strategy.orderbook.get_orders.return_value = [
         {"txid": "txid1", "price": 50000.0},
         {"txid": "txid2", "price": 49900.0},
         {"txid": "txid3", "price": 49800.0},
@@ -345,10 +347,7 @@ def test_shift_buy_orders_up(
 ) -> None:
     """Test shifting buy orders up."""
     strategy.get_current_buy_prices.return_value = [50000.0, 49000.0]
-    strategy.get_active_buy_orders.return_value.all.return_value = [
-        {"txid": "txid1", "price": 50000.0},
-        {"txid": "txid2", "price": 49000.0},
-    ]
+    strategy.orderbook.count.return_value = 2
     strategy.ticker.last = 60000.0
     assert order_manager._OrderManager__shift_buy_orders_up() is True
     mock_cancel_all_open_buy_orders.assert_called_once()
@@ -363,7 +362,7 @@ def test_check_extra_sell_order(
 ) -> None:
     """Test checking and placing an extra sell order for the SWING strategy."""
     strategy.strategy = "GridHODL"
-    strategy.get_active_sell_orders.return_value.all.return_value = []
+    strategy.orderbook.count.return_value = 0
     strategy.get_balances.return_value = {"base_available": 1.0}
     strategy.get_order_price.return_value = 51000.0
 
@@ -477,7 +476,7 @@ def test_new_buy_order(
     strategy.trade.create_order.return_value = {"txid": ["txid1"]}
     strategy.trade.truncate.side_effect = [50000.0, 100.0]  # price, volume
     # No other open orders
-    strategy.get_active_buy_orders.return_value.all.return_value = []
+    strategy.orderbook.count.return_value = 0
 
     order_manager.new_buy_order(order_price=50000.0)
     strategy.pending_txids.add.assert_called_once_with("txid1")
@@ -492,14 +491,13 @@ def test_new_buy_order_max_invest_reached(
     """Test placing a new buy order without sufficient funds."""
     strategy.max_investment_reached = True
     # No other open orders
-    strategy.get_active_buy_orders.return_value.all.return_value = []
+    strategy.orderbook.count.return_value = 0
 
     order_manager.new_buy_order(order_price=50000.0)
     strategy.trade.create_order.assert_not_called()
     strategy.pending_txids.add.assert_not_called()
 
 
-@pytest.mark.wip
 def test_new_buy_order_not_enough_funds(
     order_manager: OrderManager,
     strategy: mock.Mock,
@@ -510,7 +508,7 @@ def test_new_buy_order_not_enough_funds(
     strategy.trade.create_order.return_value = {"txid": ["txid1"]}
     strategy.trade.truncate.side_effect = [50000.0, 100.0]  # price, volume
     # No other open orders
-    strategy.get_active_buy_orders.return_value.all.return_value = []
+    strategy.orderbook.count.return_value = 0
 
     order_manager.new_buy_order(order_price=50000.0)
     strategy.trade.create_order.assert_not_called()
@@ -547,7 +545,7 @@ def test_new_sell_order_GridSell(
     strategy.get_balances.return_value = {"base_available": 1.0}
 
     # Handling the txid to delete
-    strategy.unsold_buy_order_txids.get.return_value.all.return_value = []
+    strategy.unsold_buy_order_txids.get.return_value.first.return_value = []
 
     # The unsold buy order of which the volume is now to be sold
     strategy.user.get_orders_info.return_value = {
@@ -582,7 +580,7 @@ def test_new_sell_order_GridSell(
 
 
 @pytest.mark.parametrize("strategy_name", ["SWING", "GridHODL"])
-def test_new_sell_order_GridHODL_SWING(
+def test_new_sell_order(
     order_manager: OrderManager,
     strategy: mock.Mock,
     strategy_name: str,
@@ -597,7 +595,7 @@ def test_new_sell_order_GridHODL_SWING(
     strategy.get_balances.return_value = {"base_available": 1.0}
 
     # Handling the txid to delete
-    strategy.unsold_buy_order_txids.get.return_value.all.return_value = []
+    strategy.unsold_buy_order_txids.get.return_value.first.return_value = []
 
     # The unsold buy order of which the volume is now to be sold
     strategy.user.get_orders_info.return_value = {
@@ -632,7 +630,7 @@ def test_new_sell_order_GridHODL_SWING(
 
 
 @pytest.mark.parametrize("strategy_name", ["SWING", "GridHODL"])
-def test_new_sell_order_GridHODL_SWING_not_enough_funds(
+def test_new_sell_order_not_enough_funds(
     order_manager: OrderManager,
     strategy: mock.Mock,
     strategy_name: str,
@@ -646,7 +644,7 @@ def test_new_sell_order_GridHODL_SWING_not_enough_funds(
     strategy.get_balances.return_value = {"base_available": 0.0}
 
     # Handling the txid to delete
-    strategy.unsold_buy_order_txids.get.return_value.all.return_value = []
+    strategy.unsold_buy_order_txids.get.return_value.first.return_value = []
 
     # The unsold buy order of which the volume is now to be sold
     strategy.user.get_orders_info.return_value = {
@@ -771,7 +769,7 @@ def test_handle_filled_order_event_sell_place_no_new_buy(
         "userref": 13456789,
         "vol_exec": 0.1,
     }
-    strategy.get_active_sell_orders.return_value.all.return_value = []
+    strategy.orderbook.count.return_value = 0  # no open sell orders
     strategy.get_order_price.return_value = 51000.0
     order_manager.handle_filled_order_event(txid="txid2")
 

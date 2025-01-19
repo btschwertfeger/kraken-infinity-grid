@@ -86,45 +86,16 @@ def test_get_balances(instance: KrakenInfinityGridBot) -> None:
     assert balances["quote_available"] == 900.0
 
 
-@mock.patch(
-    "kraken_infinity_grid.gridbot.KrakenInfinityGridBot.get_active_buy_orders",
-    return_value=[{"price": 50000.0, "vol": 0.1}, {"price": 49000.0, "vol": 0.2}],
-)
 def test_get_current_buy_prices(
-    mock_get_active_buy_orders: mock.Mock,  # noqa: ARG001
     instance: KrakenInfinityGridBot,
 ) -> None:
     """Test the get_current_buy_prices method."""
 
-    instance.get_active_buy_orders.return_value = [
+    instance.orderbook.get_orders.return_value = [
         {"price": 50000.0},
         {"price": 49000.0},
     ]
-    assert instance.get_current_buy_prices() == [50000.0, 49000.0]
-
-
-def test_get_active_buy_orders(instance: KrakenInfinityGridBot) -> None:
-    """Test the get_active_buy_orders method."""
-    instance.orderbook.get_orders.return_value = [
-        {"txid": "txid1", "side": "buy"},
-        {"txid": "txid2", "side": "buy"},
-    ]
-    orders = instance.get_active_buy_orders()
-    assert len(orders) == 2
-    assert orders[0]["txid"] == "txid1"
-    assert orders[1]["txid"] == "txid2"
-
-
-def test_get_active_sell_orders(instance: KrakenInfinityGridBot) -> None:
-    """Test the get_active_sell_orders method."""
-    instance.orderbook.get_orders.return_value = [
-        {"txid": "txid1", "side": "sell"},
-        {"txid": "txid2", "side": "sell"},
-    ]
-    orders = instance.get_active_sell_orders()
-    assert len(orders) == 2
-    assert orders[0]["txid"] == "txid1"
-    assert orders[1]["txid"] == "txid2"
+    assert list(instance.get_current_buy_prices()) == [50000.0, 49000.0]
 
 
 def test_get_order_price_sell(instance: KrakenInfinityGridBot) -> None:

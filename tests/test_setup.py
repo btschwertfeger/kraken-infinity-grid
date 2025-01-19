@@ -115,9 +115,7 @@ def test_update_order_book_handle_closed_sell_order_trigger_new_buy(
     strategy.quote_currency = "USD"
     strategy.base_currency = "BTC"
     strategy.get_order_price.return_value = 49000.0
-    strategy.orderbook.get_orders.return_value.all.return_value = [
-        {"txid": "txid3", "side": "sell"},
-    ]
+    strategy.orderbook.count.return_value = 1
 
     local_order = {"txid": "txid2"}
     closed_order = {
@@ -156,7 +154,7 @@ def test_update_order_book_handle_closed_sell_order_no_new_buy(
     strategy.quote_currency = "USD"
     strategy.base_currency = "BTC"
     strategy.get_order_price.return_value = 49000.0
-    strategy.orderbook.get_orders.return_value.all.return_value = []
+    strategy.orderbook.count.return_value = 0
 
     local_order = {"txid": "txid2"}
     closed_order = {
@@ -197,7 +195,7 @@ def test_update_order_book(
     strategy.altname = "BTC/USD"
     strategy.orderbook.get_orders.side_effect = [
         # This is the local order book:
-        mock.Mock(all=mock.Mock(return_value=[{"txid": "txid3"}, {"txid": "txid4"}])),
+        [{"txid": "txid3"}, {"txid": "txid4"}],
         # This are the updated local orders:
         [{"txid": "txid3"}, {"txid": "txid4"}],
     ]
@@ -226,7 +224,6 @@ def test_update_order_book(
     )
 
 
-@pytest.mark.wip
 @pytest.mark.parametrize(
     "input_fee,asset_fee,order_size",  # noqa: PT006
     [(None, 0.0026, 100.26), (0.02, 0.02, 102)],

@@ -296,18 +296,15 @@ def run(ctx: Context, **kwargs: dict) -> None:
 
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot  # noqa: PLC0415
 
+    db_config = {
+        "sqlite_file": kwargs.pop("sqlite_file"),
+        "db_user": kwargs.pop("db_user"),
+        "db_password": kwargs.pop("db_password"),
+        "db_host": kwargs.pop("db_host"),
+        "db_port": kwargs.pop("db_port"),
+        "db_name": kwargs.pop("db_name"),
+    }
     ctx.obj |= kwargs
-
-    if ctx.obj["sqlite_file"]:
-        db_config = {"sqlite_file": ctx.obj["sqlite_file"]}
-    else:
-        db_config = {
-            "db_user": ctx.obj["db_user"],
-            "db_password": ctx.obj["db_password"],
-            "db_host": ctx.obj["db_host"],
-            "db_port": ctx.obj["db_port"],
-            "db_name": ctx.obj["db_name"],
-        }
 
     async def main() -> None:
         # Instantiate the trading algorithm

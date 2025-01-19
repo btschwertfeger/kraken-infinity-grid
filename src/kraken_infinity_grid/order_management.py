@@ -124,7 +124,7 @@ class OrderManager:
         """
         LOG.debug("Checking if distance between buy orders is too low...")
 
-        if len(buy_prices := self.__s.get_current_buy_prices()) == 0:
+        if len(buy_prices := list(self.__s.get_current_buy_prices())) == 0:
             return
 
         buy_prices.sort(reverse=True)
@@ -133,7 +133,7 @@ class OrderManager:
                 price == buy_prices[i]
                 or (buy_prices[i] / price) - 1 < self.__s.interval / 2
             ):
-                for order in self.__s.get_active_buy_orders():
+                for order in self.__s.orderbook.get_orders(filters={"side": "buy"}):
                     if order["price"] == buy_prices[i]:
                         self.handle_cancel_order(txid=order["txid"])
                         break
@@ -148,32 +148,30 @@ class OrderManager:
             "Checking if there are %d open buy orders...",
             self.__s.n_open_buy_orders,
         )
-        buy_prices: list[float] = self.__s.get_current_buy_prices()
-        active_buy_orders: list[dict] = self.__s.get_active_buy_orders().all()  # type: ignore[no-untyped-call]
         can_place_buy_order: bool = True
+        buy_prices: list[float] = list(self.__s.get_current_buy_prices())
 
         while (
-            len(active_buy_orders) < self.__s.n_open_buy_orders
+            (n_active_buy_orders := self.__s.orderbook.count(filters={"side": "buy"}))
+            < self.__s.n_open_buy_orders
             and can_place_buy_order
             and self.__s.pending_txids.count() == 0
             and not self.__s.max_investment_reached
         ):
-
             fetched_balances: dict[str, float] = self.__s.get_balances()
             if fetched_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
                 order_price: float = self.__s.get_order_price(
                     side="buy",
                     last_price=(
                         self.__s.ticker.last
-                        if len(active_buy_orders) == 0
+                        if n_active_buy_orders == 0
                         else min(buy_prices)
                     ),
                 )
 
                 self.handle_arbitrage(side="buy", order_price=order_price)
-                active_buy_orders = self.__s.get_active_buy_orders().all()  # type: ignore[no-untyped-call]
-                buy_prices = self.__s.get_current_buy_prices()
-                LOG.info("Length of active buy orders: %s", len(active_buy_orders))
+                buy_prices = list(self.__s.get_current_buy_prices())
+                LOG.info("Length of active buy orders: %s", n_active_buy_orders + 1)
             else:
                 LOG.warning("Not enough quote currency available to place buy order!")
                 can_place_buy_order = False
@@ -184,13 +182,13 @@ class OrderManager:
         executed sell order.
         """
         LOG.debug("Checking if the lowest buy order needs to be canceled...")
-        buy_prices = self.__s.get_current_buy_prices()
-        active_buy_orders = self.__s.get_active_buy_orders().all()  # type: ignore[no-untyped-call]
-        while len(buy_prices) > self.__s.n_open_buy_orders:
-            for order in active_buy_orders:
+        while (
+            len(buy_prices := list(self.__s.get_current_buy_prices()))
+            > self.__s.n_open_buy_orders
+        ):
+            for order in self.__s.orderbook.get_orders(filters={"side": "buy"}):
                 if order["price"] == min(buy_prices):
                     self.handle_cancel_order(txid=order["txid"])
-                    buy_prices = self.__s.get_current_buy_prices()
 
     def __shift_buy_orders_up(self: OrderManager) -> bool:
         """
@@ -202,19 +200,16 @@ class OrderManager:
         ``check_price_range`` functions stops.
         """
         LOG.debug("Checking if buy orders need to be shifted up...")
-        active_buy_orders = self.__s.get_active_buy_orders().all()  # type: ignore[no-untyped-call]
-        if len(active_buy_orders) > 0:
-            buy_prices = self.__s.get_current_buy_prices()
-            if (
-                self.__s.ticker.last
-                > max(buy_prices)
-                * (1 + self.__s.interval)
-                * (1 + self.__s.interval)
-                * 1.001
-            ):
-                self.cancel_all_open_buy_orders()
-                self.check_price_range()
-                return True
+        if self.__s.orderbook.count(filters={"side": "buy"}) > 0 and (
+            self.__s.ticker.last
+            > max(list(self.__s.get_current_buy_prices()))
+            * (1 + self.__s.interval)
+            * (1 + self.__s.interval)
+            * 1.001
+        ):
+            self.cancel_all_open_buy_orders()
+            self.check_price_range()
+            return True
 
         return False
 
@@ -227,8 +222,7 @@ class OrderManager:
             return
 
         LOG.debug("Checking if extra sell order can be placed...")
-        active_sell_orders = self.__s.get_active_sell_orders().all()  # type: ignore[no-untyped-call]
-        if len(active_sell_orders) == 0:
+        if self.__s.orderbook.count(filters={"side": "sell"}) == 0:
             fetched_balances = self.__s.get_balances()
 
             if (
@@ -297,7 +291,7 @@ class OrderManager:
     ) -> None:
         """Handles the arbitrage between buy and sell orders."""
         LOG.debug(
-            "Handle Arbitrage for %s order with order price: %s and"
+            "Handle arbitrage for %s order with order price: %s and"
             " txid_to_delete: %s",
             side,
             order_price,
@@ -339,14 +333,16 @@ class OrderManager:
         if txid_to_delete is not None:
             self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
-        if len(self.__s.get_active_buy_orders().all()) >= self.__s.n_open_buy_orders:  # type: ignore[no-untyped-call]
+        if (
+            self.__s.orderbook.count(filters={"side": "buy"})
+            >= self.__s.n_open_buy_orders
+        ):
+            # Don't place new buy orders if there are already enough
             return
 
         # Check if algorithm reached the max_investment value
         if self.__s.max_investment_reached:
             return
-
-        current_balances = self.__s.get_balances()
 
         # Compute the target price for the upcoming buy order.
         order_price = float(
@@ -368,6 +364,7 @@ class OrderManager:
 
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
+        current_balances = self.__s.get_balances()
         if current_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
@@ -409,6 +406,10 @@ class OrderManager:
         txid_id_to_delete: str | None = None,
     ) -> None:
         """Places a new sell order."""
+        if self.__s.dry_run:
+            LOG.info("Dry run, not placing sell order.")
+            # FIXME: do proper dryrun
+            return
 
         if self.__s.strategy == "cDCA":
             LOG.debug("cDCA strategy, not placing sell order.")
@@ -417,10 +418,9 @@ class OrderManager:
             return
 
         LOG.debug("Check conditions for placing a sell order...")
-        fetched_balances = self.__s.get_balances()
-        volume: float | None = None
 
         # ======================================================================
+        volume: float | None = None
         if txid_id_to_delete is not None:  # If corresponding buy order filled
             # GridSell always has txid_id_to_delete set.
 
@@ -429,7 +429,7 @@ class OrderManager:
             # will be placed - even if placing now fails.
             if not self.__s.unsold_buy_order_txids.get(
                 filters={"txid": txid_id_to_delete},
-            ).all():  # type: ignore[no-untyped-call]
+            ).first():  # type: ignore[no-untyped-call]
                 self.__s.unsold_buy_order_txids.add(
                     txid=txid_id_to_delete,
                     price=order_price,
@@ -499,6 +499,7 @@ class OrderManager:
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
+        fetched_balances = self.__s.get_balances()
         if fetched_balances["base_available"] >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
@@ -524,6 +525,8 @@ class OrderManager:
             self.__s.pending_txids.add(placed_order_txid)
 
             if txid_id_to_delete is not None:
+                # Other than with buy orders, we can only delete the
+                # corresponding buy order if the sell order was placed.
                 self.__s.orderbook.remove(filters={"txid": txid_id_to_delete})
                 self.__s.unsold_buy_order_txids.remove(txid=txid_id_to_delete)
 
@@ -547,6 +550,15 @@ class OrderManager:
             # exchange, or manual trades have been made during processing.
             self.__s.save_exit(reason=message)
         elif txid_id_to_delete is not None:
+            # TODO: Check if this is appropriate or not
+            #       Added logging statement to monitor occurrences
+            # ... This would only be the case for GridHODL and SWING, while
+            # those should always have enough base currency available... but
+            # lets check this for a while.
+            LOG.warning(
+                "TODO: Not enough funds to place sell order for txid %s",
+                txid_id_to_delete,
+            )
             self.__s.orderbook.remove(filters={"txid": txid_id_to_delete})
 
     def handle_filled_order_event(
@@ -643,13 +655,7 @@ class OrderManager:
         # Create a buy order for the executed sell order.
         ##
         elif (
-            len(
-                [
-                    o
-                    for o in self.__s.get_active_sell_orders().all()  # type: ignore[no-untyped-call]
-                    if o["side"] == "sell" and o["txid"] != txid
-                ],
-            )
+            self.__s.orderbook.count(filters={"side": "sell"}, exclude={"txid": txid})
             != 0
         ):
             # A new buy order will only be placed if there is another sell
@@ -688,7 +694,7 @@ class OrderManager:
 
             # Check if the order has some vol_exec to sell
             ##
-            if float(order["vol_exec"]) != float(0):
+            if float(order["vol_exec"]) != 0.0:
                 LOG.info(
                     "Order %s is partly filled - saving those funds.",
                     txid,

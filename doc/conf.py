@@ -77,4 +77,3 @@ html_context = {
     "github_repo": "kraken-infinity-grid",
     "github_version": "master/doc/",
 }
-html_theme_options = {"relbarbgcolor": "black"}
