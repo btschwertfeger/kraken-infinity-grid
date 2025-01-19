@@ -291,7 +291,7 @@ class OrderManager:
     ) -> None:
         """Handles the arbitrage between buy and sell orders."""
         LOG.debug(
-            "Handle Arbitrage for %s order with order price: %s and"
+            "Handle arbitrage for %s order with order price: %s and"
             " txid_to_delete: %s",
             side,
             order_price,

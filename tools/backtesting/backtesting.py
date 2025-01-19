@@ -18,6 +18,10 @@ configuration in different market situations.
 Except from the configuration, an iterable including float values for prices are
 the only inputs for running the backtest.
 
+This script is far from optimal, but it should give a good overview of the
+functionality of the Kraken Infinity Grid Bot. It is not intended to be used for
+real trading or making any final financial decisions.
+
 It does not respect the following situations for simplicity:
 
 - Partly filled buy orders
