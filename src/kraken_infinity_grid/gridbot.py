@@ -310,14 +310,12 @@ class KrakenInfinityGridBot(SpotWSClient):
                     match execution["exec_type"]:
                         # FIXME: Check if order_id is part of this bot here, and
                         #        not later.
-                        case "new":  # "pending_new"
+                        case "new":
                             self.om.assign_order_by_txid(execution["order_id"])
                         case "filled":
                             self.om.handle_filled_order_event(execution["order_id"])
                         case "canceled" | "expired":
-                            self.orderbook.remove(
-                                filters={"txid": execution["order_id"]},
-                            )
+                            self.om.handle_cancel_order(execution["order_id"])
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)

@@ -12,8 +12,10 @@ from decimal import Decimal
 from time import sleep
 from typing import TYPE_CHECKING, Self
 
+from kraken.exceptions import KrakenUnknownOrderError
+
 if TYPE_CHECKING:
-    # to avoid circular import for type checking
+    # To avoid circular import for type checking
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 
 LOG: logging.Logger = logging.getLogger(__name__)
@@ -61,40 +63,28 @@ class OrderManager:
         was added to the orderbook, the algorithm will handle any removals in
         case of closed orders.
         """
-
-        LOG.info("Processing %s (try: %d / 10)", txid, tries)
-        order_info = self.__s.user.get_orders_info(txid=txid)
-        LOG.debug("- Order information: %s", order_info)
-
-        if len(order_info.keys()) != 0:
-            order_to_assign = order_info[txid]
-            order_to_assign["txid"] = txid
-            if self.__s.pending_txids.get(filters={"txid": txid}).all():  # type: ignore[no-untyped-call]
-                self.__s.orderbook.add(order_to_assign)
-                self.__s.pending_txids.remove(txid)
-            else:
-                self.__s.orderbook.update(order_to_assign, filters={"txid": txid})
-                LOG.info("%s: Updated order in orderbook.", txid)
-
-            LOG.info(
-                "Current invested value: %f / %d %s",
-                self.__s.investment,
-                self.__s.max_investment,
-                self.__s.quote_currency,
+        LOG.info("Processing '%s' (try: %d / 10)", txid, tries)
+        if (order_details := self.get_orders_info_with_retry(txid=txid)) is None:
+            self.__s.save_exit(
+                f"Cold not retrieve order info for '{txid}' during"
+                " order assignment to orderbook!",
             )
+        LOG.debug("- Order information: %s", order_details)
+
+        order_details["txid"] = txid
+        if self.__s.pending_txids.count(filters={"txid": txid}) != 0:
+            self.__s.orderbook.add(order_details)
+            self.__s.pending_txids.remove(txid)
         else:
-            # FIXME: Check if this can still happen.
-            LOG.info("%s: order was empty when fetch, try again", txid)
-            if tries < 10:
-                sleep(1)
-                self.assign_order_by_txid(txid=txid, tries=tries + 1)
-            else:
-                raise ValueError(
-                    str(
-                        f"{self.__s.symbol}: Could not assign txid, since it "
-                        f"was always empty when fetch: {txid}",
-                    ),
-                )
+            self.__s.orderbook.update(order_details, filters={"txid": txid})
+            LOG.info("Updated order '%s' in orderbook.", txid)
+
+        LOG.info(
+            "Current invested value: %f / %d %s",
+            self.__s.investment,
+            self.__s.max_investment,
+            self.__s.quote_currency,
+        )
 
     # =============================================================================
     #            C H E C K - P R I C E - R A N G E
@@ -384,6 +374,7 @@ class OrderManager:
                 price=order_price,
                 userref=self.__s.userref,
                 validate=self.__s.dry_run,
+                oflags="post",
             )
 
             self.__s.pending_txids.add(placed_order["txid"][0])
@@ -437,9 +428,15 @@ class OrderManager:
 
             # ==================================================================
             # Get the corresponding buy order in order to retrieve the volume.
-            corresponding_buy_order = self.__s.user.get_orders_info(
-                txid=txid_id_to_delete,
-            )[txid_id_to_delete]
+            if (
+                corresponding_buy_order := self.get_orders_info_with_retry(
+                    txid=txid_id_to_delete,
+                )
+            ) is None:
+                self.__s.save_exit(
+                    "Failed to place sell order since the corresponding buy"
+                    f" order '{txid_id_to_delete}' could not be retrieved!",
+                )
 
             # In some cases the corresponding buy order is not closed yet and
             # the vol_exec is missing. In this case, the function will be
@@ -678,82 +675,104 @@ class OrderManager:
         """
         Cancels an order by txid, removes it from the orderbook, and checks if
         there there was some volume executed which can be sold later.
+
+        NOTE: The orderbook is the "gate keeper" of this function. If the order
+              is not present in the local orderbook, nothing will happen.
+
+        For post-only buy orders - if these were cancelled by Kraken, they are
+        still in the local orderbook and will be handled just like regular calls
+        of the handle_cancel_order of the algorithm.
+
+        For orders that were cancelled by the algorithm, these will cancelled
+        via API and removed from the orderbook. The incoming "canceled" message
+        by the websocket will be ignored, as the order is already removed from
+        the orderbook.
+
         """
-        LOG.info("Cancelling order: %s", txid)
-        try:
-            order = self.__s.user.get_orders_info(txid=txid)[txid]
-            if order["descr"]["pair"] != self.__s.altname:
-                return
+        if self.__s.orderbook.count(filters={"txid": txid}) == 0:
+            return
 
-            if self.__s.dry_run:
-                LOG.info("DRY RUN: Not cancelling order: %s", txid)
-                return
-
-            self.__s.trade.cancel_order(txid=txid)
-            self.__s.orderbook.remove(filters={"txid": txid})
-
-            # Check if the order has some vol_exec to sell
-            ##
-            if float(order["vol_exec"]) != 0.0:
-                LOG.info(
-                    "Order %s is partly filled - saving those funds.",
-                    txid,
-                )
-                b = self.__s.configuration.get()
-
-                # Add vol_exec to remaining funds
-                updates = {
-                    "vol_of_unfilled_remaining": b["vol_of_unfilled_remaining"]
-                    + float(order["vol_exec"]),
-                }
-
-                # Set new highest buy price.
-                if b["vol_of_unfilled_remaining_max_price"] < float(
-                    order["descr"]["price"],
-                ):
-                    updates |= {
-                        "vol_of_unfilled_remaining_max_price": float(
-                            order["descr"]["price"],
-                        ),
-                    }
-                self.__s.configuration.update(updates)
-
-                # Sell remaining funds if there is enough to place a sell order.
-                # Its not perfect but good enough. (Some funds may still be
-                # stuck) - but better than nothing.
-                b = self.__s.configuration.get()
-                if (
-                    b["vol_of_unfilled_remaining"]
-                    * b["vol_of_unfilled_remaining_max_price"]
-                    >= self.__s.amount_per_grid
-                ):
-                    LOG.info(
-                        "Collected enough funds via partly filled buy orders to"
-                        " create a new sell order...",
-                    )
-                    self.handle_arbitrage(
-                        side="sell",
-                        order_price=self.__s.get_order_price(
-                            side="sell",
-                            last_price=b["vol_of_unfilled_remaining_max_price"],
-                        ),
-                    )
-                    self.__s.configuration.update(  # Reset the remaining funds
-                        {
-                            "vol_of_unfilled_remaining": 0,
-                            "vol_of_unfilled_remaining_max_price": 0,
-                        },
-                    )
-        except Exception:  # noqa: BLE001
+        if (order_details := self.get_orders_info_with_retry(txid=txid)) is None:
             self.__s.save_exit(
-                f"Could not cancel order: {txid}\n {traceback.format_exc()}",
+                f"Cold not retrieve order info for '{txid}' during"
+                " cancellation! The order is still open.",
             )
+
+        if order_details["descr"]["pair"] != self.__s.altname:
+            return
+
+        if self.__s.dry_run:
+            LOG.info("DRY RUN: Not cancelling order: %s", txid)
+            return
+
+        LOG.info("Cancelling order: '%s'", txid)
+
+        try:
+            self.__s.trade.cancel_order(txid=txid)
+        except KrakenUnknownOrderError:
+            LOG.info(
+                "Order '%s' is already closed. Removing from orderbook...",
+                txid,
+            )
+
+        self.__s.orderbook.remove(filters={"txid": txid})
+
+        # Check if the order has some vol_exec to sell
+        ##
+        if float(order_details["vol_exec"]) != 0.0:
+            LOG.info(
+                "Order '%s' is partly filled - saving those funds.",
+                txid,
+            )
+            b = self.__s.configuration.get()
+
+            # Add vol_exec to remaining funds
+            updates = {
+                "vol_of_unfilled_remaining": b["vol_of_unfilled_remaining"]
+                + float(order_details["vol_exec"]),
+            }
+
+            # Set new highest buy price.
+            if b["vol_of_unfilled_remaining_max_price"] < float(
+                order_details["descr"]["price"],
+            ):
+                updates |= {
+                    "vol_of_unfilled_remaining_max_price": float(
+                        order_details["descr"]["price"],
+                    ),
+                }
+            self.__s.configuration.update(updates)
+
+            # Sell remaining funds if there is enough to place a sell order.
+            # Its not perfect but good enough. (Some funds may still be
+            # stuck) - but better than nothing.
+            b = self.__s.configuration.get()
+            if (
+                b["vol_of_unfilled_remaining"]
+                * b["vol_of_unfilled_remaining_max_price"]
+                >= self.__s.amount_per_grid
+            ):
+                LOG.info(
+                    "Collected enough funds via partly filled buy orders to"
+                    " create a new sell order...",
+                )
+                self.handle_arbitrage(
+                    side="sell",
+                    order_price=self.__s.get_order_price(
+                        side="sell",
+                        last_price=b["vol_of_unfilled_remaining_max_price"],
+                    ),
+                )
+                self.__s.configuration.update(  # Reset the remaining funds
+                    {
+                        "vol_of_unfilled_remaining": 0,
+                        "vol_of_unfilled_remaining_max_price": 0,
+                    },
+                )
 
     def cancel_all_open_buy_orders(self: OrderManager) -> None:
         """
         Cancels all open buy orders and removes them from the orderbook.
-
-        TODO: Use batch cancel order
         """
         LOG.info("Cancelling all open buy orders...")
         try:
@@ -790,7 +809,6 @@ class OrderManager:
 
         NOTE: We need retry here, since Kraken lacks of fast processing of
               filled orders and making them available via REST API.
-        TODO: Maybe add to missed buy/sell instead of retry and exit?
         """
         while tries <= max_tries and not (
             order_details := self.__s.user.get_orders_info(

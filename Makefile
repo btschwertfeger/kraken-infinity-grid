@@ -56,6 +56,12 @@ test:
 .PHONY: tests
 tests: test
 
+## retest		Run only the tests that failed last time
+##
+.PHONY: retest
+retest:
+	$(PYTEST) $(PYTEST_OPTS) --lf $(TEST_DIR)
+
 ## wip		Run tests marked as 'wip'
 ##
 .PHONY: wip

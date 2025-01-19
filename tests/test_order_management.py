@@ -1037,13 +1037,16 @@ def test_handle_cancel_order_partly_filled(
     mock_handle_arbitrage.assert_not_called()
 
 
+@mock.patch.object(OrderManager, "get_orders_info_with_retry", return_value=None)
 def test_handle_cancel_order_exception(
+    mock_get_orders_info_with_retry: mock.Mock,  # noqa: ARG001
     order_manager: OrderManager,
-    strategy: mock.Mock,
 ) -> None:
     """Test handling a cancel order with an exception."""
-    strategy.user.get_orders_info.side_effect = Exception("Test exception")
-    with pytest.raises(SystemExit, match="Test exception"):
+    with pytest.raises(
+        SystemExit,
+        match="Cold not retrieve order info for 'txid1'.*",
+    ):
         order_manager.handle_cancel_order(txid="txid1")
 
 

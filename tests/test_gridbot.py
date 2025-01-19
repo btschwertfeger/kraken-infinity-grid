@@ -370,4 +370,4 @@ async def test_on_message_executions(instance: KrakenInfinityGridBot) -> None:
             "data": [{"exec_type": "canceled", "order_id": "txid1"}],
         },
     )
-    instance.orderbook.remove.assert_called_once_with(filters={"txid": "txid1"})
+    instance.om.handle_cancel_order.assert_called_once_with("txid1")
