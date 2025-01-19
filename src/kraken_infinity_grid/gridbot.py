@@ -174,7 +174,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         # If the algorithm receives execution messages before being ready to
         # trade, they will be stored here and processed later.
         ##
-        self.missed_messages: list[dict] = []
+        self.__missed_messages: list[dict] = []
 
         # Wait for ticker to be connected before do some action
         ##
@@ -268,15 +268,15 @@ class KrakenInfinityGridBot(SpotWSClient):
                 self.sm.prepare_for_trading()
 
                 # If there are any missed messages, process them now.
-                for msg in self.missed_messages:
+                for msg in self.__missed_messages:
                     await self.on_message(msg)
-                self.missed_messages = []
+                self.__missed_messages = []
 
             if not self.is_ready_to_trade:
                 if channel == "executions":
                     # If the algorithm is not ready to trade, store the
                     # executions to process them later.
-                    self.missed_messages.append(message)
+                    self.__missed_messages.append(message)
 
                 # Return here, until the algorithm is ready to trade. It is
                 # ready when the init/setup is done and the orderbook is
