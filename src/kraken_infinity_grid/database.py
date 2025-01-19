@@ -191,26 +191,25 @@ class Orderbook:
         if not filters:
             filters = {}
 
-        _updates = {} | filters
-        _updates.pop("userref", None)
+        prepared_updates = {}
         if "txid" in updates:
-            _updates["txid"] = updates["txid"]
+            prepared_updates["txid"] = updates["txid"]
 
         if descr := updates.get("descr"):
             if descr.get("pair"):
-                _updates["symbol"] = descr["pair"]
+                prepared_updates["symbol"] = descr["pair"]
             if descr.get("type"):
-                _updates["side"] = descr["type"]  # should not happen
+                prepared_updates["side"] = descr["type"]  # should not happen
             if descr.get("price"):
-                _updates["price"] = descr["price"]
+                prepared_updates["price"] = descr["price"]
 
         if "vol" in updates:
-            _updates["volume"] = updates["vol"]
+            prepared_updates["volume"] = updates["vol"]
 
         self.__db.update_row(
             self.__table,
             filters=filters | {"userref": self.__userref},
-            updates=_updates,
+            updates=prepared_updates,
         )
 
     def count(

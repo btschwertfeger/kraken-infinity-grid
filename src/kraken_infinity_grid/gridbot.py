@@ -171,6 +171,11 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.xquote_currency: str | None = None  # ZEUR
         self.cost_decimals: int | None = None  # 5 for EUR, i.e., 0.00001 EUR
 
+        # If the algorithm receives execution messages before being ready to
+        # trade, they will be stored here and processed later.
+        ##
+        self.__missed_messages: list[dict] = []
+
         # Wait for ticker to be connected before do some action
         ##
         self.__ticker_channel_connected: bool = False
@@ -261,9 +266,18 @@ class KrakenInfinityGridBot(SpotWSClient):
             ):
                 # Sets self.is_ready_to_trade to True
                 self.sm.prepare_for_trading()
-                return
+
+                # If there are any missed messages, process them now.
+                for msg in self.__missed_messages:
+                    await self.on_message(msg)
+                self.__missed_messages = []
 
             if not self.is_ready_to_trade:
+                if channel == "executions":
+                    # If the algorithm is not ready to trade, store the
+                    # executions to process them later.
+                    self.__missed_messages.append(message)
+
                 # Return here, until the algorithm is ready to trade. It is
                 # ready when the init/setup is done and the orderbook is
                 # updated.
