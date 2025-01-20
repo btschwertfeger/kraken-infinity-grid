@@ -25,7 +25,7 @@ class SetupManager:
         LOG.debug("Initializing SetupManager...")
         self.__s = strategy
 
-    def __update_orderbook_get_open_orders(self: SetupManager) -> tuple:
+    def __update_orderbook_get_open_orders(self: SetupManager) -> tuple[list, list]:
         """Get the open orders and txid as lists."""
         LOG.info("  - Retrieving open orders from upstream...")
 
@@ -41,7 +41,6 @@ class SetupManager:
 
     def __update_order_book_handle_closed_order(
         self: SetupManager,
-        local_order: dict,
         closed_order: dict,
     ) -> None:
         """
@@ -51,11 +50,8 @@ class SetupManager:
 
         This function triggers the Telegram message of the executed order and
         places a new order.
-
-        NOTE: 'local_order' and 'closed_order' must be the same order!
-        FIXME: Why not only using closed order?
         """
-        LOG.info("Handling executed order: %s", local_order["txid"])
+        LOG.info("Handling executed order: %s", closed_order["txid"])
         closed_order["side"] = closed_order["descr"]["type"]
 
         message = str(
@@ -78,7 +74,7 @@ class SetupManager:
                     side="sell",
                     last_price=float(closed_order["price"]),
                 ),
-                txid_id_to_delete=local_order["txid"],
+                txid_id_to_delete=closed_order["txid"],
             )
 
         # ======================================================================
@@ -91,7 +87,7 @@ class SetupManager:
             if (
                 self.__s.orderbook.count(
                     filters={"side": "sell"},
-                    exclude={"txid": local_order["txid"]},
+                    exclude={"txid": closed_order["txid"]},
                 )
                 != 0
             ):
@@ -101,10 +97,10 @@ class SetupManager:
                         side="buy",
                         last_price=float(closed_order["price"]),
                     ),
-                    txid_id_to_delete=local_order["txid"],
+                    txid_id_to_delete=closed_order["txid"],
                 )
             else:
-                self.__s.orderbook.remove(filters={"txid": local_order["txid"]})
+                self.__s.orderbook.remove(filters={"txid": closed_order["txid"]})
 
     def __update_order_book(self: SetupManager) -> None:
         """
@@ -149,21 +145,13 @@ class SetupManager:
         ##
         for order in self.__s.orderbook.get_orders():
             if order["txid"] not in open_txids:
-                if not (
-                    closed_order := self.__s.om.get_orders_info_with_retry(
-                        txid=order["txid"],
-                    )
-                ):
-                    self.__s.save_exit(
-                        f"Cold not retrieve order info for '{order['txid']}'"
-                        " during initialization of the orderbook!",
-                    )
-
+                closed_order = self.__s.om.get_orders_info_with_retry(
+                    txid=order["txid"],
+                )
                 # ==============================================================
                 # Order was filled
                 if closed_order["status"] == "closed":
                     self.__update_order_book_handle_closed_order(
-                        local_order=order,
                         closed_order=closed_order,
                     )
 

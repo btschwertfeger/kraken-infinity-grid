@@ -112,14 +112,18 @@ def test_assign_order_by_txid(
     strategy: mock.Mock,
 ) -> None:
     """Test assigning an order by txid."""
+    order = {
+        "txid": "txid1",
+        "status": "open",
+        "descr": {"pair": "BTCUSD"},
+        "userref": 13456789,
+    }
     strategy.user.get_orders_info.return_value = {
-        "txid1": {"txid": "txid1", "status": "open"},
+        "txid1": order,
     }
     strategy.pending_txids.get.return_value.all.return_value = [{"txid": "txid1"}]
     order_manager.assign_order_by_txid(txid="txid1")
-    strategy.orderbook.add.assert_called_once_with(
-        {"txid": "txid1", "status": "open"},
-    )
+    strategy.orderbook.add.assert_called_once_with(order)
     strategy.pending_txids.remove.assert_called_once_with("txid1")
 
 
@@ -128,10 +132,13 @@ def test_assign_order_by_txid_retry(
     strategy: mock.Mock,
 ) -> None:
     """Test retrying to assign an order by txid."""
-    strategy.user.get_orders_info.side_effect = [
-        {},
-        {"txid1": {"txid": "txid1", "status": "open"}},
-    ]
+    order = {
+        "txid": "txid1",
+        "status": "open",
+        "descr": {"pair": "BTCUSD"},
+        "userref": 13456789,
+    }
+    strategy.user.get_orders_info.side_effect = [{}, {"txid1": order}]
     strategy.pending_txids.get.return_value.all.return_value = [
         {"txid": "txid1"},
     ]
@@ -142,9 +149,7 @@ def test_assign_order_by_txid_retry(
     ):
         order_manager.assign_order_by_txid(txid="txid1")
 
-    strategy.orderbook.add.assert_called_once_with(
-        {"txid": "txid1", "status": "open"},
-    )
+    strategy.orderbook.add.assert_called_once_with(order)
     strategy.pending_txids.remove.assert_called_once_with("txid1")
 
 
@@ -779,24 +784,6 @@ def test_handle_filled_order_event_sell_place_no_new_buy(
 
 @mock.patch.object(OrderManager, "get_orders_info_with_retry")
 @mock.patch.object(OrderManager, "handle_arbitrage")
-def test_handle_filled_order_event_buy_failing_order_retrieval(
-    mock_handle_arbitrage: mock.Mock,
-    mock_get_orders_info_with_retry: mock.Mock,
-    order_manager: OrderManager,
-) -> None:
-    """
-    Test handling a filled order event failing if the order can't be retrieved.
-    """
-    mock_get_orders_info_with_retry.return_value = None
-
-    with pytest.raises(SystemExit):
-        order_manager.handle_filled_order_event(txid="txid1")
-
-    mock_handle_arbitrage.assert_not_called()
-
-
-@mock.patch.object(OrderManager, "get_orders_info_with_retry")
-@mock.patch.object(OrderManager, "handle_arbitrage")
 def test_handle_filled_order_event_buy_order_not_from_instance(
     mock_handle_arbitrage: mock.Mock,
     mock_get_orders_info_with_retry: mock.Mock,
@@ -929,6 +916,7 @@ def test_handle_cancel_order_partly_filled_create_sell_order(
         "txid1": {
             "descr": {"pair": "BTCUSD", "type": "buy", "price": "50000"},
             "vol_exec": "0.1",
+            "userref": 13456789,
         },
     }
     strategy.configuration.get.return_value = {
@@ -974,6 +962,7 @@ def test_handle_cancel_order_dry_run(
         "txid1": {
             "descr": {"pair": "BTCUSD", "type": "buy", "price": "50000"},
             "vol_exec": "0.1",
+            "userref": 13456789,
         },
     }
     order_manager.handle_cancel_order(txid="txid1")
@@ -1019,6 +1008,7 @@ def test_handle_cancel_order_partly_filled(
         "txid1": {
             "descr": {"pair": "BTCUSD", "type": "buy", "price": "50000"},
             "vol_exec": "0.1",
+            "userref": 13456789,
         },
     }
     strategy.configuration.get.return_value = {
@@ -1035,19 +1025,6 @@ def test_handle_cancel_order_partly_filled(
         },
     )
     mock_handle_arbitrage.assert_not_called()
-
-
-@mock.patch.object(OrderManager, "get_orders_info_with_retry", return_value=None)
-def test_handle_cancel_order_exception(
-    mock_get_orders_info_with_retry: mock.Mock,  # noqa: ARG001
-    order_manager: OrderManager,
-) -> None:
-    """Test handling a cancel order with an exception."""
-    with pytest.raises(
-        SystemExit,
-        match="Cold not retrieve order info for 'txid1'.*",
-    ):
-        order_manager.handle_cancel_order(txid="txid1")
 
 
 @mock.patch.object(OrderManager, "handle_cancel_order")
@@ -1138,7 +1115,10 @@ def test_get_orders_info_with_retry_failure(
 ) -> None:
     """Test failing to retrieve order info after maximum retries."""
     strategy.user.get_orders_info.return_value = {}
-    result = order_manager.get_orders_info_with_retry(txid="txid1", max_tries=3)
-    assert result is None
-    assert strategy.user.get_orders_info.call_count == 4
-    assert mock_sleep.call_count == 4
+    with pytest.raises(
+        SystemExit,
+        match="Failed to retrieve order info for 'txid1' after 3 retries!",
+    ):
+        order_manager.get_orders_info_with_retry(txid="txid1", max_tries=3)
+    assert strategy.user.get_orders_info.call_count == 3
+    assert mock_sleep.call_count == 3

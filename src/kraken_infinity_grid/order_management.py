@@ -51,7 +51,7 @@ class OrderManager:
         for order in self.__s.pending_txids.get():
             self.assign_order_by_txid(txid=order["txid"])
 
-    def assign_order_by_txid(self: Self, txid: str, tries: int = 1) -> None:
+    def assign_order_by_txid(self: Self, txid: str) -> None:
         """
         Assigns an order by its txid to the orderbook.
 
@@ -63,21 +63,27 @@ class OrderManager:
         was added to the orderbook, the algorithm will handle any removals in
         case of closed orders.
         """
-        LOG.info("Processing '%s' (try: %d / 10)", txid, tries)
-        if (order_details := self.get_orders_info_with_retry(txid=txid)) is None:
-            self.__s.save_exit(
-                f"Cold not retrieve order info for '{txid}' during"
-                " order assignment to orderbook!",
-            )
+        LOG.info("Processing '%s' ...", txid)
+        order_details = self.get_orders_info_with_retry(txid=txid)
         LOG.debug("- Order information: %s", order_details)
 
+        if (
+            order_details["descr"]["pair"] != self.__s.altname
+            or order_details["userref"] != self.__s.userref
+        ):
+            LOG.info("Order '%s' does not belong to this instance.", txid)
+            return
+
         order_details["txid"] = txid
-        if self.__s.pending_txids.count(filters={"txid": txid}) != 0:
+        if self.__s.pending_txids.count(filters={"txid": order_details["txid"]}) != 0:
             self.__s.orderbook.add(order_details)
-            self.__s.pending_txids.remove(txid)
+            self.__s.pending_txids.remove(order_details["txid"])
         else:
-            self.__s.orderbook.update(order_details, filters={"txid": txid})
-            LOG.info("Updated order '%s' in orderbook.", txid)
+            self.__s.orderbook.update(
+                order_details,
+                filters={"txid": order_details["txid"]},
+            )
+            LOG.info("Updated order '%s' in orderbook.", order_details["txid"])
 
         LOG.info(
             "Current invested value: %f / %d %s",
@@ -131,8 +137,6 @@ class OrderManager:
     def __check_n_open_buy_orders(self: OrderManager) -> None:
         """
         Ensures that there are n open buy orders and will place orders until n.
-
-        TODO: Think of placing a batch order to place multiple orders at once.
         """
         LOG.debug(
             "Checking if there are %d open buy orders...",
@@ -290,7 +294,6 @@ class OrderManager:
 
         if self.__s.dry_run:
             LOG.info("Dry run, not placing %s order.", side)
-            # FIXME: do proper dryrun
             return
 
         if side == "buy":
@@ -317,7 +320,6 @@ class OrderManager:
         """Places a new buy order."""
         if self.__s.dry_run:
             LOG.info("Dry run, not placing buy order.")
-            # FIXME: do proper dryrun
             return
 
         if txid_to_delete is not None:
@@ -399,7 +401,6 @@ class OrderManager:
         """Places a new sell order."""
         if self.__s.dry_run:
             LOG.info("Dry run, not placing sell order.")
-            # FIXME: do proper dryrun
             return
 
         if self.__s.strategy == "cDCA":
@@ -428,15 +429,9 @@ class OrderManager:
 
             # ==================================================================
             # Get the corresponding buy order in order to retrieve the volume.
-            if (
-                corresponding_buy_order := self.get_orders_info_with_retry(
-                    txid=txid_id_to_delete,
-                )
-            ) is None:
-                self.__s.save_exit(
-                    "Failed to place sell order since the corresponding buy"
-                    f" order '{txid_id_to_delete}' could not be retrieved!",
-                )
+            corresponding_buy_order = self.get_orders_info_with_retry(
+                txid=txid_id_to_delete,
+            )
 
             # In some cases the corresponding buy order is not closed yet and
             # the vol_exec is missing. In this case, the function will be
@@ -575,11 +570,7 @@ class OrderManager:
         # ======================================================================
         # Fetch the order details for the given txid.
         ##
-        if (order_details := self.get_orders_info_with_retry(txid=txid)) is None:
-            self.__s.save_exit(
-                f"Cold not retrieve order info for '{txid}' during"
-                " handling a filled order event!",
-            )
+        order_details = self.get_orders_info_with_retry(txid=txid)
 
         # ======================================================================
         # Check if the order belongs to this bot and return if not
@@ -599,7 +590,10 @@ class OrderManager:
         ##
         tries = 1
         while order_details["status"] != "closed" and tries <= 3:
-            order_details = self.get_orders_info_with_retry(txid=txid)
+            order_details = self.get_orders_info_with_retry(
+                txid=txid,
+                exit_on_fail=False,
+            )
             LOG.warning(
                 "Order '%s' is not closed! Retry %d/3 in %d seconds...",
                 txid,
@@ -692,13 +686,12 @@ class OrderManager:
         if self.__s.orderbook.count(filters={"txid": txid}) == 0:
             return
 
-        if (order_details := self.get_orders_info_with_retry(txid=txid)) is None:
-            self.__s.save_exit(
-                f"Cold not retrieve order info for '{txid}' during"
-                " cancellation! The order is still open.",
-            )
+        order_details = self.get_orders_info_with_retry(txid=txid)
 
-        if order_details["descr"]["pair"] != self.__s.altname:
+        if (
+            order_details["descr"]["pair"] != self.__s.altname
+            or order_details["userref"] != self.__s.userref
+        ):
             return
 
         if self.__s.dry_run:
@@ -803,6 +796,7 @@ class OrderManager:
         txid: str,
         tries: int = 0,
         max_tries: int = 3,
+        exit_on_fail: bool = True,
     ) -> dict | None:
         """
         Returns the order details for a given txid.
@@ -810,18 +804,24 @@ class OrderManager:
         NOTE: We need retry here, since Kraken lacks of fast processing of
               filled orders and making them available via REST API.
         """
-        while tries <= max_tries and not (
+        while tries < max_tries and not (
             order_details := self.__s.user.get_orders_info(
                 txid=txid,
             ).get(txid)
         ):
             LOG.warning(
-                "Could not find order '%s'. Retry %d/3 in %d seconds...",
+                "Could not find order '%s'. Retry %d/%d in %d seconds...",
                 txid,
-                tries,
-                (wait_time := 2 + tries),
+                tries + 1,
+                max_tries,
+                (wait_time := 2 * tries),
             )
             sleep(wait_time)
             tries += 1
 
+        if exit_on_fail and order_details is None:
+            self.__s.save_exit(
+                f"Failed to retrieve order info for '{txid}' after"
+                f" {max_tries} retries!",
+            )
         return order_details  # type: ignore[no-any-return]

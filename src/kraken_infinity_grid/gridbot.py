@@ -308,8 +308,6 @@ class KrakenInfinityGridBot(SpotWSClient):
                 for execution in data:
                     LOG.debug("Got execution: %s", execution)
                     match execution["exec_type"]:
-                        # FIXME: Check if order_id is part of this bot here, and
-                        #        not later.
                         case "new":
                             self.om.assign_order_by_txid(execution["order_id"])
                         case "filled":
