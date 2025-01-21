@@ -30,6 +30,28 @@ It does not respect the following situations for simplicity:
 - Failed orders (of any kind)
 - Telegram messaging
 - Real trading
+
+Example:
+
+The following example demonstrates how to run this script and the expected
+output if the full history of XBTEUR was downloaded from Kraken (see main
+function).
+
+.. code-block:: bash
+
+    python3 backtesting.py
+    100%|█████████████████████████████████| 100000/100000 [01:24<00:00, 1185.80it/s]
+    ********************************************************************************
+    Strategy: GridHODL
+    Final price: 633.1639
+    Executed buy orders: 472
+    Executed sell orders: 467
+    Final balances:
+    BTC: {'balance': 3.202440239999995, 'hold_trade': 0.6135451499999994}
+    EUR: {'balance': 489.92317716484786, 'hold_trade': 453.53667409747777}
+    Market price: 2517.5927290401805 EUR
+    ********************************************************************************
+
 """
 
 import asyncio
@@ -120,11 +142,12 @@ class KrakenAPIMock(Trade, User, Market):
             "vol": kwargs["volume"],
             "vol_exec": "0.0",
             "cost": "0.0",
-            "fee": "0.0",
+            "fee": str(float(kwargs["price"]) * float(kwargs["volume"]) * self.__fee),
         }
-
-        if kwargs["side"] == "buy":
-            required_balance = float(kwargs["price"]) * float(kwargs["volume"])
+        if order["descr"]["type"] == "buy":
+            required_balance = float(order["descr"]["price"]) * float(
+                order["vol"],
+            ) + float(order["fee"])
 
             if float(self.__balances[self.quote]["balance"]) < required_balance:
                 raise ValueError("Insufficient balance to create buy order")
@@ -133,13 +156,17 @@ class KrakenAPIMock(Trade, User, Market):
                 float(self.__balances[self.quote]["hold_trade"]) + required_balance,
             )
 
-        elif kwargs["side"] == "sell":
-            if float(self.__balances[self.base]["balance"]) < float(kwargs["volume"]):
+        elif order["descr"]["type"] == "sell":
+            if float(self.__balances[self.base]["balance"]) < float(order["vol"]):
                 raise ValueError("Insufficient balance to create sell order")
 
             self.__balances[self.base]["hold_trade"] = str(
-                float(self.__balances[self.base]["hold_trade"])
-                + float(kwargs["volume"]),
+                float(self.__balances[self.base]["hold_trade"]) + float(order["vol"]),
+            )
+
+            # Hold trade fee
+            self.__balances[self.quote]["hold_trade"] = str(
+                float(self.__balances[self.quote]["hold_trade"]) + float(order["fee"]),
             )
 
         self.__orders[txid] = order
@@ -155,41 +182,49 @@ class KrakenAPIMock(Trade, User, Market):
         if not (order := self.__orders.get(txid)):
             return
 
-        order["status"] = "closed"
-        order["vol_exec"] = order["vol"]
-        order["fee"] = str(
-            (float(order["vol_exec"]) * float(order["descr"]["price"])) * self.__fee,
-        )
-        order["cost"] = str(
-            float(order["vol_exec"]) * float(order["descr"]["price"])
-            + float(order["fee"]),
-        )
-        self.__orders[txid] = order
+        self.__orders[txid] |= {
+            "status": "closed",
+            "vol_exec": order["vol"],
+            "cost": str(
+                float(order["vol"]) * float(order["descr"]["price"])
+                + float(order["fee"]),
+            ),
+        }
 
         if order["descr"]["type"] == "buy":
             self.n_exec_buy_orders += 1
+
             self.__balances[self.base]["balance"] = str(
-                float(self.__balances[self.base]["balance"]) + float(order["vol_exec"]),
+                float(self.__balances[self.base]["balance"])
+                + float(self.__orders[txid]["vol_exec"]),
             )
+
             self.__balances[self.quote]["balance"] = str(
-                float(self.__balances[self.quote]["balance"]) - float(order["cost"]),
+                float(self.__balances[self.quote]["balance"])
+                - float(self.__orders[txid]["cost"]),
             )
+
             self.__balances[self.quote]["hold_trade"] = str(
-                float(self.__balances[self.quote]["hold_trade"]) - float(order["cost"]),
+                float(self.__balances[self.quote]["hold_trade"])
+                - float(self.__orders[txid]["cost"]),
             )
         elif order["descr"]["type"] == "sell":
             self.n_exec_sell_orders += 1
+
             self.__balances[self.quote]["balance"] = str(
                 float(self.__balances[self.quote]["balance"])
-                + float(order["vol_exec"]) * float(order["descr"]["price"])
-                - float(order["fee"]),
+                + float(self.__orders[txid]["vol_exec"])
+                * float(self.__orders[txid]["descr"]["price"])
+                - float(self.__orders[txid]["fee"]),
             )
+
             self.__balances[self.base]["balance"] = str(
-                float(self.__balances[self.base]["balance"]) - float(order["vol_exec"]),
+                float(self.__balances[self.base]["balance"])
+                - float(self.__orders[txid]["vol_exec"]),
             )
             self.__balances[self.base]["hold_trade"] = str(
                 float(self.__balances[self.base]["hold_trade"])
-                - float(order["vol_exec"]),
+                - float(self.__orders[txid]["vol_exec"]),
             )
 
     async def on_ticker_update(self: Self, last: float) -> None:
@@ -432,6 +467,15 @@ async def main() -> None:
     )
 
     try:
+        # If you downloaded the historical data from Kraken, you can backtest the
+        # kraken-infinity-grid as follows:
+        # import pandas as pd
+        # for chunk in pd.read_csv("XBTEUR.csv", chunksize=10**5):
+        #     prices = chunk.iloc[:, 1].astype(float)
+        #     await bt.run(prices)
+        #     break # Remove the break to get through the full data set ....
+
+        # Otherwise just use dummy data:
         await bt.run(
             prices=(
                 50000.0,
@@ -468,8 +512,6 @@ async def main() -> None:
                 60000.0,
             ),
         )
-    except:  # pylint: disable=bare-except # noqa: S110, E722
-        pass
     finally:
         await bt.instance.async_close()
         await bt.instance.stop()
