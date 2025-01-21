@@ -78,15 +78,14 @@ def test_update_order_book_handle_closed_buy_order(
     strategy.base_currency = "BTC"
     strategy.get_order_price.return_value = 51000.0
 
-    local_order = {"txid": "txid1"}
     closed_order = {
         "descr": {"type": "buy"},
         "price": "50000",
         "vol_exec": "0.1",
+        "txid": "txid1",
     }
 
     setup_manager._SetupManager__update_order_book_handle_closed_order(
-        local_order,
         closed_order,
     )
 
@@ -117,15 +116,14 @@ def test_update_order_book_handle_closed_sell_order_trigger_new_buy(
     strategy.get_order_price.return_value = 49000.0
     strategy.orderbook.count.return_value = 1
 
-    local_order = {"txid": "txid2"}
     closed_order = {
         "descr": {"type": "sell"},
         "price": "48000",
         "vol_exec": "0.1",
+        "txid": "txid2",
     }
 
     setup_manager._SetupManager__update_order_book_handle_closed_order(
-        local_order,
         closed_order,
     )
 
@@ -156,15 +154,14 @@ def test_update_order_book_handle_closed_sell_order_no_new_buy(
     strategy.get_order_price.return_value = 49000.0
     strategy.orderbook.count.return_value = 0
 
-    local_order = {"txid": "txid2"}
     closed_order = {
         "descr": {"type": "sell"},
         "price": "48000",
         "vol_exec": "0.1",
+        "txid": "txid2",
     }
 
     setup_manager._SetupManager__update_order_book_handle_closed_order(
-        local_order,
         closed_order,
     )
 
@@ -219,7 +216,6 @@ def test_update_order_book(
     # Ensure that a filled order triggers the correct handling
     strategy.orderbook.remove.assert_called_once_with(filters={"txid": "txid3"})
     setup_manager._SetupManager__update_order_book_handle_closed_order.assert_called_once_with(
-        local_order={"txid": "txid4"},
         closed_order={"status": "closed"},
     )
 

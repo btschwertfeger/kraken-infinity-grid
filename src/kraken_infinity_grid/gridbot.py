@@ -12,6 +12,7 @@ import traceback
 from contextlib import suppress
 from datetime import datetime, timedelta
 from decimal import Decimal
+from importlib.metadata import version
 from logging import getLogger
 from time import sleep
 from types import SimpleNamespace
@@ -140,7 +141,10 @@ class KrakenInfinityGridBot(SpotWSClient):
     ) -> None:
         super().__init__(key=key, secret=secret)
 
-        LOG.info("Initiate the Kraken Infinity Grid Algorithm instance...")
+        LOG.info(
+            "Initiate the Kraken Infinity Grid Algorithm instance (v%s)",
+            version("kraken-infinity-grid"),
+        )
         LOG.debug("Config: %s", config)
         self.init_done: bool = False
         self.dry_run: bool = dry_run
@@ -308,16 +312,12 @@ class KrakenInfinityGridBot(SpotWSClient):
                 for execution in data:
                     LOG.debug("Got execution: %s", execution)
                     match execution["exec_type"]:
-                        # FIXME: Check if order_id is part of this bot here, and
-                        #        not later.
-                        case "new":  # "pending_new"
+                        case "new":
                             self.om.assign_order_by_txid(execution["order_id"])
                         case "filled":
                             self.om.handle_filled_order_event(execution["order_id"])
                         case "canceled" | "expired":
-                            self.orderbook.remove(
-                                filters={"txid": execution["order_id"]},
-                            )
+                            self.om.handle_cancel_order(execution["order_id"])
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)
