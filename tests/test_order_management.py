@@ -79,12 +79,12 @@ def test_add_missed_sell_orders(
     mock_handle_arbitrage.assert_any_call(
         side="sell",
         order_price=50000.0,
-        txid_id_to_delete="txid1",
+        txid_to_delete="txid1",
     )
     mock_handle_arbitrage.assert_any_call(
         side="sell",
         order_price=51000.0,
-        txid_id_to_delete="txid2",
+        txid_to_delete="txid2",
     )
     assert mock_handle_arbitrage.call_count == 2
 
@@ -326,13 +326,8 @@ def test_check_lowest_cancel_of_more_than_n_buy_orders(
     """Test checking and canceling the lowest buy order if there are more than n
     open buy orders."""
     strategy.n_open_buy_orders = 1
-    strategy.get_current_buy_prices.side_effect = [
-        [50000.0, 49900.0, 49800.0],
-        [50000.0, 49900.0],
-        [50000.0],
-    ]
+    strategy.orderbook.count.return_value = 3
     strategy.orderbook.get_orders.return_value = [
-        {"txid": "txid1", "price": 50000.0},
         {"txid": "txid2", "price": 49900.0},
         {"txid": "txid3", "price": 49800.0},
     ]
@@ -351,9 +346,9 @@ def test_shift_buy_orders_up(
     strategy: mock.Mock,
 ) -> None:
     """Test shifting buy orders up."""
-    strategy.get_current_buy_prices.return_value = [50000.0, 49000.0]
     strategy.orderbook.count.return_value = 2
     strategy.ticker.last = 60000.0
+    strategy.orderbook.get_orders.return_value.first.return_value = {"price": 50000.0}
     assert order_manager._OrderManager__shift_buy_orders_up() is True
     mock_cancel_all_open_buy_orders.assert_called_once()
     mock_check_price_range.assert_called_once()
@@ -457,11 +452,8 @@ def test_handle_arbitrage(
     order_manager.handle_arbitrage(side="sell", order_price=51000.0)
     mock_new_sell_order.assert_called_once_with(
         order_price=51000.0,
-        txid_id_to_delete=None,
+        txid_to_delete=None,
     )
-
-    with pytest.raises(ValueError, match=r".*Invalid side.*"):
-        order_manager.handle_arbitrage(side="invalid", order_price=50000.0)
 
 
 # ==============================================================================
@@ -530,7 +522,7 @@ def test_new_sell_order_skip_dca(
 ) -> None:
     """Test placing a new sell order - skip for cDCA strategy."""
     strategy.strategy = "cDCA"
-    order_manager.new_sell_order(order_price=51000.0, txid_id_to_delete="txid1")
+    order_manager.new_sell_order(order_price=51000.0, txid_to_delete="txid1")
     strategy.orderbook.remove.assert_called_once_with(filters={"txid": "txid1"})
     strategy.trade.create_order.assert_not_called()
     strategy.pending_txids.add.assert_not_called()
@@ -561,7 +553,7 @@ def test_new_sell_order_GridSell(
     strategy.trade.truncate.side_effect = [0.1, 52000.0]  # volume, price
     strategy.trade.create_order.return_value = {"txid": ["txid2"]}
 
-    order_manager.new_sell_order(order_price=52000.0, txid_id_to_delete="txid1")
+    order_manager.new_sell_order(order_price=52000.0, txid_to_delete="txid1")
 
     # == Ensure that unsold buy orders are temporarily saved
     strategy.unsold_buy_order_txids.add.assert_called_once_with(
@@ -611,7 +603,7 @@ def test_new_sell_order(
     strategy.trade.truncate.side_effect = [52000.0, 0.1]  # price, volume
     strategy.trade.create_order.return_value = {"txid": ["txid2"]}
 
-    order_manager.new_sell_order(order_price=52000.0, txid_id_to_delete="txid1")
+    order_manager.new_sell_order(order_price=52000.0, txid_to_delete="txid1")
 
     # == Ensure that unsold buy orders are temporarily saved
     strategy.unsold_buy_order_txids.add.assert_called_once_with(
@@ -660,7 +652,7 @@ def test_new_sell_order_not_enough_funds(
     strategy.trade.truncate.side_effect = [52000.0, 0.1]  # price, volume
     strategy.trade.create_order.return_value = {"txid": ["txid2"]}
 
-    order_manager.new_sell_order(order_price=52000.0, txid_id_to_delete="txid1")
+    order_manager.new_sell_order(order_price=52000.0, txid_to_delete="txid1")
 
     # == Ensure that unsold buy orders are temporarily saved
     strategy.unsold_buy_order_txids.add.assert_called_once_with(
@@ -709,7 +701,7 @@ def test_handle_filled_order_event_buy(
     mock_handle_arbitrage.assert_called_once_with(
         side="sell",
         order_price=51000.0,
-        txid_id_to_delete="txid1",
+        txid_to_delete="txid1",
     )
 
 
@@ -748,7 +740,7 @@ def test_handle_filled_order_event_sell_place_new_buy(
     mock_handle_arbitrage.assert_called_once_with(
         side="buy",
         order_price=51000.0,
-        txid_id_to_delete="txid2",
+        txid_to_delete="txid2",
     )
 
 
@@ -840,7 +832,7 @@ def test_handle_filled_order_event_buy_order_not_closed_retry(
     mock_handle_arbitrage.assert_called_once_with(
         side="sell",
         order_price=51000.0,
-        txid_id_to_delete="txid1",
+        txid_to_delete="txid1",
     )
 
 

@@ -93,7 +93,7 @@ def test_update_order_book_handle_closed_buy_order(
     strategy.om.handle_arbitrage.assert_called_once_with(
         side="sell",
         order_price=51000.0,
-        txid_id_to_delete="txid1",
+        txid_to_delete="txid1",
     )
 
 
@@ -131,7 +131,7 @@ def test_update_order_book_handle_closed_sell_order_trigger_new_buy(
     strategy.om.handle_arbitrage.assert_called_once_with(
         side="buy",
         order_price=49000.0,
-        txid_id_to_delete="txid2",
+        txid_to_delete="txid2",
     )
 
 

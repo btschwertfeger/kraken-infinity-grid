@@ -131,7 +131,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self: Self,
         key: str,
         secret: str,
@@ -230,8 +230,8 @@ class KrakenInfinityGridBot(SpotWSClient):
     ) -> None:
         """
         This function receives all messages that are sent via the websocket
-        connections. It is the entrypoint of the incoming messages and
-        calls the respective functions to handle the actions.
+        connections by Kraken. It's the entrypoint of the incoming messages and
+        calls the appropriate functions to handle the messages.
         """
         try:
             # =====================================================================
@@ -327,12 +327,14 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     async def run(self: Self) -> None:
         """
-        The run function creates the asyncio loop which calls the main function
-        that runs forever.
+        Main function that starts the algorithm and runs it until it is
+        interrupted.
         """
         LOG.info("Starting the Kraken Infinity Grid Algorithm...")
+
         # ======================================================================
-        # Try to connect to the Kraken API and validate credentials
+        # Try to connect to the Kraken API, validate credentials and API key
+        # permissions.
         ##
         self.__check_kraken_status()
 
@@ -350,7 +352,7 @@ class KrakenInfinityGridBot(SpotWSClient):
             )
 
         # ======================================================================
-        # Create the event loop to run the main
+        # Start the websocket connections and run the main function
         ##
         try:
             await self.__main()
@@ -361,8 +363,9 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     async def __main(self: Self) -> None:
         """
-        Main function that creates the instance of the grid trading bot,
-        creates the subscriptions and runs "for ever".
+        Main function that runs the algorithm. It subscribes to the ticker and
+        execution channels and runs the main loop until the algorithm is
+        interrupted.
         """
 
         # ======================================================================
@@ -470,7 +473,8 @@ class KrakenInfinityGridBot(SpotWSClient):
 
     def __check_api_keys(self: Self) -> None:
         """
-        Checks if the credentials are valid by accessing private endpoints.
+        Checks if the credentials are valid and if the API keys have the
+        required permissions.
         """
         LOG.info("- Checking permissions of API keys...")
 
@@ -540,7 +544,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         return balances
 
     def get_current_buy_prices(self: Self) -> Iterable[float]:
-        """Returns a list of the prices of open buy orders."""
+        """Returns a generator of the prices of open buy orders."""
         LOG.debug("Getting current buy prices...")
         for order in self.orderbook.get_orders(filters={"side": "buy"}):
             yield order["price"]
@@ -552,16 +556,16 @@ class KrakenInfinityGridBot(SpotWSClient):
         extra_sell: Optional[bool] = False,
     ) -> float:
         """
-        Returns the order price depending on the ``bot_type`` and side. Also
-        assigns a new highest buy price to configuration (if new highest
-        buy...).
+        Returns the order price depending on the strategy and side. Also assigns
+        a new highest buy price to configuration if there was a new highest
+        buy.
         """
         LOG.debug("Computing the order price...")
         order_price: float
-        price_of_highest_buy = float(self.configuration.get()["price_of_highest_buy"])
+        price_of_highest_buy = self.configuration.get()["price_of_highest_buy"]
         last_price = float(last_price)
 
-        if side == "sell":  # new order is sell
+        if side == "sell":  # New order is a sell
             if self.strategy == "SWING" and extra_sell:
                 # Extra sell order when SWING
                 # 2x interval above [last close price | price of highest buy]
@@ -573,7 +577,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             else:
                 # Regular sell order (even for SWING) (cDCA will trigger this
-                # but it will be filtered out by handle_arbitrage)
+                # but it will be filtered out later)
                 if last_price > price_of_highest_buy:
                     self.configuration.update(
                         {"price_of_highest_buy": last_price},
@@ -585,7 +589,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                     order_price = self.ticker.last * (1 + self.interval)
             return order_price
 
-        if side == "buy":  # new order is buy
+        if side == "buy":  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self.interval)
             if order_price > self.ticker.last:
                 order_price = self.ticker.last * 100 / (100 + 100 * self.interval)
