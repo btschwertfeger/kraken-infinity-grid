@@ -22,6 +22,10 @@ services:
       - internal_network
 
   kraken-infinity-grid:
+    # If using the image from Docker Hub, consider using a release tag instead
+    # of latest:
+    # image: btschwertfeger/kraken-infinity-grid:latest
+    # Or build the image from sources if you have cloned the repository:
     build: .
     depends_on:
       postgresql:
