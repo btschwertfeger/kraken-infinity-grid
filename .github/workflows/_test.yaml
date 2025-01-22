@@ -29,6 +29,7 @@ jobs:
         uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
         with:
           disable-sudo: true
+          egress-policy: audit
 
       - name: Checkout repository
         uses: actions/checkout@cbb722410c2e876e24abbe8de2cc27693e501dcb # v4.2.2
