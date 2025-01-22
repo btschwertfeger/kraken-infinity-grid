@@ -159,7 +159,6 @@ class Orderbook:
     def add(self: Self, order: dict) -> None:
         """Add an order to the orderbook."""
         LOG.debug("Adding order to the orderbook: %s", order)
-        # FIXME: check if the order has all that properties via pydantic or so
         self.__db.add_row(
             self.__table,
             userref=self.__userref,

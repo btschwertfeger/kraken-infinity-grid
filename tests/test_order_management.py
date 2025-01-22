@@ -535,8 +535,6 @@ def test_new_sell_order_GridSell(
     """
     Test placing a new sell order with the GridSell strategy and remove the
     corresponding buy order txid from tracking.
-
-    TODO: Check for correct values in volume and order price - maybe?
     """
     strategy.strategy = "GridSell"
     strategy.get_balances.return_value = {"base_available": 1.0}
@@ -585,8 +583,6 @@ def test_new_sell_order(
     """
     Test placing a new sell order with the GridHODL and SWING strategies and
     remove the corresponding buy order txid from tracking.
-
-    TODO: Check for correct values in volume and order price - maybe?
     """
     strategy.strategy = strategy_name
     strategy.get_balances.return_value = {"base_available": 1.0}

@@ -8,8 +8,6 @@
 """
 Backtesting script for the Kraken Infinity Grid Bot.
 
-NOTE: Please use the supplied Jupyter Notebook for running backtests.
-
 The backtesting.py script can be used to backtest different strategies and their
 configuration against custom price movements. It is intended to be used as
 orientation and guidance in order to estimate profitability and the optimal
