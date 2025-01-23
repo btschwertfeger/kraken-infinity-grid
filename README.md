@@ -273,6 +273,36 @@ these steps:
 
 ### Running the algorithm
 
+**Pure Python process**
+
+To run the algorithm as a pure Python process, follow these steps:
+
+1. Install the package via pip:
+
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install kraken-infinity-grid
+   ```
+
+2. The algorithm can be started via the command-line interface. For using a
+   local SQLite database, you can specify the path to the SQLite database file
+   via the `--sqlite-file` option. The SQLite database is created
+   automatically if it does not exist, otherwise the existing database is used.
+   See more configuration options within the configuration section.
+
+   ```bash
+   kraken-infinity-grid \
+       --api-key <your-api-key> \
+       --secret-key <your-api-secret> \
+       run \
+       --strategy "GridHODL"
+       ...
+       --sqlite-file=/path/to/sqlite.db
+   ```
+
+**Docker Compose**
+
 The repository of the
 [`kraken-infinity-grid`](https://github.com/btschwertfeger/kraken-infinity-grid)
 contains a `docker-compose.yaml` file that can be used to run the algorithm
@@ -303,9 +333,6 @@ PostgreSQL database. To run the algorithm, follow these steps:
    ```
 
 5. Check the logs of the container and the Telegram chat for updates.
-
-> ⚠️ **Note**: In the future, there will be a Docker image available including
-> the kraken-infinity-grid! Stay tuned!
 
 ## 🛠 Configuration
 
