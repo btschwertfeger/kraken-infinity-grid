@@ -36,7 +36,7 @@ even more logging of used packages.
 Hidden tax benefits
 -------------------
 
-.. WARNING:: This is not financial advice. The authors of this software are not
+.. WARNING:: This is no financial advice. The authors of this software are not
              tax advisors. The following scenario may not apply universally.
              Users should conduct their own research.
 
