@@ -98,6 +98,47 @@ def test_orderbook_get_orders(
     result = orderbook.get_orders(filters={"txid": "txid1"})
     assert result.fetchone() is not None
 
+    # Ensure filtering, ordering, and limiting work as expected
+    orderbook.add(
+        order={
+            "txid": "txid2",
+            "descr": {"pair": "BTC/USD", "type": "buy", "price": "51000"},
+            "vol": "0.1",
+        },
+    )
+    orderbook.add(
+        order={
+            "txid": "txid3",
+            "descr": {"pair": "BTC/USD", "type": "sell", "price": "51000"},
+            "vol": "0.1",
+        },
+    )
+
+    result = orderbook.get_orders(
+        filters={"side": "buy"},
+        order_by=("price", "desc"),
+        limit=1,
+    ).all()
+    assert len(result) == 1
+    assert result[0]["price"] == 51000
+    assert result[0]["txid"] == "txid2"
+
+    result = orderbook.get_orders(
+        filters={"side": "buy"},
+        order_by=("price", "asc"),
+        limit=1,
+    ).all()
+    assert len(result) == 1
+    assert result[0]["price"] == 50000
+    assert result[0]["txid"] == "txid1"
+
+    result = orderbook.get_orders(
+        filters={"side": "buy"},
+        order_by=("price", "asc"),
+        limit=2,
+    ).all()
+    assert len(result) == 2
+
 
 def test_orderbook_remove(orderbook: Orderbook, db_connect: DBConnect) -> None:
     """Test removing orders from the orderbook."""

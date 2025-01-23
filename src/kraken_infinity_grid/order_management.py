@@ -4,10 +4,11 @@
 # GitHub: https://github.com/btschwertfeger
 #
 
+""" Order management for the Kraken Infinity Grid Bot. """
+
 from __future__ import annotations
 
 import logging
-import traceback
 from decimal import Decimal
 from time import sleep
 from typing import TYPE_CHECKING, Self
@@ -22,6 +23,7 @@ LOG: logging.Logger = logging.getLogger(__name__)
 
 
 class OrderManager:
+    """Manages the orderbook and the order handling."""
 
     def __init__(self: OrderManager, strategy: KrakenInfinityGridBot) -> None:
         LOG.debug("Initializing the OrderManager...")
@@ -42,7 +44,7 @@ class OrderManager:
             self.handle_arbitrage(
                 side="sell",
                 order_price=entry["price"],
-                txid_id_to_delete=entry["txid"],
+                txid_to_delete=entry["txid"],
             )
 
     def assign_all_pending_transactions(self: Self) -> None:
@@ -92,9 +94,9 @@ class OrderManager:
             self.__s.quote_currency,
         )
 
-    # =============================================================================
+    # ==========================================================================
     #            C H E C K - P R I C E - R A N G E
-    # =============================================================================
+    # ==========================================================================
 
     def __check_pending_txids(self: OrderManager) -> bool:
         """
@@ -176,13 +178,19 @@ class OrderManager:
         executed sell order.
         """
         LOG.debug("Checking if the lowest buy order needs to be canceled...")
-        while (
-            len(buy_prices := list(self.__s.get_current_buy_prices()))
-            > self.__s.n_open_buy_orders
-        ):
-            for order in self.__s.orderbook.get_orders(filters={"side": "buy"}):
-                if order["price"] == min(buy_prices):
-                    self.handle_cancel_order(txid=order["txid"])
+
+        if (
+            n_to_cancel := (
+                self.__s.orderbook.count(filters={"side": "buy"})
+                - self.__s.n_open_buy_orders
+            )
+        ) > 0:
+            for order in self.__s.orderbook.get_orders(
+                filters={"side": "buy"},
+                order_by=("price", "asc"),
+                limit=n_to_cancel,
+            ):
+                self.handle_cancel_order(txid=order["txid"])
 
     def __shift_buy_orders_up(self: OrderManager) -> bool:
         """
@@ -194,9 +202,16 @@ class OrderManager:
         ``check_price_range`` functions stops.
         """
         LOG.debug("Checking if buy orders need to be shifted up...")
-        if self.__s.orderbook.count(filters={"side": "buy"}) > 0 and (
+
+        if (
+            max_buy_order := self.__s.orderbook.get_orders(
+                filters={"side": "buy"},
+                order_by=("price", "desc"),
+                limit=1,
+            ).first()  # type: ignore[no-untyped-call]
+        ) and (
             self.__s.ticker.last
-            > max(list(self.__s.get_current_buy_prices()))
+            > max_buy_order["price"]
             * (1 + self.__s.interval)
             * (1 + self.__s.interval)
             * 1.001
@@ -281,15 +296,20 @@ class OrderManager:
         self: Self,
         side: str,
         order_price: float,
-        txid_id_to_delete: str | None = None,
+        txid_to_delete: str | None = None,
     ) -> None:
-        """Handles the arbitrage between buy and sell orders."""
+        """
+        Handles the arbitrage between buy and sell orders.
+
+        The existence of this function is mainly justified due to the sleep
+        statement at the end.
+        """
         LOG.debug(
             "Handle arbitrage for %s order with order price: %s and"
             " txid_to_delete: %s",
             side,
             order_price,
-            txid_id_to_delete,
+            txid_to_delete,
         )
 
         if self.__s.dry_run:
@@ -299,15 +319,13 @@ class OrderManager:
         if side == "buy":
             self.new_buy_order(
                 order_price=order_price,
-                txid_to_delete=txid_id_to_delete,
+                txid_to_delete=txid_to_delete,
             )
         elif side == "sell":
             self.new_sell_order(
                 order_price=order_price,
-                txid_id_to_delete=txid_id_to_delete,
+                txid_to_delete=txid_to_delete,
             )
-        else:
-            raise ValueError(f"Invalid side: {side}")
 
         # Wait a bit to avoid rate limiting.
         sleep(0.2)
@@ -376,7 +394,7 @@ class OrderManager:
                 price=order_price,
                 userref=self.__s.userref,
                 validate=self.__s.dry_run,
-                oflags="post",
+                oflags="post",  # post-only buy orders
             )
 
             self.__s.pending_txids.add(placed_order["txid"][0])
@@ -396,7 +414,7 @@ class OrderManager:
     def new_sell_order(  # noqa: C901
         self: OrderManager,
         order_price: float,
-        txid_id_to_delete: str | None = None,
+        txid_to_delete: str | None = None,
     ) -> None:
         """Places a new sell order."""
         if self.__s.dry_run:
@@ -405,32 +423,32 @@ class OrderManager:
 
         if self.__s.strategy == "cDCA":
             LOG.debug("cDCA strategy, not placing sell order.")
-            if txid_id_to_delete is not None:
-                self.__s.orderbook.remove(filters={"txid": txid_id_to_delete})
+            if txid_to_delete is not None:
+                self.__s.orderbook.remove(filters={"txid": txid_to_delete})
             return
 
         LOG.debug("Check conditions for placing a sell order...")
 
         # ======================================================================
         volume: float | None = None
-        if txid_id_to_delete is not None:  # If corresponding buy order filled
-            # GridSell always has txid_id_to_delete set.
+        if txid_to_delete is not None:  # If corresponding buy order filled
+            # GridSell always has txid_to_delete set.
 
             # Add the txid of the corresponding buy order to the unsold buy
             # order txids in order to ensure that the corresponding sell order
             # will be placed - even if placing now fails.
             if not self.__s.unsold_buy_order_txids.get(
-                filters={"txid": txid_id_to_delete},
+                filters={"txid": txid_to_delete},
             ).first():  # type: ignore[no-untyped-call]
                 self.__s.unsold_buy_order_txids.add(
-                    txid=txid_id_to_delete,
+                    txid=txid_to_delete,
                     price=order_price,
                 )
 
             # ==================================================================
             # Get the corresponding buy order in order to retrieve the volume.
             corresponding_buy_order = self.get_orders_info_with_retry(
-                txid=txid_id_to_delete,
+                txid=txid_to_delete,
             )
 
             # In some cases the corresponding buy order is not closed yet and
@@ -448,7 +466,7 @@ class OrderManager:
                 sleep(1)
                 self.__s.om.new_sell_order(
                     order_price=order_price,
-                    txid_id_to_delete=txid_id_to_delete,
+                    txid_to_delete=txid_to_delete,
                 )
                 return
 
@@ -516,11 +534,11 @@ class OrderManager:
             placed_order_txid = placed_order["txid"][0]
             self.__s.pending_txids.add(placed_order_txid)
 
-            if txid_id_to_delete is not None:
+            if txid_to_delete is not None:
                 # Other than with buy orders, we can only delete the
                 # corresponding buy order if the sell order was placed.
-                self.__s.orderbook.remove(filters={"txid": txid_id_to_delete})
-                self.__s.unsold_buy_order_txids.remove(txid=txid_id_to_delete)
+                self.__s.orderbook.remove(filters={"txid": txid_to_delete})
+                self.__s.unsold_buy_order_txids.remove(txid=txid_to_delete)
 
             self.__s.om.assign_order_by_txid(txid=placed_order_txid)
             return
@@ -541,7 +559,7 @@ class OrderManager:
             # processed properly, the algorithm is not in sync with the
             # exchange, or manual trades have been made during processing.
             self.__s.save_exit(reason=message)
-        elif txid_id_to_delete is not None:
+        elif txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
             #       Added logging statement to monitor occurrences
             # ... This would only be the case for GridHODL and SWING, while
@@ -549,9 +567,9 @@ class OrderManager:
             # lets check this for a while.
             LOG.warning(
                 "TODO: Not enough funds to place sell order for txid %s",
-                txid_id_to_delete,
+                txid_to_delete,
             )
-            self.__s.orderbook.remove(filters={"txid": txid_id_to_delete})
+            self.__s.orderbook.remove(filters={"txid": txid_to_delete})
 
     def handle_filled_order_event(
         self: OrderManager,
@@ -639,7 +657,7 @@ class OrderManager:
                     side="sell",
                     last_price=float(order_details["descr"]["price"]),
                 ),
-                txid_id_to_delete=txid,
+                txid_to_delete=txid,
             )
 
         # ======================================================================
@@ -659,7 +677,7 @@ class OrderManager:
                     side="buy",
                     last_price=float(order_details["descr"]["price"]),
                 ),
-                txid_id_to_delete=txid,
+                txid_to_delete=txid,
             )
         else:
             # Remove filled order from list of all orders
@@ -768,28 +786,17 @@ class OrderManager:
         Cancels all open buy orders and removes them from the orderbook.
         """
         LOG.info("Cancelling all open buy orders...")
-        try:
-            for txid, order in self.__s.user.get_open_orders(
-                userref=self.__s.userref,
-            )["open"].items():
-                if (
-                    order["descr"]["type"] == "buy"
-                    and order["descr"]["pair"] == self.__s.altname
-                ):
-                    self.handle_cancel_order(txid=txid)
-                    sleep(0.2)
+        for txid, order in self.__s.user.get_open_orders(
+            userref=self.__s.userref,
+        )["open"].items():
+            if (
+                order["descr"]["type"] == "buy"
+                and order["descr"]["pair"] == self.__s.altname
+            ):
+                self.handle_cancel_order(txid=txid)
+                sleep(0.2)  # Avoid rate limiting
 
-            self.__s.orderbook.remove(filters={"side": "buy"})
-        except Exception:  # noqa: BLE001
-            # FIXME: Check if this can still happen. Can't remember why this
-            #        was added.
-            self.__s.save_exit(
-                str(
-                    f"❌ Error in function >cancelAllOpenBuyOrders < \n"
-                    " !!!--> MAYBE OPEN BUY ORDERS ARE STILL ACTIVE <--!!!"
-                    f" exit()\n {traceback.format_exc()}",
-                ),
-            )
+        self.__s.orderbook.remove(filters={"side": "buy"})
 
     def get_orders_info_with_retry(
         self: OrderManager,

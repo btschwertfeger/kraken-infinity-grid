@@ -30,16 +30,20 @@ dependencies = [
 keywords = ["crypto", "trading", "kraken", "exchange", "api"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
-  "Topic :: Office/Business :: Financial",
-  "Topic :: Office/Business :: Financial :: Investment",
-  "Topic :: Internet :: WWW/HTTP",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
+  "Environment :: Console",
+  "Framework :: AsyncIO",
+  "Framework :: Pytest",
   "Natural Language :: English",
   "Operating System :: MacOS",
   "Operating System :: Unix",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Office/Business :: Financial",
+  "Typing :: Typed",
 ]
 
 [project.optional-dependencies]

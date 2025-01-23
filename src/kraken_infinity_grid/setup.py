@@ -74,7 +74,7 @@ class SetupManager:
                     side="sell",
                     last_price=float(closed_order["price"]),
                 ),
-                txid_id_to_delete=closed_order["txid"],
+                txid_to_delete=closed_order["txid"],
             )
 
         # ======================================================================
@@ -97,7 +97,7 @@ class SetupManager:
                         side="buy",
                         last_price=float(closed_order["price"]),
                     ),
-                    txid_id_to_delete=closed_order["txid"],
+                    txid_to_delete=closed_order["txid"],
                 )
             else:
                 self.__s.orderbook.remove(filters={"txid": closed_order["txid"]})
@@ -170,7 +170,7 @@ class SetupManager:
         LOG.info("- Orderbook initialized!")
 
     def __check_asset_pair_parameter(self: Self) -> None:
-        """Check the asset pair parameters."""
+        """Check the asset pair parameter."""
         LOG.info("- Checking asset pair parameters...")
         pair_data = self.__s.market.get_asset_pairs(
             pair=[self.__s.symbol.replace("/", "")],
@@ -196,7 +196,7 @@ class SetupManager:
 
     def __check_configuration_changes(self: Self) -> None:
         """
-        Checking if the database content does match with the setup parameters.
+        Checking if the database content match with the setup parameters.
 
         Checking if the order size or the interval have changed, requiring
         all open buy orders to be cancelled.

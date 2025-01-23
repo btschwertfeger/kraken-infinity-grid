@@ -4,7 +4,7 @@
 # GitHub: https://github.com/btschwertfeger
 #
 
-"""Module implementing the database connection and handling."""
+"""Module implementing the database connection and handling of interactions."""
 
 from datetime import datetime
 from importlib.metadata import version
@@ -19,8 +19,10 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    asc,
     create_engine,
     delete,
+    desc,
     func,
     select,
     text,
@@ -79,12 +81,16 @@ class DBConnect:
         table: Table,
         filters: dict | None = None,
         exclude: dict | None = None,
+        order_by: tuple[str, str] | None = None,  # (column_name, "asc" or "desc")
+        limit: int | None = None,
     ) -> MappingResult:
-        """Fetch rows from the specified table with optional filters."""
+        """Fetch rows from the specified table with optional filters, ordering, and limit."""
         LOG.debug(
-            "Querying rows from table '%s' with filters: %s",
+            "Querying rows from table '%s' with filters: %s, order_by: %s, limit: %s",
             table,
             filters,
+            order_by,
+            limit,
         )
         query = select(table)
         if filters:
@@ -95,6 +101,14 @@ class DBConnect:
             query = query.where(
                 *(table.c[column] != value for column, value in exclude.items()),
             )
+        if order_by:
+            column, direction = order_by
+            if direction.lower() == "asc":
+                query = query.order_by(asc(table.c[column]))
+            elif direction.lower() == "desc":
+                query = query.order_by(desc(table.c[column]))
+        if limit:
+            query = query.limit(limit)
         return self.session.execute(query).mappings()
 
     def update_row(
@@ -145,7 +159,6 @@ class Orderbook:
     def add(self: Self, order: dict) -> None:
         """Add an order to the orderbook."""
         LOG.debug("Adding order to the orderbook: %s", order)
-        # FIXME: check if the order has all that properties via pydantic or so
         self.__db.add_row(
             self.__table,
             userref=self.__userref,
@@ -160,15 +173,25 @@ class Orderbook:
         self: Self,
         filters: dict | None = None,
         exclude: dict | None = None,
+        order_by: tuple[str, str] | None = None,
+        limit: int | None = None,
     ) -> MappingResult:
         """Get orders from the orderbook."""
-        LOG.debug("Getting orders from the orderbook with filters: %s", filters)
+        LOG.debug(
+            "Getting orders from the orderbook with filters: %s, exclude: %s, order_by: %s, limit: %s",
+            filters,
+            exclude,
+            order_by,
+            limit,
+        )
         if not filters:
             filters = {}
         return self.__db.get_rows(
             self.__table,
             filters=filters | {"userref": self.__userref},
             exclude=exclude,
+            order_by=order_by,
+            limit=limit,
         )
 
     def remove(self: Self, filters: dict) -> None:

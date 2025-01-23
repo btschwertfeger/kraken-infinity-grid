@@ -50,7 +50,6 @@ dev: check-uv
 ##
 .PHONY: test
 test:
-	@rm .cache/tests/*.log || true
 	$(PYTEST) $(PYTEST_OPTS) $(TEST_DIR)
 
 .PHONY: tests
