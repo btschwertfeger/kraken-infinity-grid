@@ -1,4 +1,4 @@
-# Integration and System TEsts
+# Integration and System Tests
 
 This directory contains integration and system tests for the project. They
 mainly focus on mocking the external dependencies (python-kraken-sdk) in order
