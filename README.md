@@ -296,7 +296,7 @@ To run the algorithm as a pure Python process, follow these steps:
        --api-key <your-api-key> \
        --secret-key <your-api-secret> \
        run \
-       --strategy "GridHODL"
+       --strategy "GridHODL" \
        ...
        --sqlite-file=/path/to/sqlite.db
    ```

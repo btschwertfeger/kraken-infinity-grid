@@ -67,8 +67,8 @@ To run the algorithm as a pure Python process, follow these steps:
             --api-key <your-api-key> \
             --secret-key <your-api-secret> \
             run \
-            --strategy "GridHODL"
-            ...
+            --strategy "GridHODL" \
+            ... # further configuration
             --sqlite-file=/path/to/sqlite.db
 
 .. _getting-started-docker-compose-section:
