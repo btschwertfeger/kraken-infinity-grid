@@ -91,12 +91,14 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["."]
-
 omit = ["*tests*", "_version.py"]
 
 [tool.coverage.report]
 exclude_lines = ["coverage: disable", "if TYPE_CHECKING:"]
 skip_empty = true
+
+[tool.codespell]
+check-filenames = true
 
 # ========= T Y P I N G ========================================================
 #
