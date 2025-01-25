@@ -7,7 +7,7 @@ Introduction
 
 |GitHub badge| |PyVersions badge| |Downloads badge|
 |CI/CD badge| |Typing badge| |codecov badge|
-|Release date badge| |Release version badge|
+|Release date badge| |Release version badge| |DOI badge|
 
 
 Disclaimer
@@ -65,8 +65,9 @@ Troubleshooting
   calculation is based on timestamps and a sent nonce must always be the highest
   nonce ever sent of that API key. Having multiple algorithms using the same
   keys will result in invalid nonce errors.
+- Always keep an eye on https://status.kraken.com/ when encountering
+  connectivity problems.
 - Feel free to open an issue at `kraken-infinity-grid/issues`_.
-
 
 References
 ----------
