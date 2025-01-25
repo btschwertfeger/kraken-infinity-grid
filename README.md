@@ -20,8 +20,6 @@ Practices](https://www.bestpractices.dev/projects/9956/badge)](https://www.bestp
 [![Documentation Status Stable](https://readthedocs.org/projects/kraken-infinity-grid/badge/?version=stable)](https://kraken-infinity-grid.readthedocs.io/en/stable)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14735203.svg)](https://doi.org/10.5281/zenodo.14735203)
 
-[![DOI](https://zenodo.org/badge/496160109.svg)](https://zenodo.org/badge/latestdoi/496160109)
-
 </div>
 
 > ⚠️ **Disclaimer**: This software was initially designed for private use only.
