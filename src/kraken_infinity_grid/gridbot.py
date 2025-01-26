@@ -240,7 +240,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                 LOG.warning("Message is not a dict: %s", message)
                 return
 
-            if (channel := message.get("channel")) == {"status", "heartbeat"}:
+            if (channel := message.get("channel")) in {"heartbeat", "status"}:
                 return
 
             if message.get("method"):
