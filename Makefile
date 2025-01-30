@@ -10,13 +10,13 @@ PYTEST_OPTS := -vv --junit-xml=pytest.xml
 PYTEST_COV_OPTS := $(PYTEST_OPTS) --cov=kraken_infinity_grid --cov-report=xml:coverage.xml --cov-report=term-missing
 TEST_DIR := tests
 
-## ======= H E L P =======
+## ======= H E L P =============================================================
 ## help		Show this help message
 .PHONY: help
 help:
 	@grep "^##" Makefile | sed -e "s/##//"
 
-## ======= B U I L D I N G =======
+## ======= B U I L D I N G =====================================================
 ## build		Builds the package
 ##
 .PHONY: build
@@ -32,7 +32,7 @@ rebuild: clean build
 doc:
 	cd doc && make html
 
-## ======= I N S T A L L A T I O N =======
+## ======= I N S T A L L A T I O N =============================================
 ## install	Install the package
 ##
 .PHONY: install
@@ -45,7 +45,7 @@ install: check-uv
 dev: check-uv
 	$(UV) pip install -e ".[dev,test,backtest]"
 
-## ======= T E S T I N G =======
+## ======= T E S T I N G =======================================================
 ## test		Run the unit tests
 ##
 .PHONY: test
@@ -81,7 +81,7 @@ coverage:
 doctest:
 	cd docs && make doctest
 
-## ======= M I S C E L L A N I O U S =======
+## ======= M I S C E L L A N I O U S ===========================================
 ## pre-commit	Run the pre-commit targets
 ##
 .PHONY: pre-commit

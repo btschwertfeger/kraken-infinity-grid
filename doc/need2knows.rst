@@ -50,3 +50,8 @@ the last buy order, no taxes may be due, as the transaction could be considered
 a loss for tax purposes. This approach can be utilized to accumulate
 cryptocurrencies in declining markets, such as with the :ref:`GridHODL`
 strategy, potentially without incurring any tax liabilities.
+
+Useful tools
+------------
+
+- PnL Calculator (for tax purposes): https://github.com/btschwertfeger/kraken-pnl-calculator
