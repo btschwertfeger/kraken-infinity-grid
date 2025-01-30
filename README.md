@@ -60,6 +60,10 @@ Documentation:
 - https://kraken-infinity-grid.readthedocs.io/en/latest/
 - https://kraken-infinity-grid.readthedocs.io/en/stable/
 
+PnL Calculator (for tax purposes):
+
+- https://github.com/btschwertfeger/kraken-pnl-calculator
+
 ## 📚 Fundamental concepts
 
 `kraken-infinity-grid` is a sophisticated trading algorithm designed for
@@ -417,7 +421,7 @@ current state of the algorithm via Telegram Bots (see
 
 ## 📝 Notes
 
-The versioning scheme follows the pattern `v<Major>.<Minor>.<Patch>`. Here's
+This project follows semantic versioning (`v<Major>.<Minor>.<Patch>`). Here's
 what each part signifies:
 
 - **Major**: This denotes significant changes that may introduce new features or
