@@ -415,7 +415,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                     or conf["last_telegram_update"] < last_hour
                 ):
                     # Send update once per hour to Telegram
-                    self.t.send_bot_update()
+                    self.t.send_telegram_update()
 
                 if conf["last_price_time"] + timedelta(seconds=600) < now:
                     # Exit if no price update for a long time (10 minutes).
