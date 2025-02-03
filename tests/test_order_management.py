@@ -1073,7 +1073,7 @@ def test_get_orders_info_with_retry_success(
     """Test successfully retrieving order info with retry."""
     strategy.user.get_orders_info.return_value = {"txid1": {"status": "closed"}}
     result = order_manager.get_orders_info_with_retry(txid="txid1")
-    assert result == {"status": "closed"}
+    assert result == {"status": "closed", "txid": "txid1"}
     strategy.user.get_orders_info.assert_called_once_with(txid="txid1")
     mock_sleep.assert_not_called()
 
@@ -1090,7 +1090,7 @@ def test_get_orders_info_with_retry_retry_success(
         {"txid1": {"status": "closed"}},
     ]
     result = order_manager.get_orders_info_with_retry(txid="txid1")
-    assert result == {"status": "closed"}
+    assert result == {"status": "closed", "txid": "txid1"}
     assert strategy.user.get_orders_info.call_count == 2
     mock_sleep.assert_called_once()
 

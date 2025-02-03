@@ -76,7 +76,6 @@ class OrderManager:
             LOG.info("Order '%s' does not belong to this instance.", txid)
             return
 
-        order_details["txid"] = txid
         if self.__s.pending_txids.count(filters={"txid": order_details["txid"]}) != 0:
             self.__s.orderbook.add(order_details)
             self.__s.pending_txids.remove(order_details["txid"])
@@ -802,33 +801,35 @@ class OrderManager:
         self: OrderManager,
         txid: str,
         tries: int = 0,
-        max_tries: int = 3,
+        max_tries: int = 5,
         exit_on_fail: bool = True,
     ) -> dict | None:
         """
         Returns the order details for a given txid.
 
         NOTE: We need retry here, since Kraken lacks of fast processing of
-              filled orders and making them available via REST API.
+              placed/filled orders and making them available via REST API.
         """
         while tries < max_tries and not (
             order_details := self.__s.user.get_orders_info(
                 txid=txid,
             ).get(txid)
         ):
+            tries += 1
             LOG.warning(
                 "Could not find order '%s'. Retry %d/%d in %d seconds...",
                 txid,
-                tries + 1,
+                tries,
                 max_tries,
                 (wait_time := 2 * tries),
             )
             sleep(wait_time)
-            tries += 1
 
         if exit_on_fail and order_details is None:
             self.__s.save_exit(
                 f"Failed to retrieve order info for '{txid}' after"
                 f" {max_tries} retries!",
             )
+        order_details["txid"] = txid
+
         return order_details  # type: ignore[no-any-return]

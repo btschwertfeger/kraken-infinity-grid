@@ -412,8 +412,14 @@ current state of the algorithm via Telegram Bots (see
   calculation is based on timestamps and a sent nonce must always be the highest
   nonce ever sent of that API key. Having multiple algorithms using the same
   keys will result in invalid nonce errors.
-- Always keep an eye on https://status.kraken.com/ when encountering
-  connectivity problems.
+- Kraken often has **maintenance windows**. Please check the status page at
+  https://status.kraken.com/ for more information.
+- When encountering errors like "Could not find order '...'. Retry 3/3 ...",
+  this might be due to the **Kraken API being slow**. The algorithm will retry
+  the request up to three times before raising an exception. If the order is
+  still not available, just restart the algorithm - or let this be handled by
+  Docker compose to restart the container automatically. Then the order will
+  most probably be found.
 
 ---
 

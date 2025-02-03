@@ -88,6 +88,10 @@ markers = [
   "wip: used for wip tests.",
 ]
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+  "ignore:The .*async_close.* function is deprecated:DeprecationWarning:",
+  "ignore:The .*stop.* function is deprecated:DeprecationWarning:",
+]
 
 [tool.coverage.run]
 source = ["."]
