@@ -80,8 +80,8 @@ class Telegram:
                 message,
             )
 
-    def send_bot_update(self: Self) -> None:  # noqa: C901
-        """Send a message to the Telegram chat with the bot's current status"""
+    def send_telegram_update(self: Self) -> None:
+        """Send a message to the Telegram chat with the current status."""
         balances = self.__s.get_balances()
 
         message = f"👑 {self.__s.symbol}\n"
@@ -102,45 +102,45 @@ class Telegram:
         message += f"├ Amount per Grid » {self.__s.amount_per_grid} {self.__s.quote_currency}\n"
         message += f"└ Open orders » {self.__s.orderbook.count()}\n"
 
-        next_buys, next_sells = [], []
-        for order in self.__s.orderbook.get_orders():
-            if order["side"] == "buy":
-                next_buys.append(order["price"])
-            elif order["side"] == "sell":
-                next_sells.append(order["price"])
-
         message += "\n```\n"
         message += f" 🏷️ Price in {self.__s.quote_currency}\n"
 
-        n_sells: int = len(next_sells)
-        n_buys: int = len(next_buys)
-        if n_sells == 0:
+        next_sells = [
+            order["price"]
+            for order in self.__s.orderbook.get_orders(
+                filters={"side": "sell"},
+                order_by=("price", "ASC"),
+                limit=5,
+            )
+        ]
+        next_sells.reverse()
+
+        if (n_sells := len(next_sells)) == 0:
             message += f"└───┬> {self.__s.ticker.last}\n"
         else:
-            for index, sell_price in enumerate(
-                sorted(next_sells, key=float, reverse=True),
-            ):
+            for index, sell_price in enumerate(next_sells):
                 change = (sell_price / self.__s.ticker.last - 1) * 100
                 if index == 0:
                     message += f" │  ┌[ {sell_price} (+{change:.2f}%)\n"
                 elif index <= n_sells - 1 and index != 4:
                     message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
-                if index == 4:
-                    break
-
             message += f" └──┼> {self.__s.ticker.last}\n"
 
-        if n_buys != 0:
-            for index, buy_price in enumerate(
-                sorted(next_buys, key=float, reverse=True),
-            ):
+        next_buys = [
+            order["price"]
+            for order in self.__s.orderbook.get_orders(
+                filters={"side": "buy"},
+                order_by=("price", "DESC"),
+                limit=5,
+            )
+        ]
+        if (n_buys := len(next_buys)) != 0:
+            for index, buy_price in enumerate(next_buys):
                 change = (buy_price / self.__s.ticker.last - 1) * 100
                 if index < n_buys - 1 and index != 4:
                     message += f"    ├[ {buy_price} ({change:.2f}%)\n"
                 else:
                     message += f"    └[ {buy_price} ({change:.2f}%)"
-                if index == 4:
-                    break
         message += "\n```"
 
         self.send_to_telegram(message)

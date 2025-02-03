@@ -87,7 +87,7 @@ def test_send_to_telegram_failure(
 
 
 @mock.patch("kraken_infinity_grid.telegram.Telegram.send_to_telegram")
-def test_send_bot_update(
+def test_send_telegram_update(
     mock_send_to_telegram: mock.Mock,
     telegram: Telegram,
 ) -> None:
@@ -110,12 +110,12 @@ def test_send_bot_update(
     telegram._Telegram__s.amount_per_grid = 10.0
     telegram._Telegram__s.cost_decimals = 5
     telegram._Telegram__s.orderbook.count.return_value = 5
-    telegram._Telegram__s.orderbook.get_orders.return_value = [
-        {"side": "buy", "price": 49000.0},
-        {"side": "sell", "price": 51000.0},
+    telegram._Telegram__s.orderbook.get_orders.side_effect = [
+        ({"side": "sell", "price": 50500.0}, {"side": "sell", "price": 51000.0}),
+        ({"side": "buy", "price": 49000.0},),
     ]
 
-    telegram.send_bot_update()
+    telegram.send_telegram_update()
     assert mock_send_to_telegram.called
 
     # Check parts of the message format. This is not a beauty but ok for now.
@@ -135,5 +135,6 @@ def test_send_bot_update(
     assert "└ Open orders » 5" in message
     assert "🏷️ Price in USD" in message
     assert " │  ┌[ 51000.0 (+2.00%)" in message
+    assert " │  ├[ 50500.0 (+1.00%)" in message
     assert " └──┼> 50000.0" in message
     assert "    └[ 49000.0 (-2.00%)" in message
