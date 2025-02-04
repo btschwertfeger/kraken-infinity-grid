@@ -621,10 +621,14 @@ class OrderManager:
             tries += 1
 
         if order_details["status"] != "closed":
-            self.__s.save_exit(
-                "handle_filled_order_event - fetched order is not closed!"
-                f" {order_details}",
+            LOG.warning(
+                "Can not handle filled order, since the fetched order is not"
+                " closed in upstream!"
+                " This may happen due to Kraken's websocket API being faster"
+                " than their REST backend. Retrying in a few seconds...",
             )
+            self.handle_filled_order_event(txid=txid)
+            return
 
         # ======================================================================
         if self.__s.dry_run:
