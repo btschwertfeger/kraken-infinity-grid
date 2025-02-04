@@ -838,10 +838,11 @@ def test_handle_filled_order_event_buy_order_not_closed_retry_failing(
     mock_handle_arbitrage: mock.Mock,
     mock_get_orders_info_with_retry: mock.Mock,
     order_manager: OrderManager,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """
-    Test handling a filled order event failing due to too much retries of
-    retrieving the order information.
+    Test handling a filled order event that fails too often an triggers a recall
+    of themselves.
     """
     mock_get_orders_info_with_retry.side_effect = [
         {
@@ -851,15 +852,26 @@ def test_handle_filled_order_event_buy_order_not_closed_retry_failing(
             "vol_exec": 0.1,
         }
         for _ in range(4)
+    ] + [  # Mark as closed after some time
+        {
+            "descr": {"pair": "BTCUSD", "type": "buy", "price": 50000.0},
+            "status": "closed",
+            "userref": 13456789,
+            "vol_exec": 0.1,
+        },
     ]
 
     with (
-        pytest.raises(SystemExit, match=r".*fetched order is not closed.*"),
         mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None),
     ):
         order_manager.handle_filled_order_event(txid="txid1")
 
-    mock_handle_arbitrage.assert_not_called()
+    mock_handle_arbitrage.assert_called_once()
+
+    assert (
+        "Can not handle filled order, since the fetched order is not closed in upstream!"
+        in caplog.text
+    )
 
 
 @mock.patch.object(OrderManager, "get_orders_info_with_retry")
