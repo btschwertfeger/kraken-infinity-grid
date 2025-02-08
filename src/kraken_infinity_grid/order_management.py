@@ -834,6 +834,6 @@ class OrderManager:
                 f"Failed to retrieve order info for '{txid}' after"
                 f" {max_tries} retries!",
             )
-        order_details["txid"] = txid
 
+        order_details["txid"] = txid
         return order_details  # type: ignore[no-any-return]
