@@ -104,13 +104,14 @@ class Telegram:
 
         message += "\n```\n"
         message += f" 🏷️ Price in {self.__s.quote_currency}\n"
+        max_orders_to_list: int = 5
 
         next_sells = [
             order["price"]
             for order in self.__s.orderbook.get_orders(
                 filters={"side": "sell"},
                 order_by=("price", "ASC"),
-                limit=5,
+                limit=max_orders_to_list,
             )
         ]
         next_sells.reverse()
@@ -122,7 +123,7 @@ class Telegram:
                 change = (sell_price / self.__s.ticker.last - 1) * 100
                 if index == 0:
                     message += f" │  ┌[ {sell_price} (+{change:.2f}%)\n"
-                elif index <= n_sells - 1 and index != 4:
+                elif index <= n_sells - 1 and index != max_orders_to_list:
                     message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
             message += f" └──┼> {self.__s.ticker.last}\n"
 
@@ -131,13 +132,13 @@ class Telegram:
             for order in self.__s.orderbook.get_orders(
                 filters={"side": "buy"},
                 order_by=("price", "DESC"),
-                limit=5,
+                limit=max_orders_to_list,
             )
         ]
         if (n_buys := len(next_buys)) != 0:
             for index, buy_price in enumerate(next_buys):
                 change = (buy_price / self.__s.ticker.last - 1) * 100
-                if index < n_buys - 1 and index != 4:
+                if index < n_buys - 1 and index != max_orders_to_list:
                     message += f"    ├[ {buy_price} ({change:.2f}%)\n"
                 else:
                     message += f"    └[ {buy_price} ({change:.2f}%)"

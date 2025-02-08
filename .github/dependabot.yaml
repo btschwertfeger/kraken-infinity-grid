@@ -4,3 +4,6 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      all:
+        dependency-type: "production"
