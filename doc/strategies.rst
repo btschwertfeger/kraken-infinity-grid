@@ -1,6 +1,8 @@
-.. -*- coding: utf-8 -*-
+.. -*- mode: rst; coding: utf-8 -*-
+..
 .. Copyright (C) 2025 Benjamin Thomas Schwertfeger
-.. GitHub: https://github.com/btschwertfeger
+.. All rights reserved.
+.. https://github.com/btschwertfeger
 ..
 
 .. _strategies-section:
