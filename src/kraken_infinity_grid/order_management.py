@@ -363,6 +363,7 @@ class OrderManager:
         )
 
         # Compute the target volume for the upcoming buy order.
+        # TODO: Check * (1 + (2 * Decimal(self.__s.fee)))),
         volume = float(
             self.__s.trade.truncate(
                 amount=Decimal(self.__s.amount_per_grid) / Decimal(order_price),

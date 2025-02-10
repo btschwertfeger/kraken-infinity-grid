@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
 # Copyright (C) 2025 Benjamin Thomas Schwertfeger
-# GitHub: https://github.com/btschwertfeger
+# All rights reserved.
+# https://github.com/btschwertfeger
 #
 # pylint: disable=arguments-differ
 
@@ -51,6 +53,10 @@ function).
     ********************************************************************************
 
 """
+
+import warnings
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import asyncio
 import logging
@@ -389,6 +395,9 @@ class Backtest:
         self.instance.market = self.api
         self.instance.trade = self.api
 
+        self.summary_balances: float
+        self.summary_market_price: float
+
     async def run(self: Self, prices: Iterable) -> None:
         """
         Run the configured strategy against a series of prices.
@@ -418,6 +427,7 @@ class Backtest:
         """
         Print the summary of the backtest.
         """
+        self.compute_summary()
         print("*" * 80)
         print(f"Strategy: {self.instance.strategy}")
         print(f"Final price: {self.instance.ticker.last}")
@@ -425,17 +435,21 @@ class Backtest:
         print(f"Executed sell orders: {self.api.n_exec_sell_orders}")
         print("Final balances:")
 
-        balances = self.api.get_balances()
-        print(f"{self.instance.base_currency}: {balances[self.api.base]}")
-        print(f"{self.instance.quote_currency}: {balances[self.api.quote]}")
-        market_price = (
-            balances[self.api.base]["balance"] * self.instance.ticker.last
-            + balances[self.api.quote]["balance"]
+        print(f"{self.instance.base_currency}: {self.summary_balances[self.api.base]}")
+        print(
+            f"{self.instance.quote_currency}: {self.summary_balances[self.api.quote]}",
         )
         print(
-            f"Market price: {market_price} {self.instance.quote_currency}",
+            f"Market price: {self.summary_market_price} {self.instance.quote_currency}",
         )
         print("*" * 80)
+
+    def compute_summary(self: Self) -> None:
+        self.summary_balances = self.api.get_balances()
+        self.summary_market_price = (
+            self.summary_balances[self.api.base]["balance"] * self.instance.ticker.last
+            + self.summary_balances[self.api.quote]["balance"]
+        )
 
 
 async def main() -> None:
