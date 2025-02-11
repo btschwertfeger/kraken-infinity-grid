@@ -252,6 +252,7 @@ task-tags = ["todo", "TODO", "fixme", "FIXME"]
 ]
 "tools/*.py" = [
   "T201", # `print` found
+  "E501", # Line too long
 ]
 "tools/generate_ws_messages.py" = [
   "S311", # pseudo-random-generator
