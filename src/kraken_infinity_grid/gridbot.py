@@ -342,8 +342,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         try:
             self.__check_api_keys()
         except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
-            await self.stop()  # Stops the websocket connections
-            await self.async_close()  # Stops the aiohttp session
+            await self.close()  # Stops the websocket connections and aiohttp session
             self.save_exit(
                 (
                     "Passed API keys are invalid!"
@@ -358,8 +357,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         try:
             await self.__main()
         except asyncio.CancelledError:
-            await self.stop()  # Stops the websocket connections
-            await self.async_close()  # Stops the aiohttp session
+            await self.close()  # Stops the websocket connections and aiohttp session
             self.save_exit("The algorithm was interrupted!")
 
     async def __main(self: Self) -> None:

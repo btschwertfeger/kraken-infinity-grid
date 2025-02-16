@@ -512,8 +512,7 @@ async def main() -> None:
             ),
         )
     finally:
-        await bt.instance.async_close()
-        await bt.instance.stop()
+        await bt.instance.close()
         bt.summary()
 
 
