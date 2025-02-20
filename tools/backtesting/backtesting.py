@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# -*- mode: python; coding: utf-8 -*-
 #
 # Copyright (C) 2025 Benjamin Thomas Schwertfeger
 # All rights reserved.
@@ -525,8 +524,7 @@ async def main() -> None:
             ),
         )
     finally:
-        await bt.instance.async_close()
-        await bt.instance.stop()
+        await bt.instance.close()
         bt.summary()
 
 

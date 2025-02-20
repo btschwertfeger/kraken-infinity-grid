@@ -1,8 +1,9 @@
-.. -*- coding: utf-8 -*-
-.. Copyright (C) 2025 Benjamin Thomas Schwertfeger
-.. GitHub: https://github.com/btschwertfeger
+.. -*- mode: rst; coding: utf-8 -*-
 ..
-.. kraken-infinity-grid documentation master file
+.. Copyright (C) 2025 Benjamin Thomas Schwertfeger
+.. All rights reserved.
+.. https://github.com/btschwertfeger
+..
 
 Welcome to kraken-infinity-grid's documentation!
 ================================================
