@@ -53,10 +53,6 @@ function).
 
 """
 
-import warnings
-
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
 import asyncio
 import logging
 import uuid
