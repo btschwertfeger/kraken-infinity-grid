@@ -26,9 +26,8 @@ project = "kraken-infinity-grid"
 copyright = "2025, Benjamin Thomas Schwertfeger"  # noqa: A001 # pylint: disable=redefined-builtin
 author = "Benjamin Thomas Schwertfeger"
 
-# to import the package
-parent_directory: Path = Path("..").resolve()
-sys.path.insert(0, str(parent_directory))
+# Import the local package
+sys.path.insert(0, str(Path("..").resolve() / "src"))
 
 rst_epilog = ""
 # Read link all targets from file
@@ -72,7 +71,7 @@ exclude_patterns = [
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "sphinx_book_theme"  # "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_context = {
     "display_github": True,

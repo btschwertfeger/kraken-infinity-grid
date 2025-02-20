@@ -1,0 +1,8 @@
+ipykernel
+ipython
+jupyter # python -m ipykernel install --user --name=kraken-infinity-grid
+kraken-infinity-grid
+pandas
+prettytable
+python-kraken-sdk
+tqdm
