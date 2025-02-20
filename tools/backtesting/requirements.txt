@@ -1,0 +1,5 @@
+kraken-infinity-grid
+pandas
+prettytable
+python-kraken-sdk
+tqdm
