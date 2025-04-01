@@ -17,14 +17,14 @@ authors = [
 ]
 description = "Infinity grid trading algorithm for the Kraken cryptocurrency exchange."
 readme = "README.md"
-license = { file = "LICENSE" }
+license-files = ["LICENSE"]
 
 requires-python = ">=3.11"
 dependencies = [
   "asyncio~=3.4",
   "click~=8.1",
   "cloup~=3.0",
-  "python-kraken-sdk>=3.1.6,<3.2",
+  "python-kraken-sdk~=3.2",
   "requests~=2.32",
   "psycopg2-binary~=2.9",
   "sqlalchemy~=2.0",
