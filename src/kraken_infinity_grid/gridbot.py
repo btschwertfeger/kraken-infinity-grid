@@ -488,11 +488,11 @@ class KrakenInfinityGridBot(SpotWSClient):
 
         LOG.info(" - Checking if 'Create & modify orders' permission set...")
         self.trade.create_order(
-            pair=self.symbol,
+            pair="BTC/USD",
             side="buy",
             ordertype="market",
-            volume="0.0001",
-            price="1",
+            volume="10",
+            price="10",
             validate=True,
         )
         LOG.info(" - Checking if 'Cancel & close orders' permission set...")
