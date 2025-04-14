@@ -86,7 +86,7 @@ Key Elements of Grid Trading
    potentially triggering a profitable trade.
 
 3. **Consistent Position Sizing**: Each trade involves a consistent volume in
-   terms of the quote currency (e.g., $100 per trade). This uniformity
+   terms of the quote currency (e.g., \\$100 per trade). This uniformity
    simplifies the management of trades and helps in maintaining a balanced
    portfolio.
 
@@ -125,7 +125,7 @@ Technical Breakdown:
 
 - **Order Placement**: The algorithm dynamically adjusts :math:`n` buy orders
   below the current market price. For example, with a 4% interval, if the
-  current BTC price is $50,000, the first buy order is set at $48,000, the
+  current BTC price is \\$50,000, the first buy order is set at \\$48,000, the
   second at $46,080, and so on.
 - **Execution**: Upon execution of a buy order, a corresponding sell order is
   immediately placed at 4% above the purchase price respecting a fixed quote
@@ -134,7 +134,7 @@ Technical Breakdown:
 - **Accumulation**: Unlike traditional trading strategies, GridHODL is designed
   to accumulate the base currency gradually. Each buy order slightly increases
   the holdings, while the fixed order size in terms of quote currency (e.g.,
-  $100) ensures consistent exposure.
+  \\$100) ensures consistent exposure.
 
 This strategy is particularly effective in sideways, slightly, and high volatile
 markets, where frequent price oscillations allow for regular execution of the
@@ -153,10 +153,10 @@ bought in the preceding buy order.
 
 Technical Breakdown:
 
-- **Order Logic**: For every buy order executed (e.g., purchasing $100 worth of
-  BTC at $48,000), a sell order is placed for the entire amount of BTC acquired
-  at a 4% higher price. This ensures that each trade cycle results in a complete
-  turnover of the base currency.
+- **Order Logic**: For every buy order executed (e.g., purchasing \\$100 worth
+  of BTC at \\$48,000), a sell order is placed for the entire amount of BTC
+  acquired at a 4% higher price. This ensures that each trade cycle results in a
+  complete turnover of the base currency.
 - **Profit Realization**: The strategy ensures that profits are locked in at
   each cycle, reducing the need for long-term accumulation or holding. It is
   particularly suitable for traders who prioritize short-term gains over base
@@ -178,8 +178,8 @@ currency at higher levels.
 Technical Breakdown:
 
 - **Market Adaptation**: This strategy tracks the highest buy price within a
-  defined range (e.g., $40,000 to $80,000). If the market price exceeds this
-  range (e.g., rises to $83,200), the algorithm initiates sell orders at
+  defined range (e.g., \\$40,000 to \\$80,000). If the market price exceeds this
+  range (e.g., rises to \\$83,200), the algorithm initiates sell orders at
   predefined intervals (e.g., 4% above the highest buy price).
 - **Sell Execution**: Unlike `GridHODL`_, which focuses on buying and selling in
   cycles, SWING starts selling accumulated base currency once the price
@@ -212,11 +212,11 @@ Technical Breakdown:
   regular time intervals. This ensures that purchases are made in response to
   market movements rather than arbitrary time frames.
 - **No Sell Orders**: cDCA focuses purely on accumulation. It consistently buys
-  the base currency (e.g., $100 worth of BTC) at each interval without placing
+  the base currency (e.g., \\$100 worth of BTC) at each interval without placing
   corresponding sell orders, banking on long-term price appreciation.
 - **Adaptive Buy Orders**: The algorithm adapts to rising prices by shifting buy
   orders upward rather than letting them fall out of scope. For instance, if the
-  price exceeds $60,000, new buy orders are placed at 4% intervals below this
+  price exceeds \\$60,000, new buy orders are placed at 4% intervals below this
   new level, maintaining relevance in the current market context.
 - **Long-Term Growth**: This strategy is ideal for traders with a long-term
   investment horizon, aiming to build a significant position in the base
@@ -228,46 +228,46 @@ Example of Grid Trading
 
 Suppose you are trading BTC/USD and set your interval at 4%.
 
-- Current BTC price: $50,000
-- Position size: $100 per trade
+- Current BTC price: \\$50,000
+- Position size: \\$100 per trade
 
 **Scenario 1: Using GridHODL Strategy**
 
 1. The algorithm places limit buy orders at intervals below the current price,
    for example:
 
-- Buy $100 worth of BTC at $48,000 (4% below $50,000)
-- Buy $100 worth of BTC at $46,080 (another 4% below $48,000)
+- Buy \\$100 worth of BTC at \\$48,000 (4% below \\$50,000)
+- Buy \\$100 worth of BTC at \\$46,080 (another 4% below \\$48,000)
 
 2. Once a buy order executes, a corresponding sell order is placed 4% above the
    purchase price:
 
-- Sell the BTC bought at $48,000 for $100 at $49,920 (4% above $48,000)
+- Sell the BTC bought at \\$48,000 for \\$100 at \\$49,920 (4% above \\$48,000)
 
 This process accumulates BTC over time since the sell orders are always slightly
 less in BTC terms than the buy orders due to the fixed USD amount.
 
 **Scenario 2: Using GridSell Strategy**
 
-1. A buy order for $100 of BTC is placed at $48,000.
+1. A buy order for \\$100 of BTC is placed at \\$48,000.
 2. Upon execution, a sell order for the full amount of BTC purchased is placed
    4% higher:
 
-- Sell BTC for $104 at $49,920.
+- Sell BTC for \\$104 at \\$49,920.
 
 This strategy focuses on liquidating the bought BTC entirely for each trade
 cycle.
 
 **Scenario 3: Using SWING Strategy**
 
-1. Assume the algorithm has been trading between $40,000 and $80,000, with the
-   highest buy at $80,000.
-2. As long as the price do not exceed $80,000, the algorithm continues to buy
+1. Assume the algorithm has been trading between \\$40,000 and \\$80,000, with
+   the highest buy at \\$80,000.
+2. As long as the price do not exceed \\$80,000, the algorithm continues to buy
    and sell BTC at 4% intervals just like the GirdHODL strategy.
-3. If the price rises to $83,200 (4% above $80,000), the algorithm starts
+3. If the price rises to \\$83,200 (4% above \\$80,000), the algorithm starts
    placing sell orders for the accumulated BTC:
 
-- Sell $100 worth of BTC at $83,200.
+- Sell \\$100 worth of BTC at \\$83,200.
 
 This strategy sells accumulated BTC when the price exceeds the highest buy,
 while continuing to buy if prices fall below the highest purchase.
@@ -278,14 +278,14 @@ The cDCA strategy simplifies the process by consistently buying at fixed
 intervals:
 
 - Interval: Every 4% price change
-- Purchase size: $100 per interval
+- Purchase size: \\$100 per interval
 
 Example:
 
-- Buy $100 of BTC at $50,000.
-- If the price drops to $48,000, buy another $100 worth of BTC.
-- If the price rises to $52,000, continue buying $100 worth of BTC, adjusting
-  the buy orders upwards.
+- Buy \\$100 of BTC at \\$50,000.
+- If the price drops to \\$48,000, buy another \\$100 worth of BTC.
+- If the price rises to \\$52,000, continue buying \\$100 worth of BTC,
+  adjusting the buy orders upwards.
 
 This strategy accumulates BTC over time without selling, speculating on
 long-term price increases.
@@ -300,7 +300,7 @@ of scope, i.e. it will place buy orders at 4 % intervals below 60,000 USD.
 1. Interval Setting: Before trading, the user must define the interval size,
    e.g., 2% or 4% between orders.
 2. Position Size: The volume of each trade remains constant in quote currency
-   terms (e.g., $100 per trade).
+   terms (e.g., \\$100 per trade).
 3. Accumulation: With strategies like GridHODL and SWING, each buy and sell
    cycle leads to a small accumulation of the base currency.
 4. Reinvestment: The accumulated base currency can be reinvested. Once there are
@@ -311,11 +311,11 @@ of scope, i.e. it will place buy orders at 4 % intervals below 60,000 USD.
 **Example of Reinvestment in Swing Strategy**
 
 - Accumulated BTC: 0.05 BTC
-- Highest buy price: $80,000
+- Highest buy price: \\$80,000
 
-If the BTC price rises to $83,200:
+If the BTC price rises to \\$83,200:
 
-- Sell 0.05 BTC at $83,200.
+- Sell 0.05 BTC at \\$83,200.
 
 If this cycle repeats and the quote currency (USD) surpasses a certain
 threshold, the position size for future trades can be increased, enhancing
