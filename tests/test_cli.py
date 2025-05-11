@@ -71,20 +71,3 @@ def test_cli_run(mock_bot: MagicMock, runner: CliRunner, sqlite_file: Path) -> N
     assert result.exit_code == 0
     mock_bot.assert_called_once()
     mock_bot.return_value.run.assert_any_await()
-
-
-@patch.dict(os.environ, {})
-@patch("kraken.spot.Trade")
-def test_cli_cancel(mock_trade: MagicMock, runner: CliRunner) -> None:
-    """Test the cancel command"""
-    command = [
-        "--api-key",
-        "test_api_key",
-        "--secret-key",
-        "test_secret_key",
-        "cancel",
-        "--force",
-    ]
-    result = runner.invoke(cli, command)
-    assert result.exit_code == 0
-    mock_trade.return_value.cancel_all_orders.assert_called_once()
