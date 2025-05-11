@@ -9,7 +9,7 @@ import sys
 from logging import DEBUG, INFO, WARNING, basicConfig, getLogger
 from typing import Any
 
-from click import BOOL, FLOAT, INT, STRING, Context, echo, pass_context
+from click import FLOAT, INT, STRING, Context, echo, pass_context
 from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option, option_group
 from cloup.constraints import If, accept_none, require_all
 
@@ -326,42 +326,3 @@ def run(ctx: Context, **kwargs: dict) -> None:
             sys.exit(1)
 
     asyncio.run(main())
-
-
-@cli.command(
-    context_settings={
-        "auto_envvar_prefix": "KRAKEN_CANCEL",
-        "help_option_names": ["-h", "--help"],
-    },
-    formatter_settings=HelpFormatter.settings(
-        theme=HelpTheme(
-            invoked_command=Style(fg="bright_yellow"),
-            heading=Style(fg="bright_white", bold=True),
-            constraint=Style(fg="magenta"),
-            col1=Style(fg="bright_yellow"),
-        ),
-    ),
-)
-@option(
-    "-f",
-    "--force",
-    required=False,
-    type=BOOL,
-    default=False,
-    is_flag=True,
-    show_default=True,
-)
-@pass_context
-def cancel(ctx: Context, **kwargs: dict) -> None:
-    """Cancel all open orders."""
-    ctx.obj |= kwargs
-    if not ctx.obj["force"]:
-        print("Not canceling unless '-f' was passed!")  # noqa: T201
-        sys.exit(1)
-
-    from pprint import pprint  # noqa: PLC0415
-
-    from kraken.spot import Trade  # noqa: PLC0415
-
-    trade = Trade(key=ctx.obj["api_key"], secret=ctx.obj["secret_key"])
-    pprint(trade.cancel_all_orders())  # noqa: T203

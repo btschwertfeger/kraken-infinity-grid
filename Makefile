@@ -8,7 +8,7 @@
 
 UV ?= uv
 PYTHON := python
-PYTEST := $(UV) run pytest
+PYTEST := pytest
 PYTEST_OPTS := -vv --junit-xml=pytest.xml
 PYTEST_COV_OPTS := $(PYTEST_OPTS) --cov=kraken_infinity_grid --cov-report=xml:coverage.xml --cov-report=term-missing
 TEST_DIR := tests
@@ -46,7 +46,7 @@ install: check-uv
 ##
 .PHONY: dev
 dev: check-uv
-	$(UV) pip install -e ".[dev,test,backtest]" -r doc/requirements.txt
+	$(UV) pip install -e ".[dev,test]" -r doc/requirements.txt
 
 ## ======= T E S T I N G =======================================================
 ## test		Run the unit tests
