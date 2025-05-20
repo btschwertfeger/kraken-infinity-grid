@@ -137,6 +137,15 @@ class DBConnect:
         self.session.execute(query)
         self.session.commit()
 
+    def close(self: Self) -> None:
+        """Close database connections properly to avoid resource leaks."""
+        LOG.info("Closing database connections...")
+        if hasattr(self, "session") and self.session:
+            self.session.close()
+        if hasattr(self, "engine") and self.engine:
+            self.engine.dispose()
+        LOG.info("Database connections closed.")
+
 
 class Orderbook:
     """Table containing the orderbook data."""

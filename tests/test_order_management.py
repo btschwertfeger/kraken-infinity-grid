@@ -36,7 +36,7 @@ def strategy() -> mock.Mock:
     strategy.get_active_buy_orders = mock.Mock()
     strategy.get_active_sell_orders = mock.Mock()
     strategy.get_orders_info_with_retry = mock.Mock()
-    strategy.save_exit = mock.Mock()
+    # strategy.terminate = mock.Mock()
     strategy.dry_run = False
     strategy.max_investment = 10000
     strategy.amount_per_grid = 100
@@ -50,7 +50,7 @@ def strategy() -> mock.Mock:
     strategy.cost_decimals = 5
     strategy.ticker = mock.Mock()
     strategy.ticker.last = 50000.0
-    strategy.save_exit = sys.exit
+    strategy.terminate = sys.exit
     strategy.max_investment_reached = False
     strategy.amount_per_grid_plus_fee = strategy.amount_per_grid * (1 + strategy.fee)
     return strategy

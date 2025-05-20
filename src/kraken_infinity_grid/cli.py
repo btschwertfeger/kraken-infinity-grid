@@ -320,7 +320,7 @@ def run(ctx: Context, **kwargs: dict) -> None:
         try:
             await gridbot.run()
         except KeyboardInterrupt as exc:
-            gridbot.save_exit(
+            gridbot.terminate(
                 reason=f"Exception in top-run: {exc} {traceback.format_exc()}",
             )
             sys.exit(1)

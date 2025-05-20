@@ -260,7 +260,7 @@ class SetupManager:
             self.__update_order_book()
         except Exception as e:  # noqa: BLE001
             message = f"Exception in update_orderbook: {e}: {traceback.format_exc()}"
-            self.__s.save_exit(message)
+            self.__s.terminate(message)
 
         # Check if the configured amount per grid or the interval have changed,
         # requiring a cancellation of all open buy orders.

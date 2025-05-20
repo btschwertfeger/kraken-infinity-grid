@@ -8,6 +8,7 @@
 """Module that implements the main strategy"""
 
 import asyncio
+import signal
 import sys
 import traceback
 from contextlib import suppress
@@ -149,6 +150,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         LOG.debug("Config: %s", config)
         self.init_done: bool = False
         self.dry_run: bool = dry_run
+        self.stop_event: asyncio.Event = asyncio.Event()
 
         # Settings and config collection
         ##
@@ -246,7 +248,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             if message.get("method"):
                 if message["method"] == "subscribe" and not message["success"]:
-                    self.save_exit(
+                    self.terminate(
                         "The algorithm was not able to subscribe to selected"
                         " channels. Please check the logs.",
                     )
@@ -322,7 +324,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)
-            self.save_exit(reason=traceback.format_exc())
+            self.terminate(reason=traceback.format_exc())
 
     # ==========================================================================
 
@@ -331,6 +333,11 @@ class KrakenInfinityGridBot(SpotWSClient):
         Main function that starts the algorithm and runs it until it is
         interrupted.
         """
+
+        async def _close_all() -> None:
+            await self.close()  # Stops the websocket connections and aiohttp session
+            self.database.close()
+
         LOG.info("Starting the Kraken Infinity Grid Algorithm...")
 
         # ======================================================================
@@ -342,8 +349,8 @@ class KrakenInfinityGridBot(SpotWSClient):
         try:
             self.__check_api_keys()
         except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
-            await self.close()  # Stops the websocket connections and aiohttp session
-            self.save_exit(
+            await _close_all()
+            self.terminate(
                 (
                     "Passed API keys are invalid!"
                     if isinstance(exc, KrakenAuthenticationError)
@@ -354,11 +361,30 @@ class KrakenInfinityGridBot(SpotWSClient):
         # ======================================================================
         # Start the websocket connections and run the main function
         ##
+        def _signal_handler() -> None:
+            LOG.warning("Gracefully shutting down the algorithm... ")
+            self.stop_event.set()
+
+        # FIXME: Ensure that requests are waited for correctly
+
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _signal_handler)
+
         try:
-            await self.__main()
+            await asyncio.gather(self.__main(), self.stop_event.wait())
         except asyncio.CancelledError:
-            await self.close()  # Stops the websocket connections and aiohttp session
-            self.save_exit("The algorithm was interrupted!")
+            await _close_all()
+            self.terminate("The algorithm was interrupted!")
+        else:
+            if self.stop_event.is_set():
+                # The algorithm was interrupted by a signal
+                await _close_all()
+                self.terminate("The algorithm was shut down gracefully!")
+            else:
+                # The algorithm was interrupted by an exception
+                await _close_all()
+                self.terminate("The algorithm was interrupted by an exception!")
 
     async def __main(self: Self) -> None:
         """
@@ -405,8 +431,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         while not self.exception_occur:
             try:
                 conf = self.configuration.get()
-                now = datetime.now()
-                last_hour = now - timedelta(hours=1)
+                last_hour = (now := datetime.now()) - timedelta(hours=1)
 
                 if self.init_done and (
                     not conf["last_price_time"]
@@ -418,36 +443,36 @@ class KrakenInfinityGridBot(SpotWSClient):
 
                 if conf["last_price_time"] + timedelta(seconds=600) < now:
                     # Exit if no price update for a long time (10 minutes).
-                    self.save_exit(
+                    self.terminate(
                         reason="No price update for a long time, exit!",
                     )
 
             except (
                 Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
             ) as exc:
-                self.save_exit(
+                self.terminate(
                     reason=f"Exception in main: {exc} {traceback.format_exc()}",
                 )
 
             await asyncio.sleep(6)
+            if self.stop_event.is_set():
+                return
 
-        self.save_exit(
+        self.terminate(
             reason="The websocket connection encountered an exception!",
         )
 
-    def save_exit(self: Self, reason: str = "") -> None:
-        """Save exit triggered, saving data and exit the program."""
-        message: str = str(
-            f"❌ {self.name} ❌"
-            f"\n{self.symbol} Save exit triggered, saving data."
-            f"\nReason: {reason}",
-        )
+    def terminate(self: Self, reason: str = "", exception: bool = True) -> None:
+        """Sends a message to Telegram and exits the algorithm."""
 
-        try:
-            self.t.send_to_telegram(message=message, exception=True)
-        except Exception as exc:  # noqa: BLE001
-            LOG.warning("%s", message)
-            LOG.error("FIXME: look at this: %s: %s", exc, traceback.format_exc())
+        self.t.send_to_telegram(
+            message=str(
+                f"❌ {self.name} ❌"
+                f"\n{self.symbol} Save exit triggered, saving data."
+                f"\nReason: {reason}",
+            ),
+            exception=exception,
+        )
 
         sys.exit(1)
 

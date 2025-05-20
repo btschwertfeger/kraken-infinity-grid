@@ -559,7 +559,7 @@ class OrderManager:
             # sell. This could only happen if some orders have not being
             # processed properly, the algorithm is not in sync with the
             # exchange, or manual trades have been made during processing.
-            self.__s.save_exit(reason=message)
+            self.__s.terminate(reason=message)
         elif txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
             #       Added logging statement to monitor occurrences
@@ -832,7 +832,7 @@ class OrderManager:
             sleep(wait_time)
 
         if exit_on_fail and order_details is None:
-            self.__s.save_exit(
+            self.__s.terminate(
                 f"Failed to retrieve order info for '{txid}' after"
                 f" {max_tries} retries!",
             )
