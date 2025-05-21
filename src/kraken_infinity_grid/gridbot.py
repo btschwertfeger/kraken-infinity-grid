@@ -151,6 +151,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.init_done: bool = False
         self.dry_run: bool = dry_run
         self.stop_event: asyncio.Event = asyncio.Event()
+        self.shutdown_event: asyncio.Event = asyncio.Event()
 
         # Settings and config collection
         ##
@@ -236,8 +237,14 @@ class KrakenInfinityGridBot(SpotWSClient):
         connections by Kraken. It's the entrypoint of the incoming messages and
         calls the appropriate functions to handle the messages.
         """
+        if self.stop_event.is_set():
+            LOG.debug("Stop event is set, not processing incoming message.")
+            self.shutdown_event.set()
+            return
+
         try:
-            # =====================================================================
+
+            # ==================================================================
             # Filtering out unwanted messages
             if not isinstance(message, dict):
                 LOG.warning("Message is not a dict: %s", message)
@@ -248,13 +255,13 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             if message.get("method"):
                 if message["method"] == "subscribe" and not message["success"]:
-                    self.terminate(
+                    await self.terminate(
                         "The algorithm was not able to subscribe to selected"
                         " channels. Please check the logs.",
                     )
                 return
 
-            # =====================================================================
+            # ==================================================================
             # Initial setup
             if channel == "ticker" and not self.__ticker_channel_connected:
                 self.__ticker_channel_connected = True
@@ -324,7 +331,7 @@ class KrakenInfinityGridBot(SpotWSClient):
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)
-            self.terminate(reason=traceback.format_exc())
+            await self.terminate(reason=traceback.format_exc())
 
     # ==========================================================================
 
@@ -333,11 +340,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         Main function that starts the algorithm and runs it until it is
         interrupted.
         """
-
-        async def _close_all() -> None:
-            await self.close()  # Stops the websocket connections and aiohttp session
-            self.database.close()
-
         LOG.info("Starting the Kraken Infinity Grid Algorithm...")
 
         # ======================================================================
@@ -349,8 +351,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         try:
             self.__check_api_keys()
         except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
-            await _close_all()
-            self.terminate(
+            await self.terminate(
                 (
                     "Passed API keys are invalid!"
                     if isinstance(exc, KrakenAuthenticationError)
@@ -359,32 +360,44 @@ class KrakenInfinityGridBot(SpotWSClient):
             )
 
         # ======================================================================
-        # Start the websocket connections and run the main function
+        # Handle the shutdown signals
+        #
+        # A controlled shutdown is initiated by sending a SIGINT or SIGTERM
+        # signal to the process. Since requests and database interactions are
+        # executed synchronously, we only need to set the stop_event during
+        # on_message, ensuring no further messages are processed.
         ##
         def _signal_handler() -> None:
-            LOG.warning("Gracefully shutting down the algorithm... ")
+            LOG.warning("Initiate a controlled shutdown of the algorithm...")
             self.stop_event.set()
-
-        # FIXME: Ensure that requests are waited for correctly
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, _signal_handler)
 
+        # ======================================================================
+        # Start the websocket connections and run the main function
+        ##
         try:
             await asyncio.gather(self.__main(), self.stop_event.wait())
         except asyncio.CancelledError:
-            await _close_all()
-            self.terminate("The algorithm was interrupted!")
+            # FIXME: Check if this can still be reached
+            self.stop_event.set()
+            await asyncio.sleep(10)
+            await self.terminate("The algorithm was interrupted!")
+        except (
+            Exception  # pylint: disable=broad-exception-caught  # noqa: BLE001
+        ) as exc:
+            self.stop_event.set()
+            await asyncio.sleep(10)
+            await self.terminate(f"The algorithm was interrupted by exception: {exc}")
         else:
             if self.stop_event.is_set():
                 # The algorithm was interrupted by a signal
-                await _close_all()
-                self.terminate("The algorithm was shut down gracefully!")
-            else:
-                # The algorithm was interrupted by an exception
-                await _close_all()
-                self.terminate("The algorithm was interrupted by an exception!")
+                await self.terminate(
+                    "The algorithm was shut down successfully!",
+                    exception=False,
+                )
 
     async def __main(self: Self) -> None:
         """
@@ -443,38 +456,43 @@ class KrakenInfinityGridBot(SpotWSClient):
 
                 if conf["last_price_time"] + timedelta(seconds=600) < now:
                     # Exit if no price update for a long time (10 minutes).
-                    self.terminate(
+                    await self.terminate(
                         reason="No price update for a long time, exit!",
                     )
 
             except (
                 Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
             ) as exc:
-                self.terminate(
+                await self.terminate(
                     reason=f"Exception in main: {exc} {traceback.format_exc()}",
                 )
 
             await asyncio.sleep(6)
-            if self.stop_event.is_set():
+            if self.shutdown_event.is_set():
                 return
 
-        self.terminate(
+        await self.terminate(
             reason="The websocket connection encountered an exception!",
         )
 
-    def terminate(self: Self, reason: str = "", exception: bool = True) -> None:
-        """Sends a message to Telegram and exits the algorithm."""
+    async def terminate(self: Self, reason: str = "", exception: bool = True) -> None:
+        """
+        Handle the termination of the algorithm.
+
+        1. Stops the websocket connections and aiohttp sessions managed by the
+           python-kraken-sdk
+        2. Stops the connection to the database.
+        3. Notifies the user via Telegram about the termination.
+        4. Exits the algorithm.
+        """
+        await self.close()
+        self.database.close()
 
         self.t.send_to_telegram(
-            message=str(
-                f"❌ {self.name} ❌"
-                f"\n{self.symbol} Save exit triggered, saving data."
-                f"\nReason: {reason}",
-            ),
+            message=f"{self.name}\n{self.symbol} terminated.\nReason: {reason}",
             exception=exception,
         )
-
-        sys.exit(1)
+        sys.exit(exception)
 
     def __check_kraken_status(self: Self, tries: int = 0) -> None:
         """Checks whether the Kraken API is available."""

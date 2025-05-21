@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+from asyncio import run as asyncio_run
 from decimal import Decimal
 from time import sleep
 from typing import TYPE_CHECKING, Self
@@ -559,7 +560,7 @@ class OrderManager:
             # sell. This could only happen if some orders have not being
             # processed properly, the algorithm is not in sync with the
             # exchange, or manual trades have been made during processing.
-            self.__s.terminate(reason=message)
+            asyncio_run(self.__s.terminate(message))
         elif txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
             #       Added logging statement to monitor occurrences
@@ -832,9 +833,11 @@ class OrderManager:
             sleep(wait_time)
 
         if exit_on_fail and order_details is None:
-            self.__s.terminate(
-                f"Failed to retrieve order info for '{txid}' after"
-                f" {max_tries} retries!",
+            asyncio_run(
+                self.__s.terminate(
+                    f"Failed to retrieve order info for '{txid}' after"
+                    f" {max_tries} retries!",
+                ),
             )
 
         order_details["txid"] = txid

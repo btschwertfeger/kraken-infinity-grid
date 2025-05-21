@@ -5,7 +5,6 @@
 # https://github.com/btschwertfeger
 #
 
-import sys
 from logging import DEBUG, INFO, WARNING, basicConfig, getLogger
 from typing import Any
 
@@ -293,7 +292,6 @@ def run(ctx: Context, **kwargs: dict) -> None:
     """Run the trading algorithm using the specified options."""
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
-    import traceback  # noqa: PLC0415
 
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot  # noqa: PLC0415
 
@@ -308,7 +306,6 @@ def run(ctx: Context, **kwargs: dict) -> None:
     ctx.obj |= kwargs
 
     async def main() -> None:
-        # Instantiate the trading algorithm
         gridbot = KrakenInfinityGridBot(
             key=ctx.obj.pop("api_key"),
             secret=ctx.obj.pop("secret_key"),
@@ -316,13 +313,6 @@ def run(ctx: Context, **kwargs: dict) -> None:
             config=kwargs,
             db_config=db_config,
         )
-
-        try:
-            await gridbot.run()
-        except KeyboardInterrupt as exc:
-            gridbot.terminate(
-                reason=f"Exception in top-run: {exc} {traceback.format_exc()}",
-            )
-            sys.exit(1)
+        await gridbot.run()
 
     asyncio.run(main())

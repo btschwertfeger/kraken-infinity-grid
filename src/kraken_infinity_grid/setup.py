@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import traceback
+from asyncio import run as asyncio_run
 from logging import getLogger
 from typing import TYPE_CHECKING, Self
 
@@ -227,6 +228,8 @@ class SetupManager:
         parameters, syncing the local with the upstream orderbook, place missing
         sell orders that not get through because of e.g. "missing funds", and
         updating the orderbook.
+
+        This function must be sync, since it must block until the setup is done.
         """
         LOG.info(
             "Preparing for trading by initializing and updating local orderbook...",
@@ -259,8 +262,11 @@ class SetupManager:
         try:
             self.__update_order_book()
         except Exception as e:  # noqa: BLE001
-            message = f"Exception in update_orderbook: {e}: {traceback.format_exc()}"
-            self.__s.terminate(message)
+            asyncio_run(
+                self.__s.terminate(
+                    f"Exception in update_orderbook: {e}: {traceback.format_exc()}",
+                ),
+            )
 
         # Check if the configured amount per grid or the interval have changed,
         # requiring a cancellation of all open buy orders.

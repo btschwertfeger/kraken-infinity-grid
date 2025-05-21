@@ -26,7 +26,6 @@ from sqlalchemy import (
     desc,
     func,
     select,
-    text,
     update,
 )
 from sqlalchemy.engine.result import MappingResult
@@ -323,76 +322,6 @@ class Configuration:
                 last_price_time=datetime.now(),
                 last_telegram_update=datetime.now(),
             )
-
-    def __migrate_table(self: Self) -> None:
-        """
-        Migrate the table to the latest version.
-
-        This method may be extended to handle more complex migrations in the
-        future, for now its just a placeholder.
-        """
-        LOG.info("- Check for %s table migration...", self.__table.name)
-        any_change = False
-
-        # ======================================================================
-        # Renaming columns
-        ##
-        change_column = text(
-            "SELECT column_name FROM information_schema.columns"
-            " WHERE table_name = :table_name"
-            " AND column_name = :column_name",
-        )
-        if not self.__db.session.execute(
-            change_column,
-            {"table_name": self.__table.name, "column_name": "version"},
-        ).fetchone():
-            LOG.info(
-                "  - Adding column 'version' to %s table...",
-                self.__table.name,
-            )
-            self.__db.session.execute(
-                text(
-                    f"ALTER TABLE {self.__table.name} ADD COLUMN version VARCHAR",
-                ),
-            )
-            any_change = True
-
-        if not self.__db.session.execute(
-            change_column,
-            {"table_name": self.__table.name, "column_name": "amount_per_grid"},
-        ).fetchone():
-            LOG.info(
-                "  - Adding column 'amount_per_grid' to %s table...",
-                self.__table.name,
-            )
-            self.__db.session.execute(
-                text(
-                    f"ALTER TABLE {self.__table.name}"
-                    " ADD COLUMN amount_per_grid FLOAT",
-                ),
-            )
-            any_change = True
-
-        if not self.__db.session.execute(
-            change_column,
-            {"table_name": self.__table.name, "column_name": "interval"},
-        ).fetchone():
-            LOG.info("  - Adding column 'interval' to %s table...", self.__table.name)
-            self.__db.session.execute(
-                text(f"ALTER TABLE {self.__table.name} ADD COLUMN interval FLOAT"),
-            )
-            any_change = True
-
-        self.__db.session.execute(
-            text(
-                f"UPDATE {self.__table.name}"  # noqa: S608
-                " SET version = :version WHERE userref = :userref",
-            ),
-            {"version": version("kraken-infinity-grid"), "userref": self.__userref},
-        )
-
-        if any_change:
-            LOG.info("  - Migration of %s table successfully!", self.__table.name)
 
     def get(self: Self, filters: dict | None = None) -> dict:
         """Get configuration from the table."""
