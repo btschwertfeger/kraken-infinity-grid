@@ -599,8 +599,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     ) -> float:
         """
         Returns the order price depending on the strategy and side. Also assigns
-        a new highest buy price to configuration if there was a new highest
-        buy.
+        a new highest buy price to configuration if there was a new highest buy.
         """
         LOG.debug("Computing the order price...")
         order_price: float
@@ -651,9 +650,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     @property
     def investment(self: Self) -> float:
         """Returns the current investment based on open orders."""
-        return self.get_value_of_orders(
-            orders=self.orderbook.get_orders(),
-        )
+        return self.get_value_of_orders(orders=self.orderbook.get_orders())
 
     @property
     def max_investment_reached(self: Self) -> bool:

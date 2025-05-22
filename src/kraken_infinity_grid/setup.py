@@ -5,7 +5,12 @@
 # https://github.com/btschwertfeger
 #
 
-"""Module that implements the setup functions of the trading algorithm."""
+"""
+Module that implements the initial setup functions of the trading algorithm.
+
+The setup only runs once at the beginning of the algorithm and prepares the
+algorithm for live trading.
+"""
 
 from __future__ import annotations
 
