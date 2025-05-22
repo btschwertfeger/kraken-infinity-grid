@@ -36,7 +36,6 @@ def strategy() -> mock.Mock:
     strategy.get_active_buy_orders = mock.Mock()
     strategy.get_active_sell_orders = mock.Mock()
     strategy.get_orders_info_with_retry = mock.Mock()
-    # strategy.terminate = mock.Mock()
     strategy.dry_run = False
     strategy.max_investment = 10000
     strategy.amount_per_grid = 100
