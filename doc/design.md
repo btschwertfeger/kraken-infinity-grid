@@ -219,7 +219,8 @@ that need to be explored.
 
    Idea: Define clear interfaces
 
-   ... allowing potential usage of other exchanges
+   ... allowing potential usage of other exchanges and backtesting (instead of
+   mocking as it is currently done)
 
    ```Python
    from abc import ABC, abstractmethod
