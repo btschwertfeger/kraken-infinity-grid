@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, Self
 
 from kraken.exceptions import KrakenUnknownOrderError
 
+from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.state_machine import States
+
 if TYPE_CHECKING:
     # To avoid circular import for type checking
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
@@ -559,8 +562,10 @@ class OrderManager:
             # sell. This could only happen if some orders have not being
             # processed properly, the algorithm is not in sync with the
             # exchange, or manual trades have been made during processing.
-            self.__s.save_exit(reason=message)
-        elif txid_to_delete is not None:
+            LOG.error(message)
+            self.__s.state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(message)
+        if txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
             #       Added logging statement to monitor occurrences
             # ... This would only be the case for GridHODL and SWING, while
@@ -832,9 +837,14 @@ class OrderManager:
             sleep(wait_time)
 
         if exit_on_fail and order_details is None:
-            self.__s.save_exit(
-                f"Failed to retrieve order info for '{txid}' after"
-                f" {max_tries} retries!",
+            LOG.error(
+                "Failed to retrieve order info for '%s' after %d retries!",
+                txid,
+                max_tries,
+            )
+            self.__s.state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(
+                f"Failed to retrieve order info for '{txid}' after {max_tries} retries!",
             )
 
         order_details["txid"] = txid

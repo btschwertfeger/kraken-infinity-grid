@@ -5,13 +5,21 @@
 # https://github.com/btschwertfeger
 #
 
-"""Module that implements the setup functions of the trading algorithm."""
+"""
+Module that implements the initial setup functions of the trading algorithm.
+
+The setup only runs once at the beginning of the algorithm and prepares the
+algorithm for live trading.
+"""
 
 from __future__ import annotations
 
 import traceback
 from logging import getLogger
 from typing import TYPE_CHECKING, Self
+
+from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.state_machine import States
 
 if TYPE_CHECKING:
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
@@ -227,6 +235,8 @@ class SetupManager:
         parameters, syncing the local with the upstream orderbook, place missing
         sell orders that not get through because of e.g. "missing funds", and
         updating the orderbook.
+
+        This function must be sync, since it must block until the setup is done.
         """
         LOG.info(
             "Preparing for trading by initializing and updating local orderbook...",
@@ -258,9 +268,11 @@ class SetupManager:
 
         try:
             self.__update_order_book()
-        except Exception as e:  # noqa: BLE001
-            message = f"Exception in update_orderbook: {e}: {traceback.format_exc()}"
-            self.__s.save_exit(message)
+        except Exception as exc:
+            message = f"Exception while updating the orderbook: {exc}: {traceback.format_exc()}"
+            LOG.error(message)
+            self.__s.state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(message) from exc
 
         # Check if the configured amount per grid or the interval have changed,
         # requiring a cancellation of all open buy orders.
@@ -269,12 +281,12 @@ class SetupManager:
 
         # Everything is done, the bot is ready to trade live.
         ##
-        self.__s.is_ready_to_trade = True
+        self.__s.state_machine.facts["ready_to_trade"] = True
         LOG.info("Algorithm is ready to trade!")
 
-        # Checks if the open orders match the range and cancel if
-        # necessary. It is the heart of this algorithm and gets
-        # triggered every time the price changes.
+        # Checks if the open orders match the range and cancel if necessary. It
+        # is the heart of this algorithm and gets triggered every time the price
+        # changes.
         ##
         self.__s.om.check_price_range()
-        self.__s.init_done = True
+        self.__s.state_machine.transition_to(States.RUNNING)

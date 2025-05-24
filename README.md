@@ -421,6 +421,11 @@ current state of the algorithm via Telegram Bots (see
   Docker compose to restart the container automatically. Then the order will
   most probably be found.
 
+## Backtesting
+
+- The `tools/` directory contains some backtesting tries, but this is still to
+  be developed and not ready yet for actual backtesting activities.
+
 ---
 
 <a name="notes"></a>
