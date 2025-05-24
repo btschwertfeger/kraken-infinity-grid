@@ -36,6 +36,7 @@ from kraken_infinity_grid.database import (
 )
 from kraken_infinity_grid.order_management import OrderManager
 from kraken_infinity_grid.setup import SetupManager
+from kraken_infinity_grid.state_machine import StateMachine, States
 from kraken_infinity_grid.telegram import Telegram
 
 LOG = getLogger(__name__)
@@ -148,10 +149,15 @@ class KrakenInfinityGridBot(SpotWSClient):
             version("kraken-infinity-grid"),
         )
         LOG.debug("Config: %s", config)
-        self.init_done: bool = False
+
         self.dry_run: bool = dry_run
-        self.stop_event: asyncio.Event = asyncio.Event()
-        self.shutdown_event: asyncio.Event = asyncio.Event()
+
+        self.state_machine = StateMachine(initial_state=States.INITIALIZING)
+        self.__stop_event: asyncio.Event = asyncio.Event()
+        self.state_machine.register_callback(
+            States.SHUTDOWN_REQUESTED,
+            self.__stop_event.set,
+        )
 
         # Settings and config collection
         ##
@@ -163,9 +169,9 @@ class KrakenInfinityGridBot(SpotWSClient):
         ##
         self.interval: float = float(config["interval"])
         self.amount_per_grid: float = float(config["amount_per_grid"])
-
         self.amount_per_grid_plus_fee: float | None = config.get("fee")
 
+        self.ticker: SimpleNamespace = None
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
         self.fee: float | None = config.get("fee")
@@ -183,14 +189,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         # trade, they will be stored here and processed later.
         ##
         self.__missed_messages: list[dict] = []
-
-        # Wait for ticker to be connected before do some action
-        ##
-        self.__ticker_channel_connected: bool = False
-        self.ticker: SimpleNamespace = None
-
-        self.is_ready_to_trade: bool = False
-        self.__execution_channel_connected: bool = False
 
         # Define the Kraken clients
         ##
@@ -237,9 +235,8 @@ class KrakenInfinityGridBot(SpotWSClient):
         connections by Kraken. It's the entrypoint of the incoming messages and
         calls the appropriate functions to handle the messages.
         """
-        if self.stop_event.is_set():
-            LOG.debug("Stop event is set, not processing incoming message.")
-            self.shutdown_event.set()
+        if self.state_machine.state == States.SHUTDOWN_REQUESTED:
+            LOG.debug("Shutdown requested, not processing incoming messages.")
             return
 
         try:
@@ -263,22 +260,27 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             # ==================================================================
             # Initial setup
-            if channel == "ticker" and not self.__ticker_channel_connected:
-                self.__ticker_channel_connected = True
+            if (
+                channel == "ticker"
+                and not self.state_machine.facts["ticker_channel_connected"]
+            ):
+                self.state_machine.facts["ticker_channel_connected"] = True
                 # Set ticker the first time to have the ticker set during setup.
                 self.ticker = SimpleNamespace(last=float(message["data"][0]["last"]))
                 LOG.info("- Subscribed to ticker channel successfully!")
 
-            elif channel == "executions" and not self.__execution_channel_connected:
-                self.__execution_channel_connected = True
+            elif (
+                channel == "executions"
+                and not self.state_machine.facts["executions_channel_connected"]
+            ):
+                self.state_machine.facts["executions_channel_connected"] = True
                 LOG.info("- Subscribed to execution channel successfully!")
 
             if (
-                self.__ticker_channel_connected
-                and self.__execution_channel_connected
-                and not self.is_ready_to_trade
+                self.state_machine.facts["ticker_channel_connected"]
+                and self.state_machine.facts["executions_channel_connected"]
+                and not self.state_machine.facts["ready_to_trade"]
             ):
-                # Sets self.is_ready_to_trade to True
                 self.sm.prepare_for_trading()
 
                 # If there are any missed messages, process them now.
@@ -286,7 +288,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                     await self.on_message(msg)
                 self.__missed_messages = []
 
-            if not self.is_ready_to_trade:
+            if not self.state_machine.facts["ready_to_trade"]:
                 if channel == "executions":
                     # If the algorithm is not ready to trade, store the
                     # executions to process them later.
@@ -369,7 +371,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         ##
         def _signal_handler() -> None:
             LOG.warning("Initiate a controlled shutdown of the algorithm...")
-            self.stop_event.set()
+            self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -379,25 +381,25 @@ class KrakenInfinityGridBot(SpotWSClient):
         # Start the websocket connections and run the main function
         ##
         try:
-            await asyncio.gather(self.__main(), self.stop_event.wait())
-        except asyncio.CancelledError:
-            # FIXME: Check if this can still be reached
-            self.stop_event.set()
-            await asyncio.sleep(10)
-            await self.terminate("The algorithm was interrupted!")
+            await asyncio.gather(self.__main(), self.__stop_event.wait())
+        except asyncio.CancelledError as exc:
+            self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
+            await asyncio.sleep(5)
+            await self.terminate(f"The algorithm was interrupted: {exc}")
         except (
             Exception  # pylint: disable=broad-exception-caught  # noqa: BLE001
         ) as exc:
-            self.stop_event.set()
-            await asyncio.sleep(10)
+            self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
+            await asyncio.sleep(5)
             await self.terminate(f"The algorithm was interrupted by exception: {exc}")
-        else:
-            if self.stop_event.is_set():
-                # The algorithm was interrupted by a signal
-                await self.terminate(
-                    "The algorithm was shut down successfully!",
-                    exception=False,
-                )
+
+        if self.state_machine.state == States.SHUTDOWN_REQUESTED:
+            # The algorithm was interrupted by a signal.
+            await asyncio.sleep(5)
+            await self.terminate(
+                "The algorithm was shut down successfully!",
+                exception=False,
+            )
 
     async def __main(self: Self) -> None:
         """
@@ -446,7 +448,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                 conf = self.configuration.get()
                 last_hour = (now := datetime.now()) - timedelta(hours=1)
 
-                if self.init_done and (
+                if self.state_machine.state == States.RUNNING and (
                     not conf["last_price_time"]
                     or not conf["last_telegram_update"]
                     or conf["last_telegram_update"] < last_hour
@@ -468,14 +470,19 @@ class KrakenInfinityGridBot(SpotWSClient):
                 )
 
             await asyncio.sleep(6)
-            if self.shutdown_event.is_set():
+            if self.state_machine.state == States.SHUTDOWN_REQUESTED:
                 return
 
         await self.terminate(
             reason="The websocket connection encountered an exception!",
         )
 
-    async def terminate(self: Self, reason: str = "", exception: bool = True) -> None:
+    async def terminate(
+        self: Self,
+        reason: str = "",
+        *,
+        exception: bool = True,
+    ) -> None:
         """
         Handle the termination of the algorithm.
 

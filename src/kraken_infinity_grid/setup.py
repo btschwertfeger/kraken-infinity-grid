@@ -19,6 +19,8 @@ from asyncio import run as asyncio_run
 from logging import getLogger
 from typing import TYPE_CHECKING, Self
 
+from kraken_infinity_grid.state_machine import States
+
 if TYPE_CHECKING:
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 
@@ -280,12 +282,12 @@ class SetupManager:
 
         # Everything is done, the bot is ready to trade live.
         ##
-        self.__s.is_ready_to_trade = True
+        self.__s.state_machine.facts["ready_to_trade"] = True
         LOG.info("Algorithm is ready to trade!")
 
-        # Checks if the open orders match the range and cancel if
-        # necessary. It is the heart of this algorithm and gets
-        # triggered every time the price changes.
+        # Checks if the open orders match the range and cancel if necessary. It
+        # is the heart of this algorithm and gets triggered every time the price
+        # changes.
         ##
         self.__s.om.check_price_range()
-        self.__s.init_done = True
+        self.__s.state_machine.transition_to(States.RUNNING)
