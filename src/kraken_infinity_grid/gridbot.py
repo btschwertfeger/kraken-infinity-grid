@@ -158,6 +158,10 @@ class KrakenInfinityGridBot(SpotWSClient):
             States.SHUTDOWN_REQUESTED,
             self.__stop_event.set,
         )
+        self.state_machine.register_callback(
+            States.ERROR,
+            self.__stop_event.set,
+        )
 
         # Settings and config collection
         ##
@@ -196,18 +200,6 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.market: Market = Market(key=key, secret=secret)
         self.trade: Trade = Trade(key=key, secret=secret)
 
-        # Instantiate the algorithm's components
-        ##
-        self.om = OrderManager(strategy=self)
-        self.sm = SetupManager(strategy=self)
-        self.t = Telegram(
-            strategy=self,
-            telegram_token=config["telegram_token"],
-            telegram_chat_id=config["telegram_chat_id"],
-            exception_token=config["exception_token"],
-            exception_chat_id=config["exception_chat_id"],
-        )
-
         # Database setup
         ##
         self.database: DBConnect = DBConnect(**db_config)
@@ -226,7 +218,19 @@ class KrakenInfinityGridBot(SpotWSClient):
         )
         self.database.init_db()
 
-    async def on_message(  # noqa: C901, PLR0912
+        # Instantiate the algorithm's components
+        ##
+        self.om = OrderManager(strategy=self)
+        self.sm = SetupManager(strategy=self)
+        self.t = Telegram(
+            strategy=self,
+            telegram_token=config["telegram_token"],
+            telegram_chat_id=config["telegram_chat_id"],
+            exception_token=config["exception_token"],
+            exception_chat_id=config["exception_chat_id"],
+        )
+
+    async def on_message(  # noqa: C901, PLR0912, PLR0911
         self: Self,
         message: dict | list,
     ) -> None:
@@ -235,7 +239,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         connections by Kraken. It's the entrypoint of the incoming messages and
         calls the appropriate functions to handle the messages.
         """
-        if self.state_machine.state == States.SHUTDOWN_REQUESTED:
+        if self.state_machine.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:
             LOG.debug("Shutdown requested, not processing incoming messages.")
             return
 
@@ -252,10 +256,12 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             if message.get("method"):
                 if message["method"] == "subscribe" and not message["success"]:
-                    await self.terminate(
+                    LOG.error(
                         "The algorithm was not able to subscribe to selected"
                         " channels. Please check the logs.",
                     )
+                    self.state_machine.transition_to(States.ERROR)
+                    return
                 return
 
             # ==================================================================
@@ -333,7 +339,8 @@ class KrakenInfinityGridBot(SpotWSClient):
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)
-            await self.terminate(reason=traceback.format_exc())
+            self.state_machine.transition_to(States.ERROR)
+            return
 
     # ==========================================================================
 
@@ -381,24 +388,35 @@ class KrakenInfinityGridBot(SpotWSClient):
         # Start the websocket connections and run the main function
         ##
         try:
-            await asyncio.gather(self.__main(), self.__stop_event.wait())
+            await asyncio.wait(
+                [
+                    asyncio.create_task(self.__main()),
+                    asyncio.create_task(self.__stop_event.wait()),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
         except asyncio.CancelledError as exc:
-            self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
+            self.state_machine.transition_to(States.ERROR)
             await asyncio.sleep(5)
             await self.terminate(f"The algorithm was interrupted: {exc}")
         except (
             Exception  # pylint: disable=broad-exception-caught  # noqa: BLE001
         ) as exc:
-            self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
+            self.state_machine.transition_to(States.ERROR)
             await asyncio.sleep(5)
             await self.terminate(f"The algorithm was interrupted by exception: {exc}")
 
+        await asyncio.sleep(5)
+
         if self.state_machine.state == States.SHUTDOWN_REQUESTED:
             # The algorithm was interrupted by a signal.
-            await asyncio.sleep(5)
             await self.terminate(
                 "The algorithm was shut down successfully!",
                 exception=False,
+            )
+        elif self.state_machine.state == States.ERROR:
+            await self.terminate(
+                "The algorithm was shut down due to an error!",
             )
 
     async def __main(self: Self) -> None:
@@ -458,24 +476,21 @@ class KrakenInfinityGridBot(SpotWSClient):
 
                 if conf["last_price_time"] + timedelta(seconds=600) < now:
                     # Exit if no price update for a long time (10 minutes).
-                    await self.terminate(
-                        reason="No price update for a long time, exit!",
-                    )
+                    LOG.error("No price update for a long time, exiting!")
+                    self.state_machine.transition_to(States.ERROR)
+                    return
 
             except (
                 Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
             ) as exc:
-                await self.terminate(
-                    reason=f"Exception in main: {exc} {traceback.format_exc()}",
-                )
-
-            await asyncio.sleep(6)
-            if self.state_machine.state == States.SHUTDOWN_REQUESTED:
+                LOG.error("Exception in main.", exc_info=exc)
+                self.state_machine.transition_to(States.ERROR)
                 return
 
-        await self.terminate(
-            reason="The websocket connection encountered an exception!",
-        )
+            await asyncio.sleep(6)
+
+        LOG.error("The websocket connection encountered an exception!")
+        self.state_machine.transition_to(States.ERROR)
 
     async def terminate(
         self: Self,

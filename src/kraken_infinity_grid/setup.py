@@ -15,10 +15,10 @@ algorithm for live trading.
 from __future__ import annotations
 
 import traceback
-from asyncio import run as asyncio_run
 from logging import getLogger
 from typing import TYPE_CHECKING, Self
 
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.state_machine import States
 
 if TYPE_CHECKING:
@@ -268,12 +268,11 @@ class SetupManager:
 
         try:
             self.__update_order_book()
-        except Exception as e:  # noqa: BLE001
-            asyncio_run(
-                self.__s.terminate(
-                    f"Exception in update_orderbook: {e}: {traceback.format_exc()}",
-                ),
-            )
+        except Exception as exc:
+            message = f"Exception while updating the orderbook: {exc}: {traceback.format_exc()}"
+            LOG.error(message)
+            self.__s.state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(message) from exc
 
         # Check if the configured amount per grid or the interval have changed,
         # requiring a cancellation of all open buy orders.
