@@ -69,7 +69,7 @@ class OrderManager:
         was added to the orderbook, the algorithm will handle any removals in
         case of closed orders.
         """
-        LOG.info("Processing '%s' ...", txid)
+        LOG.info("Processing order '%s' ...", txid)
         order_details = self.get_orders_info_with_retry(txid=txid)
         LOG.debug("- Order information: %s", order_details)
 
@@ -91,7 +91,7 @@ class OrderManager:
             LOG.info("Updated order '%s' in orderbook.", order_details["txid"])
 
         LOG.info(
-            "Current invested value: %f / %d %s",
+            "Current investment: %f / %d %s",
             self.__s.investment,
             self.__s.max_investment,
             self.__s.quote_currency,
@@ -170,7 +170,7 @@ class OrderManager:
 
                 self.handle_arbitrage(side="buy", order_price=order_price)
                 buy_prices = list(self.__s.get_current_buy_prices())
-                LOG.info("Length of active buy orders: %s", n_active_buy_orders + 1)
+                LOG.debug("Length of active buy orders: %s", n_active_buy_orders + 1)
             else:
                 LOG.warning("Not enough quote currency available to place buy order!")
                 can_place_buy_order = False
