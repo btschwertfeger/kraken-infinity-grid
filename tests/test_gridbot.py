@@ -18,6 +18,7 @@ from kraken_infinity_grid.database import Configuration, Orderbook, UnsoldBuyOrd
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 from kraken_infinity_grid.order_management import OrderManager
 from kraken_infinity_grid.setup import SetupManager
+from kraken_infinity_grid.state_machine import States
 from kraken_infinity_grid.telegram import Telegram
 
 
@@ -255,8 +256,8 @@ async def test_on_message_failing_subscribe(
     instance: KrakenInfinityGridBot,
 ) -> None:
     """Test the on_message method failing in case subscribing fails."""
-    with pytest.raises(SystemExit):
-        await instance.on_message({"method": "subscribe", "success": False})
+    await instance.on_message({"method": "subscribe", "success": False})
+    assert instance.state_machine.state == States.ERROR
 
 
 @pytest.mark.asyncio
