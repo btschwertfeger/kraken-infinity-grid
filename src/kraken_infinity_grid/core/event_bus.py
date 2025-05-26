@@ -6,14 +6,17 @@
 #
 
 
-from typing import Callable, Any
 from dataclasses import dataclass
+from typing import Any, Callable
+
 
 @dataclass
 class Event:
     """Base event class"""
+
     type: str
     data: dict[str, Any]
+
 
 class EventBus:
     """Central event bus for communication between components"""

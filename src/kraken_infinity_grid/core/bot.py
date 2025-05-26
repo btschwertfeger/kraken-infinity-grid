@@ -5,16 +5,11 @@
 # https://github.com/btschwertfeger
 #
 
+from typing import Any
+import asyncio
+import signal
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine
-from kraken_infinity_grid.strategies import (
-    CDCAStrategy,
-    GridHodlStrategy,
-    GridSellStrategy,
-    SwingStrategy,
-)
-from typing import Any
-
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     DBConnect,
@@ -23,6 +18,21 @@ from kraken_infinity_grid.infrastructure.database import (
     UnsoldBuyOrderTXIDs,
 )
 from kraken_infinity_grid.services import OrderbookService
+from kraken_infinity_grid.strategies import (
+    CDCAStrategy,
+    GridHodlStrategy,
+    GridSellStrategy,
+    SwingStrategy,
+)
+from logging import getLogger
+from kraken_infinity_grid.core.state_machine import States
+from importlib.metadata import version
+
+from typing import Self
+import sys
+
+LOG = getLogger(__name__)
+
 
 class InfinityGridBot:
     """
@@ -31,54 +41,59 @@ class InfinityGridBot:
     """
 
     def __init__(self, config: dict, db_config: dict, dry_run: bool = False):
-        self.event_bus = EventBus()
-        self.state_machine = StateMachine()
+        LOG.info(
+            "Initiate the Kraken Infinity Grid Algorithm instance (v%s)",
+            version("kraken-infinity-grid"),
+        )
+        LOG.debug("Config: %s", config)
+
+        self.__event_bus = EventBus()
+        self.__state_machine = StateMachine()
+        self.__config = config
+        self.__userref: int = config["userref"]
+        self.dry_run: bool = dry_run
 
         # == Infrastructure components =========================================
         ##
-        self.db: DBConnect = DBConnect(**db_config)
-        self.orderbook: Orderbook = Orderbook(userref=self.userref, db=self.db)
-        self.configuration: Configuration = Configuration(
-            userref=self.userref,
-            db=self.db,
+        self.__db = DBConnect(**db_config)
+        self.__orderbook = Orderbook(userref=self.__userref, db=self.__db)
+        self.configuration = Configuration(userref=self.__userref, db=self.__db)
+        self.__pending_txids = PendingTXIDs(userref=self.__userref, db=self.__db)
+        self.__unsold_buy_order_txids = UnsoldBuyOrderTXIDs(
+            userref=self.__userref,
+            db=self.__db,
         )
-        self.pending_txids: PendingTXIDs = PendingTXIDs(
-            userref=self.userref,
-            db=self.db,
-        )
-        self.unsold_buy_order_txids: UnsoldBuyOrderTXIDs = UnsoldBuyOrderTXIDs(
-            userref=self.userref,
-            db=self.db,
-        )
-        self.db.init_db()
+        self.__db.init_db()
 
-        exchange_services = self._exchange_factory(
+        exchange_services = self.__exchange_factory(
             config["exchange"],
             config["api_key"],
             config["api_secret"],
-            event_bus=self.event_bus,
-            state_machine=self.state_machine,
+            event_bus=self.__event_bus,
+            state_machine=self.__state_machine,
         )
         self.rest_api = exchange_services["REST"]
         self.ws_client = exchange_services["websocket"]
-        self.orderbook_service = OrderbookService(
-            rest_api=self.rest_api,
-            event_bus=self.event_bus,
-            state_machine=self.state_machine,
-            orderbook=self.orderbook,
-            pending_txids=self.pending_txids,
-            unsold_buy_order_txids=self.unsold_buy_order_txids,
-        )
 
         # == Application services ==============================================
         ##
+        self.orderbook_service = OrderbookService(
+            config=config,
+            rest_api=self.rest_api,
+            event_bus=self.__event_bus,
+            state_machine=self.__state_machine,
+            orderbook=self.__orderbook,
+            pending_txids=self.__pending_txids,
+            unsold_buy_order_txids=self.__unsold_buy_order_txids,
+        )
+
         # Create the appropriate strategy based on config
-        self.strategy = self._strategy_factory(config, self.state_machine)
+        self.strategy = self.__strategy_factory(config, self.__state_machine)
 
         # Setup event subscriptions
-        self._setup_event_handlers()
+        self.__setup_event_handlers()
 
-    def _strategy_factory(self, config: dict, state_machine: StateMachine) -> Any:
+    def __strategy_factory(self, config: dict, state_machine: StateMachine) -> Any:
         if (strategy_type := config["strategy"]) not in (
             strategies := {
                 "SWING": SwingStrategy,
@@ -93,14 +108,10 @@ class InfinityGridBot:
             state_machine=state_machine,
             rest_api=self.rest_api,
             orderbook_service=self.orderbook_service,
-            event_bus=self.event_bus,
-            # config=self.configuration,
-            # orderbook=self.orderbook,
-            # pending_txids=self.pending_txids,
-            # unsold_buy_order_txids=self.unsold_buy_order_txids,
+            event_bus=self.__event_bus,
         )
 
-    def _exchange_factory(
+    def __exchange_factory(
         self,
         exchange: str,
         api_key: str,
@@ -110,15 +121,15 @@ class InfinityGridBot:
     ) -> dict:
         """Create the exchange service based on the configuration."""
         if exchange == "Kraken":
-            from kraken_infinity_grid.adapters.exchanges.kraken import (
-                KrakenExchangeServiceAdapter,
+            from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel
+                KrakenExchangeRESTServiceAdapter,
                 KrakenExchangeWebsocketServiceAdapter,
-                OrderbookServiceAdapter,
             )
 
             return {
-                "REST": KrakenExchangeServiceAdapter(
-                    api_key=api_key, api_secret=api_secret, event_bus=event_bus
+                "REST": KrakenExchangeRESTServiceAdapter(
+                    api_key=api_key,
+                    api_secret=api_secret,
                 ),
                 "websocket": KrakenExchangeWebsocketServiceAdapter(
                     api_key=api_key,
@@ -126,32 +137,131 @@ class InfinityGridBot:
                     state_machine=state_machine,
                     event_bus=event_bus,
                 ),
-                "orderbook_service": OrderbookServiceAdapter(event_bus=event_bus),
             }
-        else:
-            raise ValueError(f"Unsupported exchange: {exchange}")
+        raise ValueError(f"Unsupported exchange: {exchange}")
 
-    def _setup_event_handlers(self):
+    def __setup_event_handlers(self):
         # Subscribe to events
-        self.event_bus.subscribe("ticker_update", self.strategy.on_ticker_update)
-        self.event_bus.subscribe("order_filled", self.strategy.on_order_filled)
-        self.event_bus.subscribe("order_canceled", self.strategy.on_order_canceled)
-        # etc.
+        self.__event_bus.subscribe(
+            "prepare_for_trading", self.strategy.prepare_for_trading
+        )
+        self.__event_bus.subscribe("ticker_update", self.strategy.on_ticker_update)
+        self.__event_bus.subscribe("order_placed", self.strategy.on_order_placed)
+        self.__event_bus.subscribe("order_filled", self.strategy.on_order_filled)
+        self.__event_bus.subscribe("order_cancelled", self.strategy.on_order_cancelled)
 
     async def run(self):
         """Start the bot"""
-        # Handle signals
-        self._setup_signal_handlers()
 
-        # Start components
-        await self.ws_client.connect()
+        # ======================================================================
+        # Handle the shutdown signals
+        #
+        # A controlled shutdown is initiated by sending a SIGINT or SIGTERM
+        # signal to the process. Since requests and database interactions are
+        # executed synchronously, we only need to set the stop_event during
+        # on_message, ensuring no further messages are processed.
+        ##
+        def _signal_handler() -> None:
+            LOG.warning("Initiate a controlled shutdown of the algorithm...")
+            self.__state_machine.transition_to(States.SHUTDOWN_REQUESTED)
 
-        # Subscribe to channels
-        await self.ws_client.subscribe_ticker(self.config_service.symbol)
-        await self.ws_client.subscribe_executions()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _signal_handler)
+
+        # ======================================================================
+        # FIXME: API key verification is required here
+
+        # ======================================================================
+        # Start the websocket connection
+        ##
+        LOG.info("Starting the websocket connection...")
+        await self.ws_client.start()
+        LOG.info("Websocket connection established!")
+
+        # ======================================================================
+        # Subscribe to the execution and ticker channels
+        ##
+        LOG.info("Subscribing to channels...")
+        subscriptions = {
+            "Kraken": [
+                {
+                    "channel": "ticker",
+                    "symbol": [
+                        f"{self.__config['base_currency']}/{self.__config['quote_currency']}"
+                    ],
+                },
+                {
+                    "channel": "executions",
+                    # Snapshots are only required to check if the channel is
+                    # connected. They are not used for any other purpose.
+                    "snap_orders": True,
+                    "snap_trades": True,
+                },
+            ]
+        }
+        for subscription in subscriptions[self.__config["exchange"]]:
+            self.ws_client.subscribe(subscription)
 
         # Wait for shutdown
-        await self.state_machine.wait_for_shutdown()
+        await self.__state_machine.wait_for_shutdown()
+
+        # ======================================================================
+        # Start the websocket connections and run the main function
+        ##
+        try:
+            await asyncio.wait(
+                [
+                    asyncio.create_task(self.__main()),
+                    asyncio.create_task(self.__stop_event.wait()),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        except asyncio.CancelledError as exc:
+            self.__state_machine.transition_to(States.ERROR)
+            await asyncio.sleep(5)
+            await self.terminate(f"The algorithm was interrupted: {exc}")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            self.__state_machine.transition_to(States.ERROR)
+            await asyncio.sleep(5)
+            await self.terminate(f"The algorithm was interrupted by exception: {exc}")
+
+        await asyncio.sleep(5)
+
+        if self.__state_machine.state == States.SHUTDOWN_REQUESTED:
+            # The algorithm was interrupted by a signal.
+            await self.terminate(
+                "The algorithm was shut down successfully!",
+                exception=False,
+            )
+        elif self.__state_machine.state == States.ERROR:
+            await self.terminate(
+                "The algorithm was shut down due to an error!",
+            )
+
+    async def terminate(
+        self: Self,
+        reason: str = "",
+        *,
+        exception: bool = True,
+    ) -> None:
+        """
+        Handle the termination of the algorithm.
+
+        1. Stops the websocket connections and aiohttp sessions managed by the
+           python-kraken-sdk
+        2. Stops the connection to the database.
+        3. Notifies the user via Telegram about the termination.
+        4. Exits the algorithm.
+        """
+        await self.ws_client.close()
+        self.__db.close()
+
+        self.t.send_to_telegram(
+            message=f"{self.name}\n{self.symbol} terminated.\nReason: {reason}",
+            exception=exception,
+        )
+        sys.exit(exception)
 
 
 # """Module that implements the main strategy"""
@@ -379,118 +489,6 @@ class InfinityGridBot:
 #             exception_chat_id=config["exception_chat_id"],
 #         )
 
-#     async def on_message(  # noqa: C901, PLR0912, PLR0911
-#         self: Self,
-#         message: dict | list,
-#     ) -> None:
-#         """
-#         This function receives all messages that are sent via the websocket
-#         connections by Kraken. It's the entrypoint of the incoming messages and
-#         calls the appropriate functions to handle the messages.
-#         """
-#         if self.state_machine.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:
-#             LOG.debug("Shutdown requested, not processing incoming messages.")
-#             return
-
-#         try:
-
-#             # ==================================================================
-#             # Filtering out unwanted messages
-#             if not isinstance(message, dict):
-#                 LOG.warning("Message is not a dict: %s", message)
-#                 return
-
-#             if (channel := message.get("channel")) in {"heartbeat", "status"}:
-#                 return
-
-#             if message.get("method"):
-#                 if message["method"] == "subscribe" and not message["success"]:
-#                     LOG.error(
-#                         "The algorithm was not able to subscribe to selected"
-#                         " channels. Please check the logs.",
-#                     )
-#                     self.state_machine.transition_to(States.ERROR)
-#                     return
-#                 return
-
-#             # ==================================================================
-#             # Initial setup
-#             if (
-#                 channel == "ticker"
-#                 and not self.state_machine.facts["ticker_channel_connected"]
-#             ):
-#                 self.state_machine.facts["ticker_channel_connected"] = True
-#                 # Set ticker the first time to have the ticker set during setup.
-#                 self.ticker = SimpleNamespace(last=float(message["data"][0]["last"]))
-#                 LOG.info("- Subscribed to ticker channel successfully!")
-
-#             elif (
-#                 channel == "executions"
-#                 and not self.state_machine.facts["executions_channel_connected"]
-#             ):
-#                 self.state_machine.facts["executions_channel_connected"] = True
-#                 LOG.info("- Subscribed to execution channel successfully!")
-
-#             if (
-#                 self.state_machine.facts["ticker_channel_connected"]
-#                 and self.state_machine.facts["executions_channel_connected"]
-#                 and not self.state_machine.facts["ready_to_trade"]
-#             ):
-#                 self.sm.prepare_for_trading()
-
-#                 # If there are any missed messages, process them now.
-#                 for msg in self.__missed_messages:
-#                     await self.on_message(msg)
-#                 self.__missed_messages = []
-
-#             if not self.state_machine.facts["ready_to_trade"]:
-#                 if channel == "executions":
-#                     # If the algorithm is not ready to trade, store the
-#                     # executions to process them later.
-#                     self.__missed_messages.append(message)
-
-#                 # Return here, until the algorithm is ready to trade. It is
-#                 # ready when the init/setup is done and the orderbook is
-#                 # updated.
-#                 return
-
-#             # =====================================================================
-#             # Handle ticker and execution messages
-
-#             if (
-#                 channel == "ticker"
-#                 and (data := message.get("data"))
-#                 and data[0].get("symbol") == self.symbol
-#             ):
-#                 self.configuration.update({"last_price_time": datetime.now()})
-
-#                 self.ticker = SimpleNamespace(last=float(data[0]["last"]))
-#                 if self.unsold_buy_order_txids.count() != 0:
-#                     self.om.add_missed_sell_orders()
-
-#                 self.om.check_price_range()
-
-#             elif channel == "executions" and (data := message.get("data", [])):
-#                 if message.get("type") == "snapshot":
-#                     # Snapshot data is not interesting, as this is handled
-#                     # during sync with upstream.
-#                     return
-
-#                 for execution in data:
-#                     LOG.debug("Got execution: %s", execution)
-#                     match execution["exec_type"]:
-#                         case "new":
-#                             self.om.assign_order_by_txid(execution["order_id"])
-#                         case "filled":
-#                             self.om.handle_filled_order_event(execution["order_id"])
-#                         case "canceled" | "expired":
-#                             self.om.handle_cancel_order(execution["order_id"])
-
-#         except Exception as exc:  # noqa: BLE001
-#             LOG.error(msg="Exception while processing message.", exc_info=exc)
-#             self.state_machine.transition_to(States.ERROR)
-#             return
-
 #     # ==========================================================================
 
 #     async def run(self: Self) -> None:
@@ -549,7 +547,7 @@ class InfinityGridBot:
 #             await asyncio.sleep(5)
 #             await self.terminate(f"The algorithm was interrupted: {exc}")
 #         except (
-#             Exception  # pylint: disable=broad-exception-caught  # noqa: BLE001
+#             Exception  # pylint: disable=broad-exception-caught
 #         ) as exc:
 #             self.state_machine.transition_to(States.ERROR)
 #             await asyncio.sleep(5)
@@ -630,7 +628,7 @@ class InfinityGridBot:
 #                     return
 
 #             except (
-#                 Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
+#                 Exception  # pylint: disable=broad-exception-caught
 #             ) as exc:
 #                 LOG.error("Exception in main.", exc_info=exc)
 #                 self.state_machine.transition_to(States.ERROR)
@@ -641,29 +639,6 @@ class InfinityGridBot:
 #         LOG.error("The websocket connection encountered an exception!")
 #         self.state_machine.transition_to(States.ERROR)
 
-#     async def terminate(
-#         self: Self,
-#         reason: str = "",
-#         *,
-#         exception: bool = True,
-#     ) -> None:
-#         """
-#         Handle the termination of the algorithm.
-
-#         1. Stops the websocket connections and aiohttp sessions managed by the
-#            python-kraken-sdk
-#         2. Stops the connection to the database.
-#         3. Notifies the user via Telegram about the termination.
-#         4. Exits the algorithm.
-#         """
-#         await self.close()
-#         self.database.close()
-
-#         self.t.send_to_telegram(
-#             message=f"{self.name}\n{self.symbol} terminated.\nReason: {reason}",
-#             exception=exception,
-#         )
-#         sys.exit(exception)
 
 #     def __check_kraken_status(self: Self, tries: int = 0) -> None:
 #         """Checks whether the Kraken API is available."""
@@ -674,7 +649,7 @@ class InfinityGridBot:
 #             self.market.get_system_status()
 #             LOG.info("- Kraken Exchange API Status: Available")
 #         except (
-#             Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
+#             Exception  # pylint: disable=broad-exception-caught
 #         ) as exc:
 #             LOG.debug(
 #                 "Exception while checking Kraken availability {exc} {traceback}",
@@ -727,51 +702,3 @@ class InfinityGridBot:
 #     # ======================================================================
 #     # Helper Functions
 #     ##
-
-#     def get_order_price(
-#         self: Self,
-#         side: str,
-#         last_price: float,
-#         extra_sell: Optional[bool] = False,
-#     ) -> float:
-#         """
-#         Returns the order price depending on the strategy and side. Also assigns
-#         a new highest buy price to configuration if there was a new highest buy.
-#         """
-#         LOG.debug("Computing the order price...")
-#         order_price: float
-#         price_of_highest_buy = self.configuration.get()["price_of_highest_buy"]
-#         last_price = float(last_price)
-
-#         if side == "sell":  # New order is a sell
-#             if self.strategy == "SWING" and extra_sell:
-#                 # Extra sell order when SWING
-#                 # 2x interval above [last close price | price of highest buy]
-#                 order_price = last_price * (1 + self.interval) * (1 + self.interval)
-#                 if order_price < price_of_highest_buy:
-#                     order_price = (
-#                         price_of_highest_buy * (1 + self.interval) * (1 + self.interval)
-#                     )
-
-#             else:
-#                 # Regular sell order (even for SWING) (cDCA will trigger this
-#                 # but it will be filtered out later)
-#                 if last_price > price_of_highest_buy:
-#                     self.configuration.update(
-#                         {"price_of_highest_buy": last_price},
-#                     )
-
-#                 # Sell price 1x interval above buy price
-#                 order_price = last_price * (1 + self.interval)
-#                 if self.ticker.last > order_price:
-#                     order_price = self.ticker.last * (1 + self.interval)
-#             return order_price
-
-#         if side == "buy":  # New order is a buy
-#             order_price = last_price * 100 / (100 + 100 * self.interval)
-#             if order_price > self.ticker.last:
-#                 order_price = self.ticker.last * 100 / (100 + 100 * self.interval)
-#             return order_price
-
-#         raise ValueError(f"Unknown side: {side}!")
-

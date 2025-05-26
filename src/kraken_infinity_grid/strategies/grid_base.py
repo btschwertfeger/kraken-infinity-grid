@@ -10,14 +10,15 @@ from kraken_infinity_grid.interfaces.interfaces import IStrategy
 from kraken_infinity_grid.interfaces.interfaces import IExchangeRESTService
 from kraken.exceptions import KrakenUnknownOrderError
 from decimal import Decimal
-# from kraken_infinity_grid.infrastructure.database import (
-#     Orderbook,
-#     PendingTxids,
-#     UnsoldBuyOrderTxids,
-#     Configuration,
-# )
+from kraken_infinity_grid.infrastructure.database import (
+    Orderbook,
+    PendingTXIDs,
+    UnsoldBuyOrderTXIDs,
+    Configuration,
+)
 from kraken_infinity_grid.core.event_bus import Event
-from typing import SimpleNamespace, Self
+from typing import Self
+from types import SimpleNamespace
 from datetime import datetime
 from logging import getLogger
 from kraken_infinity_grid.core.state_machine import StateMachine, States
@@ -32,33 +33,59 @@ class IGridBaseStrategy(IStrategy):
 
     def __init__(
         self,
+        config: dict,  # FIXME: this should be a dataclass or a more structured type
         rest_api: IExchangeRESTService,
         orderbook_service: OrderbookService,
         event_bus: EventBus,
         state_machine: StateMachine,
-        # config: Configuration,
-        # orderbook: Orderbook,
-        # pending_txids: PendingTxids,
-        # unsold_buy_order_txids: UnsoldBuyOrderTxids,
+        configuration_table: Configuration,
+        orderbook_table: Orderbook,
+        pending_txids_table: PendingTXIDs,
+        unsold_buy_order_txids_table: UnsoldBuyOrderTXIDs,
     ) -> None:
+        self._config = config
         self._rest_api = rest_api
         self._event_bus = event_bus
         self._orderbook_service = orderbook_service
         self._state_machine = state_machine
-        # self._config = config
-        # self._orderbook = orderbook
-        # self._pending_txids = pending_txids
-        # self._unsold_buy_order_txids = unsold_buy_order_txids
+        self._configuration_table = configuration_table
+        self._orderbook_table = orderbook_table
+        self._pending_txids_table = pending_txids_table
+        self._unsold_buy_order_txids_table = unsold_buy_order_txids_table
+        self._ticker: SimpleNamespace = None
 
+
+    # ==========================================================================
+    ## Event handlers
     def on_ticker_update(self, event: Event) -> None:
-        self._config.update({"last_price_time": datetime.now()})
+        self._ticker = SimpleNamespace(last=event.data["last"])
+        self._configuration_table.update({"last_price_time": datetime.now()})
 
-        self.ticker = SimpleNamespace(last=event.data["last"])
-        if self.unsold_buy_order_txids.count() != 0:
-            self.om.add_missed_sell_orders()
+        # FIXME: only if init done
+        if self._state_machine.state == States.RUNNING:
+            if self._unsold_buy_order_txids_table.count() != 0:
+                self._orderbook_service.add_missed_sell_orders()
 
-        self.om.check_price_range()
+            self.check_price_range()
 
+    def on_order_placed(self, event: Event) -> None:
+        LOG.debug("Got order_placed event: %s", event.data)
+        self._orderbook_service.assign_order_by_txid(txid=event.data["order_id"])
+
+    def on_order_filled(self, event: Event) -> None:
+        LOG.debug("Got order_filled event: %s", event.data)
+        self._orderbook_service.handle_filled_order_event(event.data["order_id"])
+
+    def on_order_cancelled(self, event: Event) -> None:
+        LOG.debug("Got order_cancelled event: %s", event.data)
+        self._orderbook_service.handle_cancel_order(event.data["order_id"])
+
+
+    def on_prepare_for_trading(self, event: Event) -> None:
+        pass
+
+    # ==========================================================================
+    ## Stuff
     def check_price_range(self: Self) -> None:
         """
         Checks if the orders prices match the conditions of the bot respecting
@@ -68,13 +95,13 @@ class IGridBaseStrategy(IStrategy):
         will be canceled and new buy orders below the price respecting the
         interval will be placed.
         """
-        if self.__s.dry_run:
+        if self._config["dry_run"]:
             LOG.debug("Dry run, not checking price range.")
             return
 
         LOG.debug("Check conditions for upgrading the grid...")
 
-        if self.__check_pending_txids():
+        if self._orderbook_service.check_pending_txids():
             LOG.debug("Not checking price range because of pending txids.")
             return
 
@@ -86,7 +113,7 @@ class IGridBaseStrategy(IStrategy):
 
         # Return if some newly placed order is still pending and not in the
         # orderbook.
-        if self._pending_txids.count() != 0:
+        if self._pending_txids_table.count() != 0:
             return
 
         # Check if there are more than n buy orders and cancel the lowest
@@ -97,7 +124,7 @@ class IGridBaseStrategy(IStrategy):
             return
 
         # Place extra sell order (only for SWING strategy)
-        self.__check_extra_sell_order()
+        self._check_extra_sell_order()
 
     def __check_near_buy_orders(self: Self) -> None:
         """
@@ -110,16 +137,19 @@ class IGridBaseStrategy(IStrategy):
         """
         LOG.debug("Checking if distance between buy orders is too low...")
 
-        if len(buy_prices := list(self.get_current_buy_prices())) == 0:
+        if (
+            len(buy_prices := list(self._orderbook_service.get_current_buy_prices()))
+            == 0
+        ):
             return
 
         buy_prices.sort(reverse=True)
         for i, price in enumerate(buy_prices[1:]):
             if (
                 price == buy_prices[i]
-                or (buy_prices[i] / price) - 1 < self.__s.interval / 2
+                or (buy_prices[i] / price) - 1 < self._config["interval"] / 2
             ):
-                for order in self._orderbook.get_orders(filters={"side": "buy"}):
+                for order in self._orderbook_table.get_orders(filters={"side": "buy"}):
                     if order["price"] == buy_prices[i]:
                         self.handle_cancel_order(txid=order["txid"])
                         break
@@ -130,31 +160,35 @@ class IGridBaseStrategy(IStrategy):
         """
         LOG.debug(
             "Checking if there are %d open buy orders...",
-            self.__s.n_open_buy_orders,
+            self._config["n_open_buy_orders"],
         )
         can_place_buy_order: bool = True
-        buy_prices: list[float] = list(self.get_current_buy_prices())
+        buy_prices: list[float] = list(self._orderbook_service.get_current_buy_prices())
 
         while (
-            (n_active_buy_orders := self._orderbook.count(filters={"side": "buy"}))
-            < self.__s.n_open_buy_orders
+            (
+                n_active_buy_orders := self._orderbook_table.count(
+                    filters={"side": "buy"}
+                )
+            )
+            < self._config["n_open_buy_orders"]
             and can_place_buy_order
-            and self._pending_txids.count() == 0
-            and not self.__s.max_investment_reached
+            and self._pending_txids_table.count() == 0
+            and not self._config["max_investment_reached"]
         ):
-            fetched_balances: dict[str, float] = self.__s.get_balances()
+            fetched_balances: dict[str, float] = self._orderbook_service.get_balances()
             if fetched_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
-                order_price: float = self.__s.get_order_price(
+                order_price: float = self._get_order_price(
                     side="buy",
                     last_price=(
-                        self.__s.ticker.last
+                        self._ticker.last
                         if n_active_buy_orders == 0
                         else min(buy_prices)
                     ),
                 )
 
                 self.handle_arbitrage(side="buy", order_price=order_price)
-                buy_prices = list(self.get_current_buy_prices())
+                buy_prices = list(self._orderbook_service.get_current_buy_prices())
                 LOG.debug("Length of active buy orders: %s", n_active_buy_orders + 1)
             else:
                 LOG.warning("Not enough quote currency available to place buy order!")
@@ -169,11 +203,11 @@ class IGridBaseStrategy(IStrategy):
 
         if (
             n_to_cancel := (
-                self._orderbook.count(filters={"side": "buy"})
-                - self.__s.n_open_buy_orders
+                self._orderbook_table.count(filters={"side": "buy"})
+                - self._config["n_open_buy_orders"]
             )
         ) > 0:
-            for order in self._orderbook.get_orders(
+            for order in self._orderbook_table.get_orders(
                 filters={"side": "buy"},
                 order_by=("price", "asc"),
                 limit=n_to_cancel,
@@ -192,49 +226,23 @@ class IGridBaseStrategy(IStrategy):
         LOG.debug("Checking if buy orders need to be shifted up...")
 
         if (
-            max_buy_order := self._orderbook.get_orders(
+            max_buy_order := self._orderbook_table.get_orders(
                 filters={"side": "buy"},
                 order_by=("price", "desc"),
                 limit=1,
             ).first()  # type: ignore[no-untyped-call]
         ) and (
-            self.__s.ticker.last
+            self._ticker.last
             > max_buy_order["price"]
-            * (1 + self.__s.interval)
-            * (1 + self.__s.interval)
+            * (1 + self._config["interval"])
+            * (1 + self._config["interval"])
             * 1.001
         ):
-            self.cancel_all_open_buy_orders()
+            self._orderbook_service.cancel_all_open_buy_orders()
             self.check_price_range()
             return True
 
         return False
-
-    def __check_extra_sell_order(self: Self) -> None:
-        """
-        Checks if an extra sell order can be placed. This only applies for the
-        SWING strategy.
-        """
-        if self.__s.strategy != "SWING":
-            return
-
-        LOG.debug("Checking if extra sell order can be placed...")
-        if self._orderbook.count(filters={"side": "sell"}) == 0:
-            fetched_balances = self.__s.get_balances()
-
-            if (
-                fetched_balances["base_available"] * self.__s.ticker.last
-                > self.__s.amount_per_grid_plus_fee
-            ):
-                order_price = self.__s.get_order_price(
-                    side="sell",
-                    last_price=self.__s.ticker.last,
-                    extra_sell=True,
-                )
-                self.__s.t.send_to_telegram(
-                    f"ℹ️ {self.__s.symbol}: Placing extra sell order",  # noqa: RUF001
-                )
-                self.handle_arbitrage(side="sell", order_price=order_price)
 
     def handle_arbitrage(
         self: Self,
@@ -256,7 +264,7 @@ class IGridBaseStrategy(IStrategy):
             txid_to_delete,
         )
 
-        if self.__s.dry_run:
+        if self._config["dry_run"]:
             LOG.info("Dry run, not placing %s order.", side)
             return
 
@@ -266,7 +274,7 @@ class IGridBaseStrategy(IStrategy):
                 txid_to_delete=txid_to_delete,
             )
         elif side == "sell":
-            self.new_sell_order(
+            self._new_sell_order(
                 order_price=order_price,
                 txid_to_delete=txid_to_delete,
             )
@@ -280,24 +288,27 @@ class IGridBaseStrategy(IStrategy):
         txid_to_delete: str | None = None,
     ) -> None:
         """Places a new buy order."""
-        if self.__s.dry_run:
+        if self._config["dry_run"]:
             LOG.info("Dry run, not placing buy order.")
             return
 
         if txid_to_delete is not None:
-            self._orderbook.remove(filters={"txid": txid_to_delete})
+            self._orderbook_table.remove(filters={"txid": txid_to_delete})
 
-        if self._orderbook.count(filters={"side": "buy"}) >= self.__s.n_open_buy_orders:
+        if (
+            self._orderbook_table.count(filters={"side": "buy"})
+            >= self._config["n_open_buy_orders"]
+        ):
             # Don't place new buy orders if there are already enough
             return
 
         # Check if algorithm reached the max_investment value
-        if self.__s.max_investment_reached:
+        if self._config["max_investment_reached"]:
             return
 
         # Compute the target price for the upcoming buy order.
         order_price = float(
-            self.__s.trade.truncate(
+            self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
                 pair=self.__s.symbol,
@@ -307,8 +318,8 @@ class IGridBaseStrategy(IStrategy):
         # Compute the target volume for the upcoming buy order.
         # NOTE: The fee is respected while placing the sell order
         volume = float(
-            self.__s.trade.truncate(
-                amount=Decimal(self.__s.amount_per_grid) / Decimal(order_price),
+            self._rest_api.truncate(
+                amount=Decimal(self._config["amount_per_grid"]) / Decimal(order_price),
                 amount_type="volume",
                 pair=self.__s.symbol,
             ),
@@ -316,208 +327,46 @@ class IGridBaseStrategy(IStrategy):
 
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
-        current_balances = self.__s.get_balances()
+        current_balances = self._orderbook_service.get_balances()
         if current_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
                 volume,
-                self.__s.base_currency,
+                self._config["base_currency"],
                 order_price,
-                self.__s.quote_currency,
+                self._config["quote_currency"],
             )
 
             # Place a new buy order, append txid to pending list and delete
             # corresponding sell order from local orderbook.
-            placed_order = self.__s.trade.create_order(
+            placed_order = self._rest_api.create_order(
                 ordertype="limit",
                 side="buy",
                 volume=volume,
                 pair=self.__s.symbol,
                 price=order_price,
-                userref=self.__s.userref,
-                validate=self.__s.dry_run,
+                userref=self._config["userref"],
+                validate=self._config["dry_run"],
                 oflags="post",  # post-only buy orders
             )
 
-            self._pending_txids.add(placed_order["txid"][0])
-            self.__s.om.assign_order_by_txid(placed_order["txid"][0])
+            self._pending_txids_table.add(placed_order["txid"][0])
+            self._orderbook_service.om.assign_order_by_txid(placed_order["txid"][0])
             return
 
         # ======================================================================
         # Not enough available funds to place a buy order.
         message = f"⚠️ {self.__s.symbol}"
-        message += f"├ Not enough {self.__s.quote_currency}"
-        message += f"├ to buy {volume} {self.__s.base_currency}"
-        message += f"└ for {order_price} {self.__s.quote_currency}"
+        message += f"├ Not enough {self._config['quote_currency']}"
+        message += f"├ to buy {volume} {self._config['base_currency']}"
+        message += f"└ for {order_price} {self._config['quote_currency']}"
         self.__s.t.send_to_telegram(message)
         LOG.warning("Current balances: %s", current_balances)
         return
 
-    def new_sell_order(  # noqa: C901
-        self: Self,
-        order_price: float,
-        txid_to_delete: str | None = None,
-    ) -> None:
-        """Places a new sell order."""
-        if self.__s.dry_run:
-            LOG.info("Dry run, not placing sell order.")
-            return
-
-        if self.__s.strategy == "cDCA":
-            LOG.debug("cDCA strategy, not placing sell order.")
-            if txid_to_delete is not None:
-                self._orderbook.remove(filters={"txid": txid_to_delete})
-            return
-
-        LOG.debug("Check conditions for placing a sell order...")
-
-        # ======================================================================
-        volume: float | None = None
-        if txid_to_delete is not None:  # If corresponding buy order filled
-            # GridSell always has txid_to_delete set.
-
-            # Add the txid of the corresponding buy order to the unsold buy
-            # order txids in order to ensure that the corresponding sell order
-            # will be placed - even if placing now fails.
-            if not self._unsold_buy_order_txids.get(
-                filters={"txid": txid_to_delete},
-            ).first():  # type: ignore[no-untyped-call]
-                self._unsold_buy_order_txids.add(
-                    txid=txid_to_delete,
-                    price=order_price,
-                )
-
-            # ==================================================================
-            # Get the corresponding buy order in order to retrieve the volume.
-            corresponding_buy_order = self.get_orders_info_with_retry(
-                txid=txid_to_delete,
-            )
-
-            # In some cases the corresponding buy order is not closed yet and
-            # the vol_exec is missing. In this case, the function will be
-            # called again after a short delay.
-            if (
-                corresponding_buy_order["status"] != "closed"
-                or corresponding_buy_order["vol_exec"] == 0
-            ):
-                LOG.warning(
-                    "Can't place sell order, since the corresponding buy order"
-                    " is not closed yet. Retry in 1 second. (order: %s)",
-                    corresponding_buy_order,
-                )
-                sleep(1)
-                self.__s.om.new_sell_order(
-                    order_price=order_price,
-                    txid_to_delete=txid_to_delete,
-                )
-                return
-
-            if self.__s.strategy == "GridSell":
-                # Volume of a GridSell is fixed to the executed volume of the
-                # buy order.
-                volume = float(
-                    self.__s.trade.truncate(
-                        amount=float(corresponding_buy_order["vol_exec"]),
-                        amount_type="volume",
-                        pair=self.__s.symbol,
-                    ),
-                )
-
-        order_price = float(
-            self.__s.trade.truncate(
-                amount=order_price,
-                amount_type="price",
-                pair=self.__s.symbol,
-            ),
-        )
-
-        if self.__s.strategy in {"GridHODL", "SWING"} or (
-            self.__s.strategy == "GridSell" and volume is None
-        ):
-            # For GridSell: This is only the case if there is no corresponding
-            # buy order and the sell order was placed, e.g. due to an extra sell
-            # order via selling of partially filled buy orders.
-
-            # Respect the fee to not reduce the quote currency over time, while
-            # accumulating the base currency.
-            volume = float(
-                self.__s.trade.truncate(
-                    amount=Decimal(self.__s.amount_per_grid)
-                    / (Decimal(order_price) * (1 - (2 * Decimal(self.__s.fee)))),
-                    amount_type="volume",
-                    pair=self.__s.symbol,
-                ),
-            )
-
-        # ======================================================================
-        # Check if there is enough base currency available for selling.
-        fetched_balances = self.__s.get_balances()
-        if fetched_balances["base_available"] >= volume:
-            # Place new sell order, append id to pending list, and delete
-            # corresponding buy order from local orderbook.
-            LOG.info(
-                "Placing order to sell %s %s @ %s %s.",
-                volume,
-                self.__s.base_currency,
-                order_price,
-                self.__s.quote_currency,
-            )
-
-            placed_order = self.__s.trade.create_order(
-                ordertype="limit",
-                side="sell",
-                volume=volume,
-                pair=self.__s.symbol,
-                price=order_price,
-                userref=self.__s.userref,
-                validate=self.__s.dry_run,
-            )
-
-            placed_order_txid = placed_order["txid"][0]
-            self._pending_txids.add(placed_order_txid)
-
-            if txid_to_delete is not None:
-                # Other than with buy orders, we can only delete the
-                # corresponding buy order if the sell order was placed.
-                self._orderbook.remove(filters={"txid": txid_to_delete})
-                self._unsold_buy_order_txids.remove(txid=txid_to_delete)
-
-            self.__s.om.assign_order_by_txid(txid=placed_order_txid)
-            return
-
-        # ======================================================================
-        # Not enough funds to sell
-        message = f"⚠️ {self.__s.symbol}"
-        message += f"├ Not enough {self.__s.base_currency}"
-        message += f"├ to sell {volume} {self.__s.base_currency}"
-        message += f"└ for {order_price} {self.__s.quote_currency}"
-
-        self.__s.t.send_to_telegram(message)
-        LOG.warning("Current balances: %s", fetched_balances)
-
-        if self.__s.strategy == "GridSell":
-            # Restart the algorithm if there is not enough base currency to
-            # sell. This could only happen if some orders have not being
-            # processed properly, the algorithm is not in sync with the
-            # exchange, or manual trades have been made during processing.
-            LOG.error(message)
-            self.__s.state_machine.transition_to(States.ERROR)
-            raise GridBotStateError(message)
-        if txid_to_delete is not None:
-            # TODO: Check if this is appropriate or not
-            #       Added logging statement to monitor occurrences
-            # ... This would only be the case for GridHODL and SWING, while
-            # those should always have enough base currency available... but
-            # lets check this for a while.
-            LOG.warning(
-                "TODO: Not enough funds to place sell order for txid %s",
-                txid_to_delete,
-            )
-            self._orderbook.remove(filters={"txid": txid_to_delete})
-
     def handle_filled_order_event(
         self: Self,
-        txid: str,
+        txid: str
     ) -> None:
         """
         Gets triggered by a filled order event from the ``on_message`` function.
@@ -532,14 +381,14 @@ class IGridBaseStrategy(IStrategy):
         # ======================================================================
         # Fetch the order details for the given txid.
         ##
-        order_details = self.get_orders_info_with_retry(txid=txid)
+        order_details = self._orderbook_service.get_orders_info_with_retry(txid=txid)
 
         # ======================================================================
         # Check if the order belongs to this bot and return if not
         ##
         if (
             order_details["descr"]["pair"] != self.__s.altname
-            or order_details["userref"] != self.__s.userref
+            or order_details["userref"] != self._config["userref"]
         ):
             LOG.debug(
                 "Filled order %s was not from this bot or pair.",
@@ -552,7 +401,7 @@ class IGridBaseStrategy(IStrategy):
         ##
         tries = 1
         while order_details["status"] != "closed" and tries <= 3:
-            order_details = self.get_orders_info_with_retry(
+            order_details = self._orderbook_service.get_orders_info_with_retry(
                 txid=txid,
                 exit_on_fail=False,
             )
@@ -576,7 +425,7 @@ class IGridBaseStrategy(IStrategy):
             return
 
         # ======================================================================
-        if self.__s.dry_run:
+        if self._config["dry_run"]:
             LOG.info("Dry run, not handling filled order event.")
             return
 
@@ -588,9 +437,9 @@ class IGridBaseStrategy(IStrategy):
                 f"✅ {self.__s.symbol}: "
                 f"{order_details['descr']['type'][0].upper()}{order_details['descr']['type'][1:]} "
                 "order executed"
-                f"\n ├ Price » {order_details['descr']['price']} {self.__s.quote_currency}"
-                f"\n ├ Size » {order_details['vol_exec']} {self.__s.base_currency}"
-                f"\n └ Size in {self.__s.quote_currency} » "
+                f"\n ├ Price » {order_details['descr']['price']} {self._config['quote_currency']}"
+                f"\n ├ Size » {order_details['vol_exec']} {self._config['base_currency']}"
+                f"\n └ Size in {self._config['quote_currency']} » "
                 f"{round(float(order_details['descr']['price']) * float(order_details['vol_exec']), self.__s.cost_decimals)}",
             ),
         )
@@ -601,7 +450,7 @@ class IGridBaseStrategy(IStrategy):
         if order_details["descr"]["type"] == "buy":
             self.handle_arbitrage(
                 side="sell",
-                order_price=self.__s.get_order_price(
+                order_price=self._get_order_price(
                     side="sell",
                     last_price=float(order_details["descr"]["price"]),
                 ),
@@ -612,7 +461,10 @@ class IGridBaseStrategy(IStrategy):
         # Create a buy order for the executed sell order.
         ##
         elif (
-            self._orderbook.count(filters={"side": "sell"}, exclude={"txid": txid}) != 0
+            self._orderbook_table.count(
+                filters={"side": "sell"}, exclude={"txid": txid}
+            )
+            != 0
         ):
             # A new buy order will only be placed if there is another sell
             # order, because if the last sell order was filled, the price is so
@@ -620,7 +472,7 @@ class IGridBaseStrategy(IStrategy):
             # orders will be placed in ``check_price_range`` during shift-up.
             self.handle_arbitrage(
                 side="buy",
-                order_price=self.__s.get_order_price(
+                order_price=self._get_order_price(
                     side="buy",
                     last_price=float(order_details["descr"]["price"]),
                 ),
@@ -628,7 +480,7 @@ class IGridBaseStrategy(IStrategy):
             )
         else:
             # Remove filled order from list of all orders
-            self._orderbook.remove(filters={"txid": txid})
+            self._orderbook_table.remove(filters={"txid": txid})
 
     def handle_cancel_order(self: Self, txid: str) -> None:
         """
@@ -648,32 +500,32 @@ class IGridBaseStrategy(IStrategy):
         the orderbook.
 
         """
-        if self._orderbook.count(filters={"txid": txid}) == 0:
+        if self._orderbook_table.count(filters={"txid": txid}) == 0:
             return
 
-        order_details = self.get_orders_info_with_retry(txid=txid)
+        order_details = self._orderbook_service.get_orders_info_with_retry(txid=txid)
 
         if (
             order_details["descr"]["pair"] != self.__s.altname
-            or order_details["userref"] != self.__s.userref
+            or order_details["userref"] != self._config["userref"]
         ):
             return
 
-        if self.__s.dry_run:
+        if self._config["dry_run"]:
             LOG.info("DRY RUN: Not cancelling order: %s", txid)
             return
 
         LOG.info("Cancelling order: '%s'", txid)
 
         try:
-            self.__s.trade.cancel_order(txid=txid)
+            self._rest_api.cancel_order(txid=txid)
         except KrakenUnknownOrderError:
             LOG.info(
                 "Order '%s' is already closed. Removing from orderbook...",
                 txid,
             )
 
-        self._orderbook.remove(filters={"txid": txid})
+        self._orderbook_table.remove(filters={"txid": txid})
 
         # Check if the order has some vol_exec to sell
         ##
@@ -682,7 +534,7 @@ class IGridBaseStrategy(IStrategy):
                 "Order '%s' is partly filled - saving those funds.",
                 txid,
             )
-            b = self.__s.configuration.get()
+            b = self._configuration_table.get()
 
             # Add vol_exec to remaining funds
             updates = {
@@ -699,16 +551,16 @@ class IGridBaseStrategy(IStrategy):
                         order_details["descr"]["price"],
                     ),
                 }
-            self.__s.configuration.update(updates)
+            self._configuration_table.update(updates)
 
             # Sell remaining funds if there is enough to place a sell order.
             # Its not perfect but good enough. (Some funds may still be
             # stuck) - but better than nothing.
-            b = self.__s.configuration.get()
+            b = self._configuration_table.get()
             if (
                 b["vol_of_unfilled_remaining"]
                 * b["vol_of_unfilled_remaining_max_price"]
-                >= self.__s.amount_per_grid
+                >= self._config["amount_per_grid"]
             ):
                 LOG.info(
                     "Collected enough funds via partly filled buy orders to"
@@ -716,14 +568,49 @@ class IGridBaseStrategy(IStrategy):
                 )
                 self.handle_arbitrage(
                     side="sell",
-                    order_price=self.__s.get_order_price(
+                    order_price=self._get_order_price(
                         side="sell",
                         last_price=b["vol_of_unfilled_remaining_max_price"],
                     ),
                 )
-                self.__s.configuration.update(  # Reset the remaining funds
+                self._configuration_table.update(  # Reset the remaining funds
                     {
                         "vol_of_unfilled_remaining": 0,
                         "vol_of_unfilled_remaining_max_price": 0,
                     },
                 )
+    @abstractmethod
+    def _get_order_price(
+        self,
+        side: str,
+        last_price: float,
+        extra_sell: bool = False,
+    ) -> float:  # pragma: no cover
+        """
+        Returns the order price for the next buy or sell order.
+
+        This method should be implemented by the concrete strategy classes.
+        """
+        raise NotImplementedError("This method should be implemented by subclasses.")
+
+    @abstractmethod
+    def _check_extra_sell_order(self: Self) -> None:
+        """
+        Checks if an extra sell order can be placed. This only applies for the
+        SWING strategy.
+        """
+        raise NotImplementedError("This method should be implemented by subclasses.")
+
+    @abstractmethod
+    def _new_sell_order(
+        self: Self,
+        order_price: float,
+        txid_to_delete: str | None = None,
+    ) -> None:
+        """
+        Places a new sell order.
+
+        This method should be implemented by the concrete strategy classes.
+        """
+        raise NotImplementedError("This method should be implemented by subclasses.")
+

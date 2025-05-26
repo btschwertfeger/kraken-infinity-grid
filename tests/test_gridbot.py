@@ -14,12 +14,16 @@ import pytest
 import pytest_asyncio
 from kraken.spot import Market, Trade, User
 
-from kraken_infinity_grid.infrastructure.database import Configuration, Orderbook, UnsoldBuyOrderTXIDs
 from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
+from kraken_infinity_grid.core.state_machine import States
+from kraken_infinity_grid.infrastructure.database import (
+    Configuration,
+    Orderbook,
+    UnsoldBuyOrderTXIDs,
+)
+from kraken_infinity_grid.infrastructure.telegram import Telegram
 from kraken_infinity_grid.order_management import OrderManager
 from kraken_infinity_grid.setup import SetupManager
-from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.infrastructure.telegram import Telegram
 
 
 @pytest.fixture

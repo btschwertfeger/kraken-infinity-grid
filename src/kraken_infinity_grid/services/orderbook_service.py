@@ -5,16 +5,14 @@
 # https://github.com/btschwertfeger
 #
 
-from logging import getLogger
-
-
-
-from typing import Self, Iterable
-from kraken_infinity_grid.core.event_bus import EventBus
-from time import sleep
 from decimal import Decimal
+from logging import getLogger
+from time import sleep
+from typing import Iterable, Self
+
+from kraken_infinity_grid.core.event_bus import EventBus
+from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import GridBotStateError
-from kraken_infinity_grid.core.state_machine import States, StateMachine
 from kraken_infinity_grid.infrastructure.database import (
     Orderbook,
     PendingTxids,
@@ -29,6 +27,7 @@ class OrderbookService:
 
     def __init__(
         self,
+        config: dict,
         rest_api,
         event_bus: EventBus,
         state_machine: StateMachine,
@@ -36,6 +35,11 @@ class OrderbookService:
         pending_txids: PendingTxids,
         unsold_buy_order_txids: UnsoldBuyOrderTxids,
     ) -> None:
+        self.__userref = config["userref"]
+        self.__quote_currency = config["quote_currency"]
+        self.__base_currency = config["base_currency"]
+        self.__max_investment = config["max_investment"]
+
         self._rest_api = rest_api
         self._event_bus = event_bus
         self._state_machine = state_machine
@@ -102,9 +106,9 @@ class OrderbookService:
 
         LOG.info(
             "Current investment: %f / %d %s",
-            self.__s.investment,
-            self.__s.max_investment,
-            self.__s.quote_currency,
+            self.investment,
+            self.__max_investment,
+            self.__quote_currency,
         )
 
     def get_current_buy_prices(self: Self) -> Iterable[float]:
@@ -131,8 +135,8 @@ class OrderbookService:
     def max_investment_reached(self: Self) -> bool:
         """Returns True if the maximum investment is reached."""
         return (
-            self.max_investment <= self.investment + self.amount_per_grid_plus_fee
-        ) or (self.max_investment <= self.investment)
+            self.__max_investment <= self.investment + self.amount_per_grid_plus_fee
+        ) or (self.__max_investment <= self.investment)
 
     def get_balances(self: Self) -> dict[str, float]:
         """
@@ -167,7 +171,7 @@ class OrderbookService:
     #            C H E C K - P R I C E - R A N G E
     # ==========================================================================
 
-    def __check_pending_txids(self: Self) -> bool:
+    def check_pending_txids(self: Self) -> bool:
         """
         Skip checking the price range, because first all missing orders
         must be assigned. Otherwise this could lead to double trades.
@@ -189,7 +193,7 @@ class OrderbookService:
         """
         LOG.info("Cancelling all open buy orders...")
         for txid, order in self._rest_api.get_open_orders(
-            userref=self.__s.userref,
+            userref=self.__userref,
         )["open"].items():
             if (
                 order["descr"]["type"] == "buy"

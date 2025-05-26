@@ -12,10 +12,10 @@ from unittest import mock
 
 import pytest
 
-from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
-from kraken_infinity_grid.order_management import OrderManager
 from kraken_infinity_grid.core.state_machine import StateMachine, States
+from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.order_management import OrderManager
 
 
 @pytest.fixture

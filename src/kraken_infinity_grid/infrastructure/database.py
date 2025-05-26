@@ -286,7 +286,7 @@ class Configuration:
             Column("id", Integer, primary_key=True),
             Column("userref", Integer, nullable=False),
             Column(
-                "version", # FIXME: This never gets updated
+                "version",  # FIXME: This never gets updated
                 String,
                 nullable=False,
                 default=version("kraken-infinity-grid"),

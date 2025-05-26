@@ -6,8 +6,12 @@
 #
 
 from kraken_infinity_grid.interfaces.interfaces import (
-    IOrderbookService,
-    IStrategy,
-    IExchangeRESTService,
-    IExchangeWebsocketService,
+    IExchangeRESTService as IExchangeRESTService,
 )
+from kraken_infinity_grid.interfaces.interfaces import (
+    IExchangeWebsocketService as IExchangeWebsocketService,
+)
+from kraken_infinity_grid.interfaces.interfaces import (
+    IOrderbookService as IOrderbookService,
+)
+from kraken_infinity_grid.interfaces.interfaces import IStrategy as IStrategy

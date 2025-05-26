@@ -14,15 +14,14 @@ FIXME: Add comprehensive examples and documentation for each method.
 from abc import ABC, abstractmethod
 from typing import Any
 
-from kraken_infinity_grid.core.event_bus import EventBus
+from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine
 from kraken_infinity_grid.infrastructure.database import (
+    Configuration,
     Orderbook,
     PendingTxids,
     UnsoldBuyOrderTxids,
-    Configuration,
 )
-from kraken_infinity_grid.core.event_bus import Event
 
 
 class IExchangeRESTService(ABC):
@@ -94,16 +93,18 @@ class IExchangeWebsocketService(ABC):
         """Start the websocket connection."""
 
     @abstractmethod
-    async def subscribe(self, params: dict[str, Any]) -> None:
-        """Subscribe to a specific channel and pair."""
-
-    @abstractmethod
     async def close(self) -> None:
         """Close the websocket connection."""
 
     @abstractmethod
+    async def subscribe(self, params: dict[str, Any]) -> None:
+        """Subscribe to a specific channel and pair."""
+
+    @abstractmethod
     async def on_message(
-        self, message: dict[str, Any], **kwargs: dict[str, Any]
+        self,__on_message
+        message: dict[str, Any],
+        **kwargs: dict[str, Any],
     ) -> None:
         """Handle incoming messages from the websocket."""
 
@@ -127,14 +128,11 @@ class IStrategy(ABC):
     @abstractmethod
     def on_ticker_update(self, event: Event) -> None:
         """Handle ticker updates from the exchange."""
-        pass
 
     @abstractmethod
     def on_order_filled(self, event: Event) -> None:
         """Handle order filled events."""
-        pass
 
     @abstractmethod
     def on_order_canceled(self, event: Event) -> None:
         """Handle order canceled events."""
-        pass
