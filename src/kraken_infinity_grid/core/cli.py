@@ -153,6 +153,12 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     """,
 )
 @option(
+    "--exchange",
+    type=Choice(choices=("Kraken",), case_sensitive=True),
+    help="The exchange to trade on.",
+    required=True,
+)
+@option(
     "--base-currency",
     required=True,
     type=STRING,
@@ -293,7 +299,7 @@ def run(ctx: Context, **kwargs: dict) -> None:
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
 
-    from kraken_infinity_grid.gridbot import KrakenInfinityGridBot  # noqa: PLC0415
+    from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot  # noqa: PLC0415
 
     db_config = {
         "sqlite_file": kwargs.pop("sqlite_file"),

@@ -286,7 +286,7 @@ class Configuration:
             Column("id", Integer, primary_key=True),
             Column("userref", Integer, nullable=False),
             Column(
-                "version",
+                "version", # FIXME: This never gets updated
                 String,
                 nullable=False,
                 default=version("kraken-infinity-grid"),
@@ -434,7 +434,7 @@ class UnsoldBuyOrderTXIDs:
         return self.__db.session.execute(query).scalar()  # type: ignore[no-any-return]
 
 
-class PendingIXIDs:
+class PendingTXIDs:
     """
     Table containing pending TXIDs. TXIDs are pending for the time from being
     placed to processed by Kraken. Usually an order gets placed, the TXID is

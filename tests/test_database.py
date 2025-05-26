@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from kraken_infinity_grid.database import (
+from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     DBConnect,
     Orderbook,
-    PendingIXIDs,
+    PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
 
@@ -54,9 +54,9 @@ def unsold_buy_order_txids(db_connect: DBConnect) -> UnsoldBuyOrderTXIDs:
 
 
 @pytest.fixture
-def pending_txids(db_connect: DBConnect) -> PendingIXIDs:
+def pending_txids(db_connect: DBConnect) -> PendingTXIDs:
     """Fixture to create a PendingIXIDs instance for testing."""
-    pending_txids = PendingIXIDs(userref=123456789, db=db_connect)
+    pending_txids = PendingTXIDs(userref=123456789, db=db_connect)
     db_connect.init_db()
     return pending_txids
 
@@ -274,7 +274,7 @@ def test_unsold_buy_order_txids_count(
 
 
 def test_pending_txids_add(
-    pending_txids: PendingIXIDs,
+    pending_txids: PendingTXIDs,
     db_connect: DBConnect,
 ) -> None:
     """Test adding a pending txid to the table."""
@@ -287,7 +287,7 @@ def test_pending_txids_add(
 
 
 def test_pending_txids_remove(
-    pending_txids: PendingIXIDs,
+    pending_txids: PendingTXIDs,
     db_connect: DBConnect,
 ) -> None:
     """Test removing a pending txid from the table."""
@@ -300,14 +300,14 @@ def test_pending_txids_remove(
     assert result.fetchone() is None
 
 
-def test_pending_txids_get(pending_txids: PendingIXIDs) -> None:
+def test_pending_txids_get(pending_txids: PendingTXIDs) -> None:
     """Test getting pending txids from the table."""
     pending_txids.add(txid="txid1")
     result = pending_txids.get(filters={"txid": "txid1"})
     assert result.fetchone()["txid"] == "txid1"
 
 
-def test_pending_txids_count(pending_txids: PendingIXIDs) -> None:
+def test_pending_txids_count(pending_txids: PendingTXIDs) -> None:
     """Test counting pending txids from the table."""
     pending_txids.add(txid="txid1")
     count = pending_txids.count()

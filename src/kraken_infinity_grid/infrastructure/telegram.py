@@ -13,7 +13,7 @@ import requests
 
 if TYPE_CHECKING:
 
-    from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
+    from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 
 LOG = getLogger(__name__)
 

@@ -19,10 +19,10 @@ from logging import getLogger
 from typing import TYPE_CHECKING, Self
 
 from kraken_infinity_grid.exceptions import GridBotStateError
-from kraken_infinity_grid.state_machine import States
+from kraken_infinity_grid.core.state_machine import States
 
 if TYPE_CHECKING:
-    from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
+    from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 
 LOG = getLogger(__name__)
 

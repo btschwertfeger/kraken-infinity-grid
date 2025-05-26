@@ -5,7 +5,11 @@
 # https://github.com/btschwertfeger
 #
 
-"""State machine for the Kraken Infinity Grid trading bot."""
+"""
+State machine for the Kraken Infinity Grid trading bot.
+
+FIXME: This state machine may work for Kraken, but not for other exchanges.
+"""
 
 from enum import Enum, auto
 from typing import Callable, Self

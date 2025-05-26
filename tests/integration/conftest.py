@@ -11,7 +11,7 @@ from unittest import mock
 import pytest_asyncio
 from kraken.spot import Market
 
-from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
+from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 
 from .helper import KrakenAPI
 
