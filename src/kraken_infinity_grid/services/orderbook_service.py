@@ -15,8 +15,8 @@ from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.infrastructure.database import (
     Orderbook,
-    PendingTxids,
-    UnsoldBuyOrderTxids,
+    PendingTXIDs,
+    UnsoldBuyOrderTXIDs,
 )
 
 LOG = getLogger(__name__)
@@ -31,9 +31,9 @@ class OrderbookService:
         rest_api,
         event_bus: EventBus,
         state_machine: StateMachine,
-        orderbook: Orderbook,
-        pending_txids: PendingTxids,
-        unsold_buy_order_txids: UnsoldBuyOrderTxids,
+        orderbook_table: Orderbook,
+        pending_txids_table: PendingTXIDs,
+        unsold_buy_order_txids_table: UnsoldBuyOrderTXIDs,
     ) -> None:
         self.__userref = config["userref"]
         self.__quote_currency = config["quote_currency"]
@@ -43,27 +43,11 @@ class OrderbookService:
         self._rest_api = rest_api
         self._event_bus = event_bus
         self._state_machine = state_machine
-        self._orderbook = orderbook
-        self._pending_txids = pending_txids
-        self._unsold_buy_order_txids = unsold_buy_order_txids
+        self._orderbook = orderbook_table
+        self._pending_txids = pending_txids_table
+        self._unsold_buy_order_txids = unsold_buy_order_txids_table
 
-    def add_missed_sell_orders(self: Self) -> None:
-        """
-        This functions can create sell orders in case there is at least one
-        executed buy order that is missing its sell order.
 
-        Missed sell orders came into place when a buy was executed and placing
-        the sell failed. An entry to the missed sell order id table is added
-        right before placing a sell order.
-        """
-        LOG.info("- Create sell orders based on unsold buy orders...")
-        for entry in self._unsold_buy_order_txids.get():
-            LOG.info("  - %s", entry)
-            self.handle_arbitrage(
-                side="sell",
-                order_price=entry["price"],
-                txid_to_delete=entry["txid"],
-            )
 
     def assign_all_pending_transactions(self: Self) -> None:
         """Assign all pending transactions to the orderbook."""

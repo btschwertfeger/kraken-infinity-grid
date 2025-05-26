@@ -30,7 +30,7 @@ from importlib.metadata import version
 
 from typing import Self
 import sys
-
+from datetime import datetime, timedelta
 LOG = getLogger(__name__)
 
 
@@ -56,10 +56,10 @@ class InfinityGridBot:
         # == Infrastructure components =========================================
         ##
         self.__db = DBConnect(**db_config)
-        self.__orderbook = Orderbook(userref=self.__userref, db=self.__db)
-        self.configuration = Configuration(userref=self.__userref, db=self.__db)
-        self.__pending_txids = PendingTXIDs(userref=self.__userref, db=self.__db)
-        self.__unsold_buy_order_txids = UnsoldBuyOrderTXIDs(
+        self.__orderbook_table = Orderbook(userref=self.__userref, db=self.__db)
+        self.__configuration_table = Configuration(userref=self.__userref, db=self.__db)
+        self.__pending_txids_table = PendingTXIDs(userref=self.__userref, db=self.__db)
+        self.__unsold_buy_order_txids_table = UnsoldBuyOrderTXIDs(
             userref=self.__userref,
             db=self.__db,
         )
@@ -82,9 +82,9 @@ class InfinityGridBot:
             rest_api=self.rest_api,
             event_bus=self.__event_bus,
             state_machine=self.__state_machine,
-            orderbook=self.__orderbook,
-            pending_txids=self.__pending_txids,
-            unsold_buy_order_txids=self.__unsold_buy_order_txids,
+            orderbook_table=self.__orderbook_table,
+            pending_txids_table=self.__pending_txids_table,
+            unsold_buy_order_txids_table=self.__unsold_buy_order_txids_table,
         )
 
         # Create the appropriate strategy based on config
@@ -203,17 +203,18 @@ class InfinityGridBot:
         for subscription in subscriptions[self.__config["exchange"]]:
             self.ws_client.subscribe(subscription)
 
-        # Wait for shutdown
-        await self.__state_machine.wait_for_shutdown()
+        # Set this initially in case the DB contains a value that is too old.
+        # FIXME: self.configuration.update({"last_price_time": datetime.now()})
 
         # ======================================================================
         # Start the websocket connections and run the main function
         ##
         try:
+            # Wait for shutdown
             await asyncio.wait(
                 [
-                    asyncio.create_task(self.__main()),
-                    asyncio.create_task(self.__stop_event.wait()),
+                    asyncio.create_task(self.__notification_loop()),
+                    asyncio.create_task(self.__state_machine.wait_for_shutdown()),
                 ],
                 return_when=asyncio.FIRST_COMPLETED,
             )
@@ -238,6 +239,35 @@ class InfinityGridBot:
             await self.terminate(
                 "The algorithm was shut down due to an error!",
             )
+
+    async def __notification_loop(self: Self) -> None:
+        while True:
+            try:
+                conf = self.__configuration_table.get()
+                last_hour = (now := datetime.now()) - timedelta(hours=1)
+
+                if self.__state_machine.state == States.RUNNING and (
+                    not conf["last_price_time"]
+                    or not conf["last_telegram_update"]
+                    or conf["last_telegram_update"] < last_hour
+                ):
+                    # Send update once per hour to Telegram
+                    self.t.send_telegram_update()
+
+                if conf["last_price_time"] + timedelta(seconds=600) < now:
+                    # Exit if no price update for a long time (10 minutes).
+                    LOG.error("No price update for a long time, exiting!")
+                    self.__state_machine.transition_to(States.ERROR)
+                    return
+
+            except (
+                Exception  # pylint: disable=broad-exception-caught
+            ) as exc:
+                LOG.error("Exception in main.", exc_info=exc)
+                self.__state_machine.transition_to(States.ERROR)
+                return
+
+            await asyncio.sleep(6)
 
     async def terminate(
         self: Self,
@@ -565,79 +595,6 @@ class InfinityGridBot:
 #             await self.terminate(
 #                 "The algorithm was shut down due to an error!",
 #             )
-
-#     async def __main(self: Self) -> None:
-#         """
-#         Main function that runs the algorithm. It subscribes to the ticker and
-#         execution channels and runs the main loop until the algorithm is
-#         interrupted.
-#         """
-
-#         # ======================================================================
-#         # Start the websocket connection
-#         ##
-#         LOG.info("Starting the websocket connection...")
-#         await self.start()
-#         LOG.info("Websocket connection established!")
-
-#         # ======================================================================
-#         # Subscribe to the execution and ticker channels
-#         ##
-#         LOG.info("Subscribing to channels...")
-#         await self.subscribe(
-#             params={
-#                 "channel": "ticker",
-#                 "symbol": [f"{self.base_currency}/{self.quote_currency}"],
-#             },
-#         )
-#         await self.subscribe(
-#             {
-#                 "channel": "executions",
-#                 # Snapshots are only required to check if the channel is
-#                 # connected. They are not used for any other purpose.
-#                 "snap_orders": True,
-#                 "snap_trades": True,
-#             },
-#         )
-
-#         # Set this initially in case the DB contains a value that is too old.
-#         self.configuration.update({"last_price_time": datetime.now()})
-
-#         # ======================================================================
-#         # Main Loop: Run until interruption
-#         ##
-#         # 'self.exception_occur' is how the python-kraken-sdk notifies about
-#         # exceptions in the websocket connection.
-#         while not self.exception_occur:
-#             try:
-#                 conf = self.configuration.get()
-#                 last_hour = (now := datetime.now()) - timedelta(hours=1)
-
-#                 if self.state_machine.state == States.RUNNING and (
-#                     not conf["last_price_time"]
-#                     or not conf["last_telegram_update"]
-#                     or conf["last_telegram_update"] < last_hour
-#                 ):
-#                     # Send update once per hour to Telegram
-#                     self.t.send_telegram_update()
-
-#                 if conf["last_price_time"] + timedelta(seconds=600) < now:
-#                     # Exit if no price update for a long time (10 minutes).
-#                     LOG.error("No price update for a long time, exiting!")
-#                     self.state_machine.transition_to(States.ERROR)
-#                     return
-
-#             except (
-#                 Exception  # pylint: disable=broad-exception-caught
-#             ) as exc:
-#                 LOG.error("Exception in main.", exc_info=exc)
-#                 self.state_machine.transition_to(States.ERROR)
-#                 return
-
-#             await asyncio.sleep(6)
-
-#         LOG.error("The websocket connection encountered an exception!")
-#         self.state_machine.transition_to(States.ERROR)
 
 
 #     def __check_kraken_status(self: Self, tries: int = 0) -> None:

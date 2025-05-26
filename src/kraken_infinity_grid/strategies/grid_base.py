@@ -126,6 +126,24 @@ class IGridBaseStrategy(IStrategy):
         # Place extra sell order (only for SWING strategy)
         self._check_extra_sell_order()
 
+    def __add_missed_sell_orders(self: Self) -> None:
+        """
+        This functions can create sell orders in case there is at least one
+        executed buy order that is missing its sell order.
+
+        Missed sell orders came into place when a buy was executed and placing
+        the sell failed. An entry to the missed sell order id table is added
+        right before placing a sell order.
+        """
+        LOG.info("- Create sell orders based on unsold buy orders...")
+        for entry in self._unsold_buy_order_txids.get():
+            LOG.info("  - %s", entry)
+            self.handle_arbitrage(
+                side="sell",
+                order_price=entry["price"],
+                txid_to_delete=entry["txid"],
+            )
+
     def __check_near_buy_orders(self: Self) -> None:
         """
         Cancel buy orders that are next to each other. Only the lowest buy order

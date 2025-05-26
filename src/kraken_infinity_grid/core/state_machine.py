@@ -13,6 +13,7 @@ FIXME: This state machine may work for Kraken, but not for other exchanges.
 
 from enum import Enum, auto
 from typing import Callable, Self
+import asyncio
 
 
 class States(Enum):
@@ -96,3 +97,26 @@ class StateMachine:
         if to_state not in self._callbacks:
             self._callbacks[to_state] = []
         self._callbacks[to_state].append(callback)
+
+    async def wait_for_shutdown(self) -> None:
+        """
+        Wait until the state machine transitions to a shutdown state.
+        Returns when state becomes SHUTDOWN_REQUESTED or ERROR.
+        """
+        # Create an event if it doesn't exist yet
+        if not hasattr(self, "_shutdown_event"):
+            self._shutdown_event = asyncio.Event()
+
+            # Register callbacks to set the event when shutdown states are reached
+            def set_shutdown_event():
+                self._shutdown_event.set()
+
+            self.register_callback(States.SHUTDOWN_REQUESTED, set_shutdown_event)
+            self.register_callback(States.ERROR, set_shutdown_event)
+
+        # If already in a shutdown state, set the event immediately
+        if self.state in (States.SHUTDOWN_REQUESTED, States.ERROR):
+            self._shutdown_event.set()
+
+        # Wait for the shutdown event
+        await self._shutdown_event.wait()
