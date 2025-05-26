@@ -79,7 +79,7 @@ async def test_integration_GridSell(  # noqa: PLR0915
     instance.market.get_ticker.return_value = {"XXBTZUSD": {"c": ["50000.0"]}}
 
     await instance.trade.on_ticker_update(instance.on_message, 50000.0)
-    assert not instance.is_ready_to_trade
+    assert not instance.state_machine.facts["ready_to_trade"]
 
     # ==========================================================================
     # During the following processing, the following steps are done:
@@ -96,7 +96,7 @@ async def test_integration_GridSell(  # noqa: PLR0915
     )
 
     # The algorithm should already be ready to trade
-    assert instance.is_ready_to_trade
+    assert instance.state_machine.facts["ready_to_trade"]
 
     # ==========================================================================
     # 1. PLACEMENT OF INITIAL N BUY ORDERS
@@ -316,7 +316,7 @@ async def test_integration_GridSell_unfilled_surplus(
     instance.market.get_ticker.return_value = {"XXBTZUSD": {"c": ["50000.0"]}}
 
     await instance.trade.on_ticker_update(instance.on_message, 50000.0)
-    assert not instance.is_ready_to_trade
+    assert not instance.state_machine.facts["ready_to_trade"]
 
     # ==========================================================================
     # During the following processing, the following steps are done:
@@ -333,7 +333,7 @@ async def test_integration_GridSell_unfilled_surplus(
     )
 
     # The algorithm should already be ready to trade
-    assert instance.is_ready_to_trade
+    assert instance.state_machine.facts["ready_to_trade"]
 
     # ==========================================================================
     # 1. PLACEMENT OF INITIAL N BUY ORDERS

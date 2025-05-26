@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, Self
 
 from kraken.exceptions import KrakenUnknownOrderError
 
+from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.state_machine import States
+
 if TYPE_CHECKING:
     # To avoid circular import for type checking
     from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
@@ -66,7 +69,7 @@ class OrderManager:
         was added to the orderbook, the algorithm will handle any removals in
         case of closed orders.
         """
-        LOG.info("Processing '%s' ...", txid)
+        LOG.info("Processing order '%s' ...", txid)
         order_details = self.get_orders_info_with_retry(txid=txid)
         LOG.debug("- Order information: %s", order_details)
 
@@ -88,7 +91,7 @@ class OrderManager:
             LOG.info("Updated order '%s' in orderbook.", order_details["txid"])
 
         LOG.info(
-            "Current invested value: %f / %d %s",
+            "Current investment: %f / %d %s",
             self.__s.investment,
             self.__s.max_investment,
             self.__s.quote_currency,
@@ -167,7 +170,7 @@ class OrderManager:
 
                 self.handle_arbitrage(side="buy", order_price=order_price)
                 buy_prices = list(self.__s.get_current_buy_prices())
-                LOG.info("Length of active buy orders: %s", n_active_buy_orders + 1)
+                LOG.debug("Length of active buy orders: %s", n_active_buy_orders + 1)
             else:
                 LOG.warning("Not enough quote currency available to place buy order!")
                 can_place_buy_order = False
@@ -559,8 +562,10 @@ class OrderManager:
             # sell. This could only happen if some orders have not being
             # processed properly, the algorithm is not in sync with the
             # exchange, or manual trades have been made during processing.
-            self.__s.save_exit(reason=message)
-        elif txid_to_delete is not None:
+            LOG.error(message)
+            self.__s.state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(message)
+        if txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
             #       Added logging statement to monitor occurrences
             # ... This would only be the case for GridHODL and SWING, while
@@ -832,9 +837,14 @@ class OrderManager:
             sleep(wait_time)
 
         if exit_on_fail and order_details is None:
-            self.__s.save_exit(
-                f"Failed to retrieve order info for '{txid}' after"
-                f" {max_tries} retries!",
+            LOG.error(
+                "Failed to retrieve order info for '%s' after %d retries!",
+                txid,
+                max_tries,
+            )
+            self.__s.state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(
+                f"Failed to retrieve order info for '{txid}' after {max_tries} retries!",
             )
 
         order_details["txid"] = txid

@@ -8,6 +8,7 @@
 """Module that implements the main strategy"""
 
 import asyncio
+import signal
 import sys
 import traceback
 from contextlib import suppress
@@ -35,6 +36,7 @@ from kraken_infinity_grid.database import (
 )
 from kraken_infinity_grid.order_management import OrderManager
 from kraken_infinity_grid.setup import SetupManager
+from kraken_infinity_grid.state_machine import StateMachine, States
 from kraken_infinity_grid.telegram import Telegram
 
 LOG = getLogger(__name__)
@@ -147,8 +149,19 @@ class KrakenInfinityGridBot(SpotWSClient):
             version("kraken-infinity-grid"),
         )
         LOG.debug("Config: %s", config)
-        self.init_done: bool = False
+
         self.dry_run: bool = dry_run
+
+        self.state_machine = StateMachine(initial_state=States.INITIALIZING)
+        self.__stop_event: asyncio.Event = asyncio.Event()
+        self.state_machine.register_callback(
+            States.SHUTDOWN_REQUESTED,
+            self.__stop_event.set,
+        )
+        self.state_machine.register_callback(
+            States.ERROR,
+            self.__stop_event.set,
+        )
 
         # Settings and config collection
         ##
@@ -160,9 +173,9 @@ class KrakenInfinityGridBot(SpotWSClient):
         ##
         self.interval: float = float(config["interval"])
         self.amount_per_grid: float = float(config["amount_per_grid"])
-
         self.amount_per_grid_plus_fee: float | None = config.get("fee")
 
+        self.ticker: SimpleNamespace = None
         self.max_investment: float = config["max_investment"]
         self.n_open_buy_orders: int = config["n_open_buy_orders"]
         self.fee: float | None = config.get("fee")
@@ -181,31 +194,11 @@ class KrakenInfinityGridBot(SpotWSClient):
         ##
         self.__missed_messages: list[dict] = []
 
-        # Wait for ticker to be connected before do some action
-        ##
-        self.__ticker_channel_connected: bool = False
-        self.ticker: SimpleNamespace = None
-
-        self.is_ready_to_trade: bool = False
-        self.__execution_channel_connected: bool = False
-
         # Define the Kraken clients
         ##
         self.user: User = User(key=key, secret=secret)
         self.market: Market = Market(key=key, secret=secret)
         self.trade: Trade = Trade(key=key, secret=secret)
-
-        # Instantiate the algorithm's components
-        ##
-        self.om = OrderManager(strategy=self)
-        self.sm = SetupManager(strategy=self)
-        self.t = Telegram(
-            strategy=self,
-            telegram_token=config["telegram_token"],
-            telegram_chat_id=config["telegram_chat_id"],
-            exception_token=config["exception_token"],
-            exception_chat_id=config["exception_chat_id"],
-        )
 
         # Database setup
         ##
@@ -225,7 +218,19 @@ class KrakenInfinityGridBot(SpotWSClient):
         )
         self.database.init_db()
 
-    async def on_message(  # noqa: C901, PLR0912
+        # Instantiate the algorithm's components
+        ##
+        self.om = OrderManager(strategy=self)
+        self.sm = SetupManager(strategy=self)
+        self.t = Telegram(
+            strategy=self,
+            telegram_token=config["telegram_token"],
+            telegram_chat_id=config["telegram_chat_id"],
+            exception_token=config["exception_token"],
+            exception_chat_id=config["exception_chat_id"],
+        )
+
+    async def on_message(  # noqa: C901, PLR0912, PLR0911
         self: Self,
         message: dict | list,
     ) -> None:
@@ -234,8 +239,13 @@ class KrakenInfinityGridBot(SpotWSClient):
         connections by Kraken. It's the entrypoint of the incoming messages and
         calls the appropriate functions to handle the messages.
         """
+        if self.state_machine.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:
+            LOG.debug("Shutdown requested, not processing incoming messages.")
+            return
+
         try:
-            # =====================================================================
+
+            # ==================================================================
             # Filtering out unwanted messages
             if not isinstance(message, dict):
                 LOG.warning("Message is not a dict: %s", message)
@@ -246,30 +256,37 @@ class KrakenInfinityGridBot(SpotWSClient):
 
             if message.get("method"):
                 if message["method"] == "subscribe" and not message["success"]:
-                    self.save_exit(
+                    LOG.error(
                         "The algorithm was not able to subscribe to selected"
                         " channels. Please check the logs.",
                     )
+                    self.state_machine.transition_to(States.ERROR)
+                    return
                 return
 
-            # =====================================================================
+            # ==================================================================
             # Initial setup
-            if channel == "ticker" and not self.__ticker_channel_connected:
-                self.__ticker_channel_connected = True
+            if (
+                channel == "ticker"
+                and not self.state_machine.facts["ticker_channel_connected"]
+            ):
+                self.state_machine.facts["ticker_channel_connected"] = True
                 # Set ticker the first time to have the ticker set during setup.
                 self.ticker = SimpleNamespace(last=float(message["data"][0]["last"]))
                 LOG.info("- Subscribed to ticker channel successfully!")
 
-            elif channel == "executions" and not self.__execution_channel_connected:
-                self.__execution_channel_connected = True
+            elif (
+                channel == "executions"
+                and not self.state_machine.facts["executions_channel_connected"]
+            ):
+                self.state_machine.facts["executions_channel_connected"] = True
                 LOG.info("- Subscribed to execution channel successfully!")
 
             if (
-                self.__ticker_channel_connected
-                and self.__execution_channel_connected
-                and not self.is_ready_to_trade
+                self.state_machine.facts["ticker_channel_connected"]
+                and self.state_machine.facts["executions_channel_connected"]
+                and not self.state_machine.facts["ready_to_trade"]
             ):
-                # Sets self.is_ready_to_trade to True
                 self.sm.prepare_for_trading()
 
                 # If there are any missed messages, process them now.
@@ -277,7 +294,7 @@ class KrakenInfinityGridBot(SpotWSClient):
                     await self.on_message(msg)
                 self.__missed_messages = []
 
-            if not self.is_ready_to_trade:
+            if not self.state_machine.facts["ready_to_trade"]:
                 if channel == "executions":
                     # If the algorithm is not ready to trade, store the
                     # executions to process them later.
@@ -322,7 +339,8 @@ class KrakenInfinityGridBot(SpotWSClient):
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)
-            self.save_exit(reason=traceback.format_exc())
+            self.state_machine.transition_to(States.ERROR)
+            return
 
     # ==========================================================================
 
@@ -342,8 +360,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         try:
             self.__check_api_keys()
         except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
-            await self.close()  # Stops the websocket connections and aiohttp session
-            self.save_exit(
+            await self.terminate(
                 (
                     "Passed API keys are invalid!"
                     if isinstance(exc, KrakenAuthenticationError)
@@ -352,13 +369,55 @@ class KrakenInfinityGridBot(SpotWSClient):
             )
 
         # ======================================================================
+        # Handle the shutdown signals
+        #
+        # A controlled shutdown is initiated by sending a SIGINT or SIGTERM
+        # signal to the process. Since requests and database interactions are
+        # executed synchronously, we only need to set the stop_event during
+        # on_message, ensuring no further messages are processed.
+        ##
+        def _signal_handler() -> None:
+            LOG.warning("Initiate a controlled shutdown of the algorithm...")
+            self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
+
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _signal_handler)
+
+        # ======================================================================
         # Start the websocket connections and run the main function
         ##
         try:
-            await self.__main()
-        except asyncio.CancelledError:
-            await self.close()  # Stops the websocket connections and aiohttp session
-            self.save_exit("The algorithm was interrupted!")
+            await asyncio.wait(
+                [
+                    asyncio.create_task(self.__main()),
+                    asyncio.create_task(self.__stop_event.wait()),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        except asyncio.CancelledError as exc:
+            self.state_machine.transition_to(States.ERROR)
+            await asyncio.sleep(5)
+            await self.terminate(f"The algorithm was interrupted: {exc}")
+        except (
+            Exception  # pylint: disable=broad-exception-caught  # noqa: BLE001
+        ) as exc:
+            self.state_machine.transition_to(States.ERROR)
+            await asyncio.sleep(5)
+            await self.terminate(f"The algorithm was interrupted by exception: {exc}")
+
+        await asyncio.sleep(5)
+
+        if self.state_machine.state == States.SHUTDOWN_REQUESTED:
+            # The algorithm was interrupted by a signal.
+            await self.terminate(
+                "The algorithm was shut down successfully!",
+                exception=False,
+            )
+        elif self.state_machine.state == States.ERROR:
+            await self.terminate(
+                "The algorithm was shut down due to an error!",
+            )
 
     async def __main(self: Self) -> None:
         """
@@ -405,10 +464,9 @@ class KrakenInfinityGridBot(SpotWSClient):
         while not self.exception_occur:
             try:
                 conf = self.configuration.get()
-                now = datetime.now()
-                last_hour = now - timedelta(hours=1)
+                last_hour = (now := datetime.now()) - timedelta(hours=1)
 
-                if self.init_done and (
+                if self.state_machine.state == States.RUNNING and (
                     not conf["last_price_time"]
                     or not conf["last_telegram_update"]
                     or conf["last_telegram_update"] < last_hour
@@ -418,38 +476,45 @@ class KrakenInfinityGridBot(SpotWSClient):
 
                 if conf["last_price_time"] + timedelta(seconds=600) < now:
                     # Exit if no price update for a long time (10 minutes).
-                    self.save_exit(
-                        reason="No price update for a long time, exit!",
-                    )
+                    LOG.error("No price update for a long time, exiting!")
+                    self.state_machine.transition_to(States.ERROR)
+                    return
 
             except (
                 Exception  # pylint: disable=broad-exception-caught # noqa: BLE001
             ) as exc:
-                self.save_exit(
-                    reason=f"Exception in main: {exc} {traceback.format_exc()}",
-                )
+                LOG.error("Exception in main.", exc_info=exc)
+                self.state_machine.transition_to(States.ERROR)
+                return
 
             await asyncio.sleep(6)
 
-        self.save_exit(
-            reason="The websocket connection encountered an exception!",
+        LOG.error("The websocket connection encountered an exception!")
+        self.state_machine.transition_to(States.ERROR)
+
+    async def terminate(
+        self: Self,
+        reason: str = "",
+        *,
+        exception: bool = True,
+    ) -> None:
+        """
+        Handle the termination of the algorithm.
+
+        1. Stops the websocket connections and aiohttp sessions managed by the
+           python-kraken-sdk
+        2. Stops the connection to the database.
+        3. Notifies the user via Telegram about the termination.
+        4. Exits the algorithm.
+        """
+        await self.close()
+        self.database.close()
+
+        self.t.send_to_telegram(
+            message=f"{self.name}\n{self.symbol} terminated.\nReason: {reason}",
+            exception=exception,
         )
-
-    def save_exit(self: Self, reason: str = "") -> None:
-        """Save exit triggered, saving data and exit the program."""
-        message: str = str(
-            f"❌ {self.name} ❌"
-            f"\n{self.symbol} Save exit triggered, saving data."
-            f"\nReason: {reason}",
-        )
-
-        try:
-            self.t.send_to_telegram(message=message, exception=True)
-        except Exception as exc:  # noqa: BLE001
-            LOG.warning("%s", message)
-            LOG.error("FIXME: look at this: %s: %s", exc, traceback.format_exc())
-
-        sys.exit(1)
+        sys.exit(exception)
 
     def __check_kraken_status(self: Self, tries: int = 0) -> None:
         """Checks whether the Kraken API is available."""
@@ -556,8 +621,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     ) -> float:
         """
         Returns the order price depending on the strategy and side. Also assigns
-        a new highest buy price to configuration if there was a new highest
-        buy.
+        a new highest buy price to configuration if there was a new highest buy.
         """
         LOG.debug("Computing the order price...")
         order_price: float
@@ -608,9 +672,7 @@ class KrakenInfinityGridBot(SpotWSClient):
     @property
     def investment(self: Self) -> float:
         """Returns the current investment based on open orders."""
-        return self.get_value_of_orders(
-            orders=self.orderbook.get_orders(),
-        )
+        return self.get_value_of_orders(orders=self.orderbook.get_orders())
 
     @property
     def max_investment_reached(self: Self) -> bool:

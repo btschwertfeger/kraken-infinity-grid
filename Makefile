@@ -1,5 +1,5 @@
-# -*- mode: make; coding: utf-8 -*-
 #!make
+# -*- mode: make; coding: utf-8 -*-
 #
 # Copyright (C) 2023 Benjamin Thomas Schwertfeger
 # All rights reserved.

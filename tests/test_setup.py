@@ -13,6 +13,7 @@ import pytest
 
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 from kraken_infinity_grid.setup import SetupManager
+from kraken_infinity_grid.state_machine import StateMachine, States
 
 
 @pytest.fixture
@@ -26,6 +27,7 @@ def strategy() -> mock.Mock:
     strategy.orderbook = mock.Mock()
     strategy.om = mock.Mock()
     strategy.t = mock.Mock()
+    strategy.state_machine = StateMachine()
     return strategy
 
 
@@ -304,13 +306,15 @@ def test_prepare_for_trading(
 
     setup_manager._SetupManager__check_asset_pair_parameter = mock.Mock()
     setup_manager._SetupManager__check_configuration_changes = mock.Mock()
+    setup_manager._SetupManager__update_order_book = mock.Mock()
     setup_manager.prepare_for_trading()
 
-    strategy.t.send_to_telegram.assert_called_once()
+    setup_manager._SetupManager__check_asset_pair_parameter.assert_called_once()
     strategy.om.assign_all_pending_transactions.assert_called_once()
     strategy.om.add_missed_sell_orders.assert_called_once()
-    strategy.om.check_price_range.assert_called_once()
-    setup_manager._SetupManager__check_asset_pair_parameter.assert_called_once()
+    setup_manager._SetupManager__update_order_book.assert_called_once()
     setup_manager._SetupManager__check_configuration_changes.assert_called_once()
-    assert strategy.is_ready_to_trade
-    assert strategy.init_done
+    strategy.om.check_price_range.assert_called_once()
+
+    assert strategy.state_machine.facts["ready_to_trade"]
+    assert strategy.state_machine.state == States.RUNNING

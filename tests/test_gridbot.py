@@ -18,6 +18,7 @@ from kraken_infinity_grid.database import Configuration, Orderbook, UnsoldBuyOrd
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 from kraken_infinity_grid.order_management import OrderManager
 from kraken_infinity_grid.setup import SetupManager
+from kraken_infinity_grid.state_machine import States
 from kraken_infinity_grid.telegram import Telegram
 
 
@@ -217,13 +218,13 @@ async def test_on_message(
     await instance.on_message({"method": "subscribe", "success": True})
 
     # Test ticker channel
-    assert not instance._KrakenInfinityGridBot__ticker_channel_connected
+    assert not instance.state_machine.facts["ticker_channel_connected"]
     await instance.on_message({"channel": "ticker", "data": [{"last": 50000.0}]})
-    assert instance._KrakenInfinityGridBot__ticker_channel_connected
+    assert instance.state_machine.facts["ticker_channel_connected"]
 
     # Ensure setup did not run yet
     instance.sm.prepare_for_trading.assert_not_called()
-    assert not instance.is_ready_to_trade
+    assert not instance.state_machine.facts["ready_to_trade"]
 
     # Ensure that even if the bot is receiving ticker messages, it will not
     # start any trading actions. For the trades, we can ensure this by checking
@@ -237,14 +238,14 @@ async def test_on_message(
     # We also need to ensure that the execution channel messages won't trigger
     # any actions. Even though it is not connected so far, we can simulate it.
     # Test executions channel
-    assert not instance._KrakenInfinityGridBot__execution_channel_connected
+    assert not instance.state_machine.facts["executions_channel_connected"]
     await instance.on_message(
         {
             "channel": "executions",
             "data": [{"exec_type": "new"}],
         },
     )
-    assert instance._KrakenInfinityGridBot__execution_channel_connected
+    assert instance.state_machine.facts["executions_channel_connected"]
 
     # Ensure that the algorithm initiated preparation for trading
     instance.sm.prepare_for_trading.assert_called_once()
@@ -255,23 +256,23 @@ async def test_on_message_failing_subscribe(
     instance: KrakenInfinityGridBot,
 ) -> None:
     """Test the on_message method failing in case subscribing fails."""
-    with pytest.raises(SystemExit):
-        await instance.on_message({"method": "subscribe", "success": False})
+    await instance.on_message({"method": "subscribe", "success": False})
+    assert instance.state_machine.state == States.ERROR
 
 
 @pytest.mark.asyncio
 async def test_on_message_ticker(instance: KrakenInfinityGridBot) -> None:
     """Test the on_message method and ticker behavior."""
 
-    assert not instance._KrakenInfinityGridBot__ticker_channel_connected
+    assert not instance.state_machine.facts["ticker_channel_connected"]
     await instance.on_message({"channel": "ticker", "data": [{"last": 50000.0}]})
-    assert instance._KrakenInfinityGridBot__ticker_channel_connected
+    assert instance.state_machine.facts["ticker_channel_connected"]
 
     # Just verify that ...
     instance.sm.prepare_for_trading.assert_not_called()
 
     # Set readiness by hand
-    instance.is_ready_to_trade = True
+    instance.state_machine.facts["ready_to_trade"] = True
     instance.ticker.last = 50000.0
 
     instance.om.check_price_range.assert_not_called()
@@ -321,22 +322,21 @@ async def test_on_message_ticker(instance: KrakenInfinityGridBot) -> None:
 @pytest.mark.asyncio
 async def test_on_message_executions(instance: KrakenInfinityGridBot) -> None:
     """Test the on_message method and execution behavior."""
-
-    assert not instance._KrakenInfinityGridBot__execution_channel_connected
+    assert not instance.state_machine.facts["executions_channel_connected"]
     await instance.on_message(
         {
             "channel": "executions",
             "data": [{"exec_type": "new"}],
         },
     )
-    assert instance._KrakenInfinityGridBot__execution_channel_connected
+    assert instance.state_machine.facts["executions_channel_connected"]
 
     # Just verify that ...
     instance.sm.prepare_for_trading.assert_not_called()
     instance.om.check_price_range.assert_not_called()
 
     # Set readiness by hand
-    instance.is_ready_to_trade = True
+    instance.state_machine.facts["ready_to_trade"] = True
 
     # Ignore snapshots
     await instance.on_message(

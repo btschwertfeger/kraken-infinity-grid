@@ -12,8 +12,10 @@ from unittest import mock
 
 import pytest
 
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
 from kraken_infinity_grid.order_management import OrderManager
+from kraken_infinity_grid.state_machine import StateMachine, States
 
 
 @pytest.fixture
@@ -36,7 +38,6 @@ def strategy() -> mock.Mock:
     strategy.get_active_buy_orders = mock.Mock()
     strategy.get_active_sell_orders = mock.Mock()
     strategy.get_orders_info_with_retry = mock.Mock()
-    strategy.save_exit = mock.Mock()
     strategy.dry_run = False
     strategy.max_investment = 10000
     strategy.amount_per_grid = 100
@@ -50,8 +51,9 @@ def strategy() -> mock.Mock:
     strategy.cost_decimals = 5
     strategy.ticker = mock.Mock()
     strategy.ticker.last = 50000.0
-    strategy.save_exit = sys.exit
+    strategy.terminate = sys.exit
     strategy.max_investment_reached = False
+    strategy.state_machine = StateMachine()
     strategy.amount_per_grid_plus_fee = strategy.amount_per_grid * (1 + strategy.fee)
     return strategy
 
@@ -1117,9 +1119,10 @@ def test_get_orders_info_with_retry_failure(
     """Test failing to retrieve order info after maximum retries."""
     strategy.user.get_orders_info.return_value = {}
     with pytest.raises(
-        SystemExit,
+        GridBotStateError,
         match="Failed to retrieve order info for 'txid1' after 3 retries!",
     ):
         order_manager.get_orders_info_with_retry(txid="txid1", max_tries=3)
+    assert strategy.state_machine.state == States.ERROR
     assert strategy.user.get_orders_info.call_count == 3
     assert mock_sleep.call_count == 3
