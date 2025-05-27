@@ -14,9 +14,10 @@ from cloup.constraints import If, accept_none, require_all
 from kraken_infinity_grid.models.dto import (
     DBConfigDTO,
     NotificationConfigDTO,
-    BotConfig,
+    BotConfigDTO,
     TelegramConfigDTO,
 )
+from cloup.constraints import If, RequireAtLeast, require_all, accept_none, IsSet, Equal
 
 
 def print_version(ctx: Context, param: Any, value: Any) -> None:  # noqa: ANN401, ARG001
@@ -108,7 +109,6 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     ctx.ensure_object(dict)
     ctx.obj |= kwargs
 
-    kwargs.pop("version")
     verbosity = kwargs.pop("verbose", 0)
 
     basicConfig(
@@ -221,13 +221,11 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     "Grid Strategy Options",
     option(
         "--amount-per-grid",
-        required=True,
         type=FLOAT,
         help="The quote amount to use per interval.",
     ),
     option(
         "--interval",
-        required=True,
         type=FLOAT,
         default=0.04,
         callback=ensure_larger_than_zero,
@@ -235,7 +233,6 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     ),
     option(
         "--n-open-buy-orders",
-        required=True,
         type=INT,
         default=3,
         callback=ensure_larger_than_zero,
@@ -248,9 +245,12 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         """,
     ),
     constraint=If(
-        "strategy",
-        lambda val: val in ("cDCA", "GridHODL", "GridSell", "SWING"),
-        require_all,
+        Equal("strategy", "cDCA")
+        | Equal("strategy", "GridHODL")
+        | Equal("strategy", "GridSell")
+        | Equal("strategy", "SWING"),
+        then=require_all,
+        else_=accept_none,
     ),
 )
 @option_group(
@@ -269,7 +269,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     ),
 )
 @option_group(
-    "Database Configuration",
+    "General Database Configuration",
     option(
         "--db-name",
         type=STRING,
@@ -311,8 +311,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         help="PostgreSQL DB port",
     ),
     constraint=If(
-        lambda ctx: not ctx.params.get("sqlite_file")
-        and not ctx.params.get("in_memory"),
+        ~IsSet("sqlite_file") & ~IsSet("in_memory"),
         then=require_all,
         else_=accept_none,
     ),
@@ -344,9 +343,10 @@ def run(ctx: Context, **kwargs: dict) -> None:
         )
     )
     ctx.obj |= kwargs
+
     asyncio.run(
         Bot(
-            bot_config=BotConfig(**ctx.obj),
+            bot_config=BotConfigDTO(**ctx.obj),
             db_config=db_config,
             notification_config=notification_config,
         ).run()

@@ -4,10 +4,15 @@
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
+
+# FIXME: Address pylint issues with too many arguments, not applicable in this
+#        project context.
+
+from kraken_infinity_grid.models.schemas import AssetPairInfoSchema
 from abc import abstractmethod
 from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.interfaces.interfaces import IStrategy
-from kraken_infinity_grid.interfaces.interfaces import IExchangeRESTService
+from kraken_infinity_grid.interfaces.strategy import IStrategy
+from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
 from kraken.exceptions import KrakenUnknownOrderError
 from decimal import Decimal
 from kraken_infinity_grid.infrastructure.database import (
@@ -26,8 +31,27 @@ from kraken_infinity_grid.services import OrderbookService
 from kraken_infinity_grid.exceptions import GridBotStateError
 import traceback
 
-LOG = getLogger(__name__)
 from time import sleep
+
+from pydantic import BaseModel
+from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
+from pydantic import BaseModel
+
+LOG = getLogger(__name__)
+
+
+class GridStrategyRuntimeAttributesDTO(BaseModel):
+    """
+    Custom attributes for grid strategies that are evaluated during
+    runtime.
+    """
+
+    altname: str  # e.g. "XBTZEUR"
+    symbol: str  # 'wsname' on kraken e.g. "XBT/EUR"
+    cost_decimals: int
+    xbase_currency: str  # base currency e.g. "XXBT"
+    zquote_currency: str  # quote currency e.g. "ZEUR"
+    amount_per_grid_plus_fee: float
 
 
 class IGridBaseStrategy(IStrategy):
@@ -35,7 +59,7 @@ class IGridBaseStrategy(IStrategy):
 
     def __init__(
         self,
-        config: dict,  # FIXME: this should be a dataclass or a more structured type
+        config: BotConfigDTO,
         rest_api: IExchangeRESTService,
         orderbook_service: OrderbookService,
         event_bus: EventBus,
@@ -55,10 +79,17 @@ class IGridBaseStrategy(IStrategy):
         self._pending_txids_table = pending_txids_table
         self._unsold_buy_order_txids_table = unsold_buy_order_txids_table
         self._ticker: SimpleNamespace = None
+        self._runtime_attrs: GridStrategyRuntimeAttributesDTO = None
 
     # ==========================================================================
     ## Event handlers
+    # FIXME: events should have basemodel class with data attribute
     def on_ticker_update(self, event: Event) -> None:
+        if event.data["symbol"] != self._config.symbol:
+            # The grid strategy is only interested in ticker updates for its
+            # symbol.
+            return
+
         self._ticker = SimpleNamespace(last=event.data["last"])
         self._configuration_table.update({"last_price_time": datetime.now()})
 
@@ -71,7 +102,7 @@ class IGridBaseStrategy(IStrategy):
 
     def on_order_placed(self, event: Event) -> None:
         LOG.debug("Got order_placed event: %s", event.data)
-        self._orderbook_service.assign_order_by_txid(txid=event.data["order_id"])
+        self._orderbook_service.assign_order_by_txid(event.data["order_id"])
 
     def on_order_filled(self, event: Event) -> None:
         LOG.debug("Got order_filled event: %s", event.data)
@@ -95,16 +126,15 @@ class IGridBaseStrategy(IStrategy):
             "Preparing for trading by initializing and updating local orderbook...",
         )
 
-        self.__s.t.send_to_telegram(
-            message=f"✅ {self.__s.name} - {self.__s.symbol} is live again!",
-            exception=True,
-            log=False,
+        self._event_bus.publish(
+            "notification", {"message": f"✅ {self._config.name} is starting!"}
         )
+
         # ======================================================================
 
         # Check the fee and altname of the asset pair
         ##
-        self.__check_asset_pair_parameter()
+        self.__retrieve_asset_information()
 
         # Append orders to local orderbook in case they are not saved yet
         ##
@@ -147,15 +177,39 @@ class IGridBaseStrategy(IStrategy):
     # ==========================================================================
     ## Setup methods
 
+    def __retrieve_asset_information(self: Self) -> None:
+        """Check the asset pair information."""
+        LOG.info("- Retrieving asset pair information...")
+        pair_info: AssetPairInfoSchema = self._rest_api.get_asset_pair_info(
+            pair=self._config.symbol.replace("/", ""),
+        )
+        LOG.debug(pair_info)
+
+        if self._config.fee is None:
+            # This is the case if the '--fee' parameter was not passed, then we
+            # take the highest maker fee.
+            self._config.fee = float(pair_info.fees_maker[0][1]) / 100
+
+        # Setup runtime attributes derived from asset pair info
+        self._runtime_attrs = GridStrategyRuntimeAttributesDTO(
+            altname=pair_info.altname,  # e.g. XBTZEUR
+            symbol=pair_info.wsname,  # e.g. XBT/EUR
+            cost_decimals=pair_info.cost_decimals,
+            xbase_currency=pair_info.base,  # e.g. XXBT
+            zquote_currency=pair_info.quote,  # e.g. ZEUR
+            amount_per_grid_plus_fee=self._config.amount_per_grid
+            * (1 + self._config.fee),
+        )
+
     def __update_orderbook_get_open_orders(self: Self) -> tuple[list, list]:
         """Get the open orders and txid as lists."""
         LOG.info("  - Retrieving open orders from upstream...")
 
         open_orders, open_txids = [], []
         for txid, order in self._rest_api.get_open_orders(
-            userref=self._config["userref"],
+            userref=self._config.userref,
         )["open"].items():
-            if order["descr"]["pair"] == self.__s.altname:
+            if order["descr"]["pair"] == self._runtime_attrs.altname:
                 order["txid"] = txid  # IMPORTANT
                 open_orders.append(order)
                 open_txids.append(order["txid"])
@@ -167,23 +221,24 @@ class IGridBaseStrategy(IStrategy):
         upstream orderbook during the ``update_orderbook`` function in the init
         of the algorithm.
 
-        This function triggers the Telegram message of the executed order and
+        This function triggers the Notification message of the executed order and
         places a new order.
+
+        FIXME: closed order must be a pydantic model, not a dict.
         """
         LOG.info("Handling executed order: %s", closed_order["txid"])
         closed_order["side"] = closed_order["descr"]["type"]
 
         message = str(
-            f"✅ {self.__s.symbol}: {closed_order['side'][0].upper()}{closed_order['side'][1:]} "
+            f"✅ {self._runtime_attrs.symbol}: {closed_order['side'][0].upper()}{closed_order['side'][1:]} "
             "order executed"
-            f"\n ├ Price » {closed_order['price']} {self._config['quote_currency']}"
-            f"\n ├ Size » {closed_order['vol_exec']} {self._config['base_currency']}"
-            f"\n └ Size in {self._config['quote_currency']} » "
+            f"\n ├ Price » {closed_order['price']} {self._config.quote_currency}"
+            f"\n ├ Size » {closed_order['vol_exec']} {self._config.base_currency}"
+            f"\n └ Size in {self._config.quote_currency} » "
             f"{float(closed_order['price']) * float(closed_order['vol_exec'])}",
         )
 
-        self.__s.t.send_to_telegram(message)
-
+        self._event_bus.publish("notification", {"message": message})
         # ======================================================================
         # If a buy order was filled, the sell order needs to be placed.
         if closed_order["side"] == "buy":
@@ -288,31 +343,6 @@ class IGridBaseStrategy(IStrategy):
         # orderbook and all upstream orders are tracked locally.
         LOG.info("- Orderbook initialized!")
 
-    def __check_asset_pair_parameter(self: Self) -> None:
-        """Check the asset pair parameter."""
-        LOG.info("- Checking asset pair parameters...")
-        pair_data = self._rest_api.get_asset_pairs(
-            pair=[self.__s.symbol.replace("/", "")],
-        )
-        LOG.debug(pair_data)
-
-        self.__s.xsymbol = next(iter(pair_data.keys()))
-        data = pair_data[self.__s.xsymbol]
-
-        self.__s.altname = data["altname"]
-        self.__s.zbase_currency = data["base"]  # XXBT
-        self.__s.xquote_currency = data["quote"]  # ZEUR
-        self.__s.cost_decimals = data["cost_decimals"]  # 5, i.e., 0.00001 EUR
-
-        if self.__s.fee is None:
-            # This is the case if the '--fee' parameter was not passed, then we
-            # take the highest maker fee.
-            self.__s.fee = float(data["fees_maker"][0][1]) / 100
-
-        self.__s.amount_per_grid_plus_fee = self.__s.amount_per_grid * (
-            1 + self.__s.fee
-        )
-
     def __check_configuration_changes(self: Self) -> None:
         """
         Checking if the database content match with the setup parameters.
@@ -323,23 +353,28 @@ class IGridBaseStrategy(IStrategy):
         LOG.info("- Checking configuration changes...")
         cancel_all_orders = False
 
-        if self.__s.amount_per_grid != self._configuration_table.get()["amount_per_grid"]:
+        if (
+            self._config.amount_per_grid
+            != self._configuration_table.get()["amount_per_grid"]
+        ):
             LOG.info(" - Amount per grid changed => cancel open buy orders soon...")
-            self._configuration_table.update({"amount_per_grid": self.__s.amount_per_grid})
+            self._configuration_table.update(
+                {"amount_per_grid": self._config.amount_per_grid}
+            )
             cancel_all_orders = True
 
-        if self.__s.interval != self._configuration_table.get()["interval"]:
+        if self._config.interval != self._configuration_table.get()["interval"]:
             LOG.info(" - Interval changed => cancel open buy orders soon...")
-            self._configuration_table.update({"interval": self.__s.interval})
+            self._configuration_table.update({"interval": self._config.interval})
             cancel_all_orders = True
 
         if cancel_all_orders:
-            self.__s.om.cancel_all_open_buy_orders()
+            self.__cancel_all_open_buy_orders()
 
         LOG.info("- Configuration checked and up-to-date!")
 
     # ==========================================================================
-    ## Stuff
+    ## Kinda main
     def __check_price_range(self: Self) -> None:
         """
         Checks if the orders prices match the conditions of the bot respecting
@@ -349,7 +384,7 @@ class IGridBaseStrategy(IStrategy):
         will be canceled and new buy orders below the price respecting the
         interval will be placed.
         """
-        if self._config["dry_run"]:
+        if self._config.dry_run:
             LOG.debug("Dry run, not checking price range.")
             return
 
@@ -380,6 +415,37 @@ class IGridBaseStrategy(IStrategy):
         # Place extra sell order (only for SWING strategy)
         self._check_extra_sell_order()
 
+    def _get_balances(self: Self) -> dict[str, float]:
+        """
+        Returns the available and overall balances of the quote and base
+        currency.
+
+        FIXME: Is there a way to get the balances of the asset pair directly?
+        """
+        LOG.debug("Retrieving the user's balances...")
+
+        base_balance = Decimal(0)
+        base_available = Decimal(0)
+        quote_balance = Decimal(0)
+        quote_available = Decimal(0)
+
+        for symbol, data in self._rest_api.get_balances().items():
+            if symbol == self.zbase_currency:
+                base_balance = Decimal(data["balance"])
+                base_available = base_balance - Decimal(data["hold_trade"])
+            elif symbol == self.xquote_currency:
+                quote_balance = Decimal(data["balance"])
+                quote_available = quote_balance - Decimal(data["hold_trade"])
+
+        balances = {
+            "base_balance": float(base_balance),
+            "quote_balance": float(quote_balance),
+            "base_available": float(base_available),
+            "quote_available": float(quote_available),
+        }
+        LOG.debug("Retrieved balances: %s", balances)
+        return balances
+
     # ==========================================================================
     #           C R E A T E / C A N C E L - O R D E R S
     # ==========================================================================
@@ -393,7 +459,7 @@ class IGridBaseStrategy(IStrategy):
         right before placing a sell order.
         """
         LOG.info("- Create sell orders based on unsold buy orders...")
-        for entry in self._unsold_buy_order_txids.get():
+        for entry in self._unsold_buy_order_txids_table.get():
             LOG.info("  - %s", entry)
             self.handle_arbitrage(
                 side="sell",
@@ -422,7 +488,7 @@ class IGridBaseStrategy(IStrategy):
         for i, price in enumerate(buy_prices[1:]):
             if (
                 price == buy_prices[i]
-                or (buy_prices[i] / price) - 1 < self._config["interval"] / 2
+                or (buy_prices[i] / price) - 1 < self._config.interval / 2
             ):
                 for order in self._orderbook_table.get_orders(filters={"side": "buy"}):
                     if order["price"] == buy_prices[i]:
@@ -435,7 +501,7 @@ class IGridBaseStrategy(IStrategy):
         """
         LOG.debug(
             "Checking if there are %d open buy orders...",
-            self._config["n_open_buy_orders"],
+            self._config.n_open_buy_orders,
         )
         can_place_buy_order: bool = True
         buy_prices: list[float] = list(self._orderbook_service.get_current_buy_prices())
@@ -446,13 +512,16 @@ class IGridBaseStrategy(IStrategy):
                     filters={"side": "buy"}
                 )
             )
-            < self._config["n_open_buy_orders"]
+            < self._config.n_open_buy_orders
             and can_place_buy_order
             and self._pending_txids_table.count() == 0
-            and not self._config["max_investment_reached"]
+            and not self._orderbook_service.max_investment_reached
         ):
-            fetched_balances: dict[str, float] = self._orderbook_service.get_balances()
-            if fetched_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
+            fetched_balances: dict[str, float] = self._get_balances()
+            if (
+                fetched_balances["quote_available"]
+                > self._runtime_attrs.amount_per_grid_plus_fee
+            ):
                 order_price: float = self._get_order_price(
                     side="buy",
                     last_price=(
@@ -479,7 +548,7 @@ class IGridBaseStrategy(IStrategy):
         if (
             n_to_cancel := (
                 self._orderbook_table.count(filters={"side": "buy"})
-                - self._config["n_open_buy_orders"]
+                - self._config.n_open_buy_orders
             )
         ) > 0:
             for order in self._orderbook_table.get_orders(
@@ -489,17 +558,17 @@ class IGridBaseStrategy(IStrategy):
             ):
                 self._handle_cancel_order(txid=order["txid"])
 
-    def cancel_all_open_buy_orders(self: Self) -> None:
+    def __cancel_all_open_buy_orders(self: Self) -> None:
         """
         Cancels all open buy orders and removes them from the orderbook.
         """
         LOG.info("Cancelling all open buy orders...")
         for txid, order in self._rest_api.get_open_orders(
-            userref=self.__config.userref,
+            userref=self._config.userref,
         )["open"].items():
             if (
                 order["descr"]["type"] == "buy"
-                and order["descr"]["pair"] == self.__s.altname
+                and order["descr"]["pair"] == self._runtime_attrs.altname
             ):
                 self._handle_cancel_order(txid=txid)
                 sleep(0.2)  # Avoid rate limiting
@@ -530,7 +599,7 @@ class IGridBaseStrategy(IStrategy):
             * (1 + self._config["interval"])
             * 1.001
         ):
-            self._orderbook_service.cancel_all_open_buy_orders()
+            self.__cancel_all_open_buy_orders()
             self.__check_price_range()
             return True
 
@@ -589,7 +658,7 @@ class IGridBaseStrategy(IStrategy):
 
         if (
             self._orderbook_table.count(filters={"side": "buy"})
-            >= self._config["n_open_buy_orders"]
+            >= self._config.n_open_buy_orders
         ):
             # Don't place new buy orders if there are already enough
             return
@@ -603,7 +672,7 @@ class IGridBaseStrategy(IStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
             ),
         )
 
@@ -613,20 +682,23 @@ class IGridBaseStrategy(IStrategy):
             self._rest_api.truncate(
                 amount=Decimal(self._config["amount_per_grid"]) / Decimal(order_price),
                 amount_type="volume",
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
             ),
         )
 
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
-        current_balances = self._orderbook_service.get_balances()
-        if current_balances["quote_available"] > self.__s.amount_per_grid_plus_fee:
+        current_balances = self._get_balances()
+        if (
+            current_balances["quote_available"]
+            > self._runtime_attrs.amount_per_grid_plus_fee
+        ):
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
                 volume,
-                self._config["base_currency"],
+                self._config.base_currency,
                 order_price,
-                self._config["quote_currency"],
+                self._config.quote_currency,
             )
 
             # Place a new buy order, append txid to pending list and delete
@@ -635,10 +707,10 @@ class IGridBaseStrategy(IStrategy):
                 ordertype="limit",
                 side="buy",
                 volume=volume,
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
                 price=order_price,
-                userref=self._config["userref"],
-                validate=self._config["dry_run"],
+                userref=self._config.userref,
+                validate=self._config.dry_run,
                 oflags="post",  # post-only buy orders
             )
 
@@ -648,13 +720,12 @@ class IGridBaseStrategy(IStrategy):
 
         # ======================================================================
         # Not enough available funds to place a buy order.
-        message = f"⚠️ {self.__s.symbol}"
-        message += f"├ Not enough {self._config['quote_currency']}"
-        message += f"├ to buy {volume} {self._config['base_currency']}"
-        message += f"└ for {order_price} {self._config['quote_currency']}"
-        self.__s.t.send_to_telegram(message)
+        message = f"⚠️ {self._runtime_attrs.symbol}"
+        message += f"├ Not enough {self._config.quote_currency}"
+        message += f"├ to buy {volume} {self._config.base_currency}"
+        message += f"└ for {order_price} {self._config.quote_currency}"
+        self._event_bus.publish("notification", {"message": message})
         LOG.warning("Current balances: %s", current_balances)
-        return
 
     def handle_filled_order_event(self: Self, txid: str) -> None:
         """
@@ -676,8 +747,8 @@ class IGridBaseStrategy(IStrategy):
         # Check if the order belongs to this bot and return if not
         ##
         if (
-            order_details["descr"]["pair"] != self.__s.altname
-            or order_details["userref"] != self._config["userref"]
+            order_details["descr"]["pair"] != self._runtime_attrs.altname
+            or order_details["userref"] != self._config.userref
         ):
             LOG.debug(
                 "Filled order %s was not from this bot or pair.",
@@ -721,16 +792,19 @@ class IGridBaseStrategy(IStrategy):
         # ======================================================================
         # Notify about the executed order
         ##
-        self.__s.t.send_to_telegram(
-            message=str(
-                f"✅ {self.__s.symbol}: "
-                f"{order_details['descr']['type'][0].upper()}{order_details['descr']['type'][1:]} "
-                "order executed"
-                f"\n ├ Price » {order_details['descr']['price']} {self._config['quote_currency']}"
-                f"\n ├ Size » {order_details['vol_exec']} {self._config['base_currency']}"
-                f"\n └ Size in {self._config['quote_currency']} » "
-                f"{round(float(order_details['descr']['price']) * float(order_details['vol_exec']), self.__s.cost_decimals)}",
-            ),
+        self._event_bus.publish(
+            "notification",
+            {
+                "message": str(
+                    f"✅ {self._runtime_attrs.symbol}: "
+                    f"{order_details['descr']['type'][0].upper()}{order_details['descr']['type'][1:]} "
+                    "order executed"
+                    f"\n ├ Price » {order_details['descr']['price']} {self._config.quote_currency}"
+                    f"\n ├ Size » {order_details['vol_exec']} {self._config.base_currency}"
+                    f"\n └ Size in {self._config.quote_currency} » "
+                    f"{round(float(order_details['descr']['price']) * float(order_details['vol_exec']), self._runtime_attrs.cost_decimals)}",
+                )
+            },
         )
 
         # ======================================================================
@@ -795,8 +869,8 @@ class IGridBaseStrategy(IStrategy):
         order_details = self._orderbook_service.get_orders_info_with_retry(txid=txid)
 
         if (
-            order_details["descr"]["pair"] != self.__s.altname
-            or order_details["userref"] != self._config["userref"]
+            order_details["descr"]["pair"] != self._runtime_attrs.altname
+            or order_details["userref"] != self._config.userref
         ):
             return
 
@@ -868,6 +942,73 @@ class IGridBaseStrategy(IStrategy):
                         "vol_of_unfilled_remaining_max_price": 0,
                     },
                 )
+
+    def build_update_message() -> str:
+        """Build a message for updates."""
+        balances = self.__s.get_balances()
+
+        message = f"👑 {self.__s.symbol}\n"
+        message += f"└ Price » {self.__s.ticker.last} {self.__s.quote_currency}\n\n"
+
+        message += "⚜️ Account\n"
+        message += f"├ Total {self.__s.base_currency} » {balances['base_balance']}\n"
+        message += f"├ Total {self.__s.quote_currency} » {balances['quote_balance']}\n"
+        message += (
+            f"├ Available {self.__s.quote_currency} » {balances['quote_available']}\n"
+        )
+        message += f"├ Available {self.__s.base_currency} » {balances['base_available'] - float(self.__s.configuration.get()['vol_of_unfilled_remaining'])}\n"  # noqa: E501
+        message += f"├ Unfilled surplus of {self.__s.base_currency} » {self.__s.configuration.get()['vol_of_unfilled_remaining']}\n"  # noqa: E501
+        message += f"├ Wealth » {round(balances['base_balance'] * self.__s.ticker.last + balances['quote_balance'], self.__s.cost_decimals)} {self.__s.quote_currency}\n"  # noqa: E501
+        message += f"└ Investment » {round(self.__s.investment, self.__s.cost_decimals)} / {self.__s.max_investment} {self.__s.quote_currency}\n\n"  # noqa: E501
+
+        message += "💠 Orders\n"
+        message += f"├ Amount per Grid » {self.__s.amount_per_grid} {self.__s.quote_currency}\n"
+        message += f"└ Open orders » {self.__s.orderbook.count()}\n"
+
+        message += "\n```\n"
+        message += f" 🏷️ Price in {self.__s.quote_currency}\n"
+        max_orders_to_list: int = 5
+
+        next_sells = [
+            order["price"]
+            for order in self.__s.orderbook.get_orders(
+                filters={"side": "sell"},
+                order_by=("price", "ASC"),
+                limit=max_orders_to_list,
+            )
+        ]
+        next_sells.reverse()
+
+        if (n_sells := len(next_sells)) == 0:
+            message += f"└───┬> {self.__s.ticker.last}\n"
+        else:
+            for index, sell_price in enumerate(next_sells):
+                change = (sell_price / self.__s.ticker.last - 1) * 100
+                if index == 0:
+                    message += f" │  ┌[ {sell_price} (+{change:.2f}%)\n"
+                elif index <= n_sells - 1 and index != max_orders_to_list:
+                    message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
+            message += f" └──┼> {self.__s.ticker.last}\n"
+
+        next_buys = [
+            order["price"]
+            for order in self.__s.orderbook.get_orders(
+                filters={"side": "buy"},
+                order_by=("price", "DESC"),
+                limit=max_orders_to_list,
+            )
+        ]
+        if (n_buys := len(next_buys)) != 0:
+            for index, buy_price in enumerate(next_buys):
+                change = (buy_price / self.__s.ticker.last - 1) * 100
+                if index < n_buys - 1 and index != max_orders_to_list:
+                    message += f"    ├[ {buy_price} ({change:.2f}%)\n"
+                else:
+                    message += f"    └[ {buy_price} ({change:.2f}%)"
+        message += "\n```"
+
+        self._event_bus.publish("notification", {"message": message})
+        self.__s.configuration.update({"last_telegram_update": datetime.now()})
 
     # ==========================================================================
     ## Abstract methods

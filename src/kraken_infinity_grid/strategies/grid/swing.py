@@ -8,7 +8,7 @@
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.strategies.grid_base import IGridBaseStrategy
+from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)
 
@@ -43,14 +43,14 @@ class SwingStrategy(IGridBaseStrategy):
                 # 2x interval above [last close price | price of highest buy]
                 order_price = (
                     last_price
-                    * (1 + self._config["interval"])
-                    * (1 + self._config["interval"])
+                    * (1 + self._config.interval)
+                    * (1 + self._config.interval)
                 )
                 if order_price < price_of_highest_buy:
                     order_price = (
                         price_of_highest_buy
-                        * (1 + self._config["interval"])
-                        * (1 + self._config["interval"])
+                        * (1 + self._config.interval)
+                        * (1 + self._config.interval)
                     )
 
             else:
@@ -62,16 +62,16 @@ class SwingStrategy(IGridBaseStrategy):
                     )
 
                 # Sell price 1x interval above buy price
-                order_price = last_price * (1 + self._config["interval"])
+                order_price = last_price * (1 + self._config.interval)
                 if self._ticker.last > order_price:
-                    order_price = self._ticker.last * (1 + self._config["interval"])
+                    order_price = self._ticker.last * (1 + self._config.interval)
             return order_price
 
         if side == "buy":  # New order is a buy
-            order_price = last_price * 100 / (100 + 100 * self._config["interval"])
+            order_price = last_price * 100 / (100 + 100 * self._config.interval)
             if order_price > self._ticker.last:
                 order_price = (
-                    self._ticker.last * 100 / (100 + 100 * self._config["interval"])
+                    self._ticker.last * 100 / (100 + 100 * self._config.interval)
                 )
             return order_price
 
@@ -84,19 +84,22 @@ class SwingStrategy(IGridBaseStrategy):
         """
         LOG.debug("Checking if extra sell order can be placed...")
         if self._orderbook_table.count(filters={"side": "sell"}) == 0:
-            fetched_balances = self._orderbook_service.get_balances()
+            fetched_balances = self._get_balances()
 
             if (
                 fetched_balances["base_available"] * self._ticker.last
-                > self.__s.amount_per_grid_plus_fee
+                > self._runtime_attrs.amount_per_grid_plus_fee
             ):
                 order_price = self._get_order_price(
                     side="sell",
                     last_price=self._ticker.last,
                     extra_sell=True,
                 )
-                self.__s.t.send_to_telegram(
-                    f"ℹ️ {self.__s.symbol}: Placing extra sell order",  # noqa: RUF001
+                self._event_bus.publish(
+                    "notification",
+                    {
+                        "message": f"ℹ️ {self._runtime_attrs.symbol}: Placing extra sell order"
+                    },
                 )
                 self.handle_arbitrage(side="sell", order_price=order_price)
 
@@ -106,7 +109,7 @@ class SwingStrategy(IGridBaseStrategy):
         txid_to_delete: str | None = None,
     ) -> None:
         """Places a new sell order."""
-        if self._config["dry_run"]:
+        if self._config.dry_run:
             LOG.info("Dry run, not placing sell order.")
             return
 
@@ -159,7 +162,7 @@ class SwingStrategy(IGridBaseStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
             ),
         )
 
@@ -167,35 +170,35 @@ class SwingStrategy(IGridBaseStrategy):
         # accumulating the base currency.
         volume = float(
             self._rest_api.truncate(
-                amount=Decimal(self._config["amount_per_grid"])
-                / (Decimal(order_price) * (1 - (2 * Decimal(self.__s.fee)))),
+                amount=Decimal(self._config.amount_per_grid)
+                / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
                 amount_type="volume",
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
             ),
         )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
-        fetched_balances = self._orderbook_service.get_balances()
+        fetched_balances = self._get_balances()
         if fetched_balances["base_available"] >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
             LOG.info(
                 "Placing order to sell %s %s @ %s %s.",
                 volume,
-                self._config["base_currency"],
+                self._config.base_currency,
                 order_price,
-                self._config["quote_currency"],
+                self._config.quote_currency,
             )
 
             placed_order = self._rest_api.create_order(
                 ordertype="limit",
                 side="sell",
                 volume=volume,
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
                 price=order_price,
-                userref=self._config["userref"],
-                validate=self._config["dry_run"],
+                userref=self._config.userref,
+                validate=self._config.dry_run,
             )
 
             placed_order_txid = placed_order["txid"][0]
@@ -212,12 +215,11 @@ class SwingStrategy(IGridBaseStrategy):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self.__s.symbol}"
-        message += f"├ Not enough {self._config['base_currency']}"
-        message += f"├ to sell {volume} {self._config['base_currency']}"
-        message += f"└ for {order_price} {self._config['quote_currency']}"
-
-        self.__s.t.send_to_telegram(message)
+        message = f"⚠️ {self._runtime_attrs.symbol}"
+        message += f"├ Not enough {self._config.base_currency}"
+        message += f"├ to sell {volume} {self._config.base_currency}"
+        message += f"└ for {order_price} {self._config.quote_currency}"
+        self._event_bus.publish("notification", {"message": message})
         LOG.warning("Current balances: %s", fetched_balances)
 
         if txid_to_delete is not None:

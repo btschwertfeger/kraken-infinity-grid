@@ -9,7 +9,10 @@ from kraken_infinity_grid.models.dto.configuration import NotificationConfigDTO
 
 from kraken_infinity_grid.interfaces import INotificationChannel
 
+from kraken_infinity_grid.core.event_bus import Event
+from logging import getLogger
 
+LOG = getLogger(__name__)
 
 
 class NotificationService:
@@ -49,6 +52,7 @@ class NotificationService:
         Returns:
             bool: True if the message was sent through at least one channel
         """
+        LOG.info("Sending notification: %s", message)
         if not self.__channels:
             return False
 
@@ -59,70 +63,6 @@ class NotificationService:
 
         return success
 
-    def build_update_message() -> str:
-        """Build a message for updates."""
-        balances = self.__s.get_balances()
-
-        message = f"👑 {self.__s.symbol}\n"
-        message += f"└ Price » {self.__s.ticker.last} {self.__s.quote_currency}\n\n"
-
-        message += "⚜️ Account\n"
-        message += f"├ Total {self.__s.base_currency} » {balances['base_balance']}\n"
-        message += f"├ Total {self.__s.quote_currency} » {balances['quote_balance']}\n"
-        message += (
-            f"├ Available {self.__s.quote_currency} » {balances['quote_available']}\n"
-        )
-        message += f"├ Available {self.__s.base_currency} » {balances['base_available'] - float(self.__s.configuration.get()['vol_of_unfilled_remaining'])}\n"  # noqa: E501
-        message += f"├ Unfilled surplus of {self.__s.base_currency} » {self.__s.configuration.get()['vol_of_unfilled_remaining']}\n"  # noqa: E501
-        message += f"├ Wealth » {round(balances['base_balance'] * self.__s.ticker.last + balances['quote_balance'], self.__s.cost_decimals)} {self.__s.quote_currency}\n"  # noqa: E501
-        message += f"└ Investment » {round(self.__s.investment, self.__s.cost_decimals)} / {self.__s.max_investment} {self.__s.quote_currency}\n\n"  # noqa: E501
-
-        message += "💠 Orders\n"
-        message += f"├ Amount per Grid » {self.__s.amount_per_grid} {self.__s.quote_currency}\n"
-        message += f"└ Open orders » {self.__s.orderbook.count()}\n"
-
-        message += "\n```\n"
-        message += f" 🏷️ Price in {self.__s.quote_currency}\n"
-        max_orders_to_list: int = 5
-
-        next_sells = [
-            order["price"]
-            for order in self.__s.orderbook.get_orders(
-                filters={"side": "sell"},
-                order_by=("price", "ASC"),
-                limit=max_orders_to_list,
-            )
-        ]
-        next_sells.reverse()
-
-        if (n_sells := len(next_sells)) == 0:
-            message += f"└───┬> {self.__s.ticker.last}\n"
-        else:
-            for index, sell_price in enumerate(next_sells):
-                change = (sell_price / self.__s.ticker.last - 1) * 100
-                if index == 0:
-                    message += f" │  ┌[ {sell_price} (+{change:.2f}%)\n"
-                elif index <= n_sells - 1 and index != max_orders_to_list:
-                    message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
-            message += f" └──┼> {self.__s.ticker.last}\n"
-
-        next_buys = [
-            order["price"]
-            for order in self.__s.orderbook.get_orders(
-                filters={"side": "buy"},
-                order_by=("price", "DESC"),
-                limit=max_orders_to_list,
-            )
-        ]
-        if (n_buys := len(next_buys)) != 0:
-            for index, buy_price in enumerate(next_buys):
-                change = (buy_price / self.__s.ticker.last - 1) * 100
-                if index < n_buys - 1 and index != max_orders_to_list:
-                    message += f"    ├[ {buy_price} ({change:.2f}%)\n"
-                else:
-                    message += f"    └[ {buy_price} ({change:.2f}%)"
-        message += "\n```"
-
-        self.send_to_telegram(message)
-        self.__s.configuration.update({"last_telegram_update": datetime.now()})
-
+    def on_notification(self, event: Event) -> None:
+        """Handle a notification event."""
+        self.notify(event.data["message"])

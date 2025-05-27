@@ -13,7 +13,9 @@ FIXME: Add comprehensive examples and documentation for each method.
 
 from abc import ABC, abstractmethod
 from typing import Any
-
+from kraken_infinity_grid.models.schemas import (
+    AssetPairInfoSchema,
+)
 
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
@@ -76,8 +78,8 @@ class IExchangeRESTService(ABC):
         """Get the current system status of the exchange."""
 
     @abstractmethod
-    def get_asset_pairs(self, pair: list[str]) -> dict[str, Any]:
-        """Get available asset pairs on the exchange."""
+    def get_asset_pair_info(self, pair: str) -> AssetPairInfoSchema:
+        """Get available asset pair info from the exchange."""
 
 
 class IExchangeWebSocketService(ABC):

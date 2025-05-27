@@ -121,38 +121,6 @@ class OrderbookService:
             <= self.investment + self.amount_per_grid_plus_fee
         ) or (self.__config.max_investment <= self.investment)
 
-    def get_balances(self: Self) -> dict[str, float]:
-        """
-        Returns the available and overall balances of the quote and base
-        currency.
-        """
-        LOG.debug("Retrieving the user's balances...")
-
-        base_balance = Decimal(0)
-        base_available = Decimal(0)
-        quote_balance = Decimal(0)
-        quote_available = Decimal(0)
-
-        for symbol, data in self._rest_api.get_balances().items():
-            if symbol == self.zbase_currency:
-                base_balance = Decimal(data["balance"])
-                base_available = base_balance - Decimal(data["hold_trade"])
-            elif symbol == self.xquote_currency:
-                quote_balance = Decimal(data["balance"])
-                quote_available = quote_balance - Decimal(data["hold_trade"])
-
-        balances = {
-            "base_balance": float(base_balance),
-            "quote_balance": float(quote_balance),
-            "base_available": float(base_available),
-            "quote_available": float(quote_available),
-        }
-        LOG.debug("Retrieved balances: %s", balances)
-        return balances
-
-    # ==========================================================================
-    #            C H E C K - P R I C E - R A N G E
-    # ==========================================================================
 
     def check_pending_txids(self: Self) -> bool:
         """

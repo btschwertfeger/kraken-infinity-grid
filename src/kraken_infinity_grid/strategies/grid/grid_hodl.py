@@ -9,7 +9,7 @@ from decimal import Decimal
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.strategies.grid_base import IGridBaseStrategy
+from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)
 
@@ -37,21 +37,19 @@ class GridHodlStrategy(IGridBaseStrategy):
             # Regular sell order (even for SWING) (cDCA will trigger this
             # but it will be filtered out later)
             if last_price > price_of_highest_buy:
-                self._configuration_table.update(
-                    {"price_of_highest_buy": last_price},
-                )
+                self._configuration_table.update({"price_of_highest_buy": last_price})
 
             # Sell price 1x interval above buy price
-            order_price = last_price * (1 + self._config["interval"])
+            order_price = last_price * (1 + self._config.interval)
             if self._ticker.last > order_price:
-                order_price = self._ticker.last * (1 + self._config["interval"])
+                order_price = self._ticker.last * (1 + self._config.interval)
             return order_price
 
         if side == "buy":  # New order is a buy
-            order_price = last_price * 100 / (100 + 100 * self._config["interval"])
+            order_price = last_price * 100 / (100 + 100 * self._config.interval)
             if order_price > self._ticker.last:
                 order_price = (
-                    self._ticker.last * 100 / (100 + 100 * self._config["interval"])
+                    self._ticker.last * 100 / (100 + 100 * self._config.interval)
                 )
             return order_price
 
@@ -66,7 +64,7 @@ class GridHodlStrategy(IGridBaseStrategy):
         txid_to_delete: str | None = None,
     ) -> None:
         """Places a new sell order."""
-        if self._config["dry_run"]:
+        if self._config.dry_run:
             LOG.info("Dry run, not placing sell order.")
             return
 
@@ -84,8 +82,7 @@ class GridHodlStrategy(IGridBaseStrategy):
                 filters={"txid": txid_to_delete},
             ).first():  # type: ignore[no-untyped-call]
                 self._unsold_buy_order_txids_table.add(
-                    txid=txid_to_delete,
-                    price=order_price,
+                    txid=txid_to_delete, price=order_price
                 )
 
             # ==================================================================
@@ -110,8 +107,7 @@ class GridHodlStrategy(IGridBaseStrategy):
                 )
                 sleep(1)
                 self._new_sell_order(
-                    order_price=order_price,
-                    txid_to_delete=txid_to_delete,
+                    order_price=order_price, txid_to_delete=txid_to_delete
                 )
                 return
 
@@ -119,7 +115,7 @@ class GridHodlStrategy(IGridBaseStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
             ),
         )
 
@@ -131,35 +127,35 @@ class GridHodlStrategy(IGridBaseStrategy):
         # accumulating the base currency.
         volume = float(
             self._rest_api.truncate(
-                amount=Decimal(self._config["amount_per_grid"])
-                / (Decimal(order_price) * (1 - (2 * Decimal(self.__s.fee)))),
+                amount=Decimal(self._config.amount_per_grid)
+                / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
                 amount_type="volume",
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
             ),
         )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
-        fetched_balances = self._orderbook_service.get_balances()
+        fetched_balances = self._get_balances()
         if fetched_balances["base_available"] >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
             LOG.info(
                 "Placing order to sell %s %s @ %s %s.",
                 volume,
-                self._config["base_currency"],
+                self._config.base_currency,
                 order_price,
-                self._config["quote_currency"],
+                self._config.quote_currency,
             )
 
             placed_order = self._rest_api.create_order(
                 ordertype="limit",
                 side="sell",
                 volume=volume,
-                pair=self.__s.symbol,
+                pair=self._runtime_attrs.symbol,
                 price=order_price,
-                userref=self._config["userref"],
-                validate=self._config["dry_run"],
+                userref=self._config.userref,
+                validate=self._config.dry_run,
             )
 
             placed_order_txid = placed_order["txid"][0]
@@ -176,12 +172,12 @@ class GridHodlStrategy(IGridBaseStrategy):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self.__s.symbol}"
-        message += f"├ Not enough {self._config["base_currency"]}"
-        message += f"├ to sell {volume} {self._config["base_currency"]}"
-        message += f"└ for {order_price} {self._config["quote_currency"]}"
+        message = f"⚠️ {self._runtime_attrs.symbol}"
+        message += f"├ Not enough {self._config.base_currency}"
+        message += f"├ to sell {volume} {self._config.base_currency}"
+        message += f"└ for {order_price} {self._config.quote_currency}"
 
-        self.__s.t.send_to_telegram(message)
+        self._event_bus.publish("notification", {"message": message})
         LOG.warning("Current balances: %s", fetched_balances)
 
         if txid_to_delete is not None:

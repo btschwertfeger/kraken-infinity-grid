@@ -18,12 +18,7 @@ from kraken_infinity_grid.infrastructure.database import (
     UnsoldBuyOrderTXIDs,
 )
 from kraken_infinity_grid.services import OrderbookService
-from kraken_infinity_grid.strategies import (
-    CDCAStrategy,
-    GridHodlStrategy,
-    GridSellStrategy,
-    SwingStrategy,
-)
+
 from logging import getLogger
 from kraken_infinity_grid.core.state_machine import States
 from importlib.metadata import version
@@ -34,7 +29,7 @@ from datetime import datetime, timedelta
 from kraken_infinity_grid.models.dto.configuration import (
     DBConfigDTO,
     NotificationConfigDTO,
-    BotConfig,
+    BotConfigDTO,
 )
 
 LOG = getLogger(__name__)
@@ -49,7 +44,7 @@ class Bot:
 
     def __init__(
         self,
-        bot_config: BotConfig,
+        bot_config: BotConfigDTO,
         db_config: DBConfigDTO,
         notification_config: NotificationConfigDTO,
     ):
@@ -78,7 +73,7 @@ class Bot:
 
         exchange_services = self.__exchange_factory()
         self.__rest_api = exchange_services["REST"]
-        self.ws_client = exchange_services["websocket"]
+        self.__ws_client = exchange_services["websocket"]
 
         # == Application services ==============================================
         ##
@@ -94,13 +89,19 @@ class Bot:
         )
 
         # Create the appropriate strategy based on config
-        self.strategy = self.__strategy_factory()
+        self.__strategy = self.__strategy_factory()
 
         # Setup event subscriptions
         self.__setup_event_handlers()
 
     def __strategy_factory(self) -> Any:
-        if (strategy_type := self.__config["strategy"]) not in (
+        from kraken_infinity_grid.strategies.grid import ( # pylint: disable=import-outside-toplevel
+            CDCAStrategy,
+            GridHodlStrategy,
+            GridSellStrategy,
+            SwingStrategy,
+        )
+        if self.__config.strategy not in (
             strategies := {
                 "SWING": SwingStrategy,
                 "GridHODL": GridHodlStrategy,
@@ -108,9 +109,9 @@ class Bot:
                 "cDCA": CDCAStrategy,
             }
         ):
-            raise ValueError(f"Unknown strategy type: {strategy_type}")
+            raise ValueError(f"Unknown strategy type: {self.__config.strategy}")
 
-        return strategies[strategy_type](
+        return strategies[self.__config.strategy](
             state_machine=self.__state_machine,
             rest_api=self.__rest_api,
             orderbook_service=self.__orderbook_service,
@@ -119,7 +120,7 @@ class Bot:
 
     def __exchange_factory(self) -> dict:
         """Create the exchange service based on the configuration."""
-        if self.__config["exchange"] == "Kraken":
+        if self.__config.exchange == "Kraken":
             from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel
                 KrakenExchangeRESTServiceAdapter,
                 KrakenExchangeWebsocketServiceAdapter,
@@ -127,18 +128,18 @@ class Bot:
 
             return {
                 "REST": KrakenExchangeRESTServiceAdapter(
-                    api_key=self.__config["api_key"],
-                    api_secret=self.__config["api_secret"],
+                    api_key=self.__config.api_key,
+                    api_secret=self.__config.api_secret,
                     state_machine=self.__state_machine,
                 ),
                 "websocket": KrakenExchangeWebsocketServiceAdapter(
-                    api_key=self.__config["api_key"],
-                    api_secret=self.__config["api_secret"],
+                    api_key=self.__config.api_key,
+                    api_secret=self.__config.api_secret,
                     state_machine=self.__state_machine,
                     event_bus=self.__event_bus,
                 ),
             }
-        raise ValueError(f"Unsupported exchange: {exchange}")
+        raise ValueError(f"Unsupported exchange: {self.__config.exchange}")
 
     def __setup_event_handlers(self):
         # Subscribe to events
@@ -146,12 +147,13 @@ class Bot:
         # prepare_for_trading is called after the initial setup is done and the
         # websocket connection is established.
         self.__event_bus.subscribe(
-            "prepare_for_trading", self.strategy.on_prepare_for_trading
+            "prepare_for_trading", self.__strategy.on_prepare_for_trading
         )
-        self.__event_bus.subscribe("ticker_update", self.strategy.on_ticker_update)
-        self.__event_bus.subscribe("order_placed", self.strategy.on_order_placed)
-        self.__event_bus.subscribe("order_filled", self.strategy.on_order_filled)
-        self.__event_bus.subscribe("order_cancelled", self.strategy.on_order_cancelled)
+        self.__event_bus.subscribe("ticker_update", self.__strategy.on_ticker_update)
+        self.__event_bus.subscribe("order_placed", self.__strategy.on_order_placed)
+        self.__event_bus.subscribe("order_filled", self.__strategy.on_order_filled)
+        self.__event_bus.subscribe("order_cancelled", self.__strategy.on_order_cancelled)
+        self.__event_bus.subscribe("notification", self.__notification_service.on_notification)
 
     async def run(self):
         """Start the bot"""
@@ -189,7 +191,7 @@ class Bot:
         # Start the websocket connection
         ##
         LOG.info("Starting the websocket connection...")
-        await self.ws_client.start()
+        await self.__ws_client.start()
         LOG.info("Websocket connection established!")
 
         # ======================================================================
@@ -201,7 +203,7 @@ class Bot:
                 {
                     "channel": "ticker",
                     "symbol": [
-                        f"{self.__config['base_currency']}/{self.__config['quote_currency']}"
+                        f"{self.__config.base_currency}/{self.__config.quote_currency}"
                     ],
                 },
                 {
@@ -214,7 +216,7 @@ class Bot:
             ]
         }
         for subscription in subscriptions[self.__config["exchange"]]:
-            self.ws_client.subscribe(subscription)
+            self.__ws_client.subscribe(subscription)
 
         # Set this initially in case the DB contains a value that is too old.
         self.__configuration_table.update({"last_price_time": datetime.now()})
@@ -295,110 +297,11 @@ class Bot:
         3. Notifies the user via Telegram about the termination.
         4. Exits the algorithm.
         """
-        await self.ws_client.close()
+        await self.__ws_client.close()
         self.__db.close()
 
-        self.t.send_to_telegram(
-            message=f"{self.name}\n{self.symbol} terminated.\nReason: {reason}",
-            exception=exception,
+        self.__event_bus.publish(
+            "notification", {"message": f"{self.name} terminated.\nReason: {reason}"}
         )
         sys.exit(exception)
 
-
-#     def __init__(  # pylint: disable=too-many-arguments
-#         self: Self,
-#         key: str,
-#         secret: str,
-#         config: dict,
-#         db_config: dict,
-#         dry_run: bool = False,
-#     ) -> None:
-#         super().__init__(key=key, secret=secret)
-
-#         LOG.info(
-#             "Initiate the Kraken Infinity Grid Algorithm instance (v%s)",
-#             version("kraken-infinity-grid"),
-#         )
-#         LOG.debug("Config: %s", config)
-
-#         self.dry_run: bool = dry_run
-
-#         self.state_machine = StateMachine(initial_state=States.INITIALIZING)
-#         self.__stop_event: asyncio.Event = asyncio.Event()
-#         self.state_machine.register_callback(
-#             States.SHUTDOWN_REQUESTED,
-#             self.__stop_event.set,
-#         )
-#         self.state_machine.register_callback(
-#             States.ERROR,
-#             self.__stop_event.set,
-#         )
-
-#         # Settings and config collection
-#         ##
-#         self.strategy: str = config["strategy"]
-#         self.userref: int = config["userref"]
-#         self.name: str = config["name"]
-
-#         # Commonly used config values
-#         ##
-#         self.interval: float = float(config["interval"])
-#         self.amount_per_grid: float = float(config["amount_per_grid"])
-#         self.amount_per_grid_plus_fee: float | None = config.get("fee")
-
-#         self.ticker: SimpleNamespace = None
-#         self.max_investment: float = config["max_investment"]
-#         self.n_open_buy_orders: int = config["n_open_buy_orders"]
-#         self.fee: float | None = config.get("fee")
-#         self.base_currency: str = config["base_currency"]
-#         self.quote_currency: str = config["quote_currency"]
-
-#         self.symbol: str = self.base_currency + "/" + self.quote_currency  # BTC/EUR
-#         self.xsymbol: str | None = None  # XXBTZEUR
-#         self.altname: str | None = None  # XBTEUR
-#         self.zbase_currency: str | None = None  # XXBT
-#         self.xquote_currency: str | None = None  # ZEUR
-#         self.cost_decimals: int | None = None  # 5 for EUR, i.e., 0.00001 EUR
-
-#         # If the algorithm receives execution messages before being ready to
-#         # trade, they will be stored here and processed later.
-#         ##
-#         self.__missed_messages: list[dict] = []
-
-#         # Define the Kraken clients
-#         ##
-#         self.user: User = User(key=key, secret=secret)
-#         self.market: Market = Market(key=key, secret=secret)
-#         self.trade: Trade = Trade(key=key, secret=secret)
-
-#         # Database setup
-#         ##
-#         self.database: DBConnect = DBConnect(**db_config)
-#         self.orderbook: Orderbook = Orderbook(userref=self.userref, db=self.database)
-#         self.configuration: Configuration = Configuration(
-#             userref=self.userref,
-#             db=self.database,
-#         )
-#         self.pending_txids: PendingIXIDs = PendingIXIDs(
-#             userref=self.userref,
-#             db=self.database,
-#         )
-#         self.unsold_buy_order_txids: UnsoldBuyOrderTXIDs = UnsoldBuyOrderTXIDs(
-#             userref=self.userref,
-#             db=self.database,
-#         )
-#         self.database.init_db()
-
-#         # Instantiate the algorithm's components
-#         ##
-#         self.om = OrderManager(strategy=self)
-#         self.sm = SetupManager(strategy=self)
-#         self.t = Telegram(
-#             strategy=self,
-#             telegram_token=config["telegram_token"],
-#             telegram_chat_id=config["telegram_chat_id"],
-#             exception_token=config["exception_token"],
-#             exception_chat_id=config["exception_chat_id"],
-#         )
-
-#     # ==========================================================================

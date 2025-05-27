@@ -7,28 +7,38 @@
 
 # FIXME: add validators
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator
 
 
 class BotConfigDTO(BaseModel):
-    """Data transfer object for bot configuration"""
+    """
+    Data transfer object for the general bot configuration. These values are
+    passed via CLI or environment variables.
+    """
 
+    # ==========================================================================
+    ## General attributes
+    strategy: str
     api_key: str
     secret_key: str
-    userref: int
-    strategy: str
     name: str
-    interval: float
-    amount_per_grid: float
-    max_investment: float
-    n_open_buy_orders: int
+    userref: int
     base_currency: str
     quote_currency: str
     fee: float | None = None
     dry_run: bool = False
+    max_investment: float
+
+    # ==========================================================================
+    ## Grid-specific attributes
+    # We expect these values to be set by the user via CLI or environment
+    # variables. Cloup is handling the validation of these values.
+    amount_per_grid: float | None
+    interval: float | None
+    n_open_buy_orders: int | None
 
     @field_validator("strategy")
-    def validate_strategy(self, value):
+    def validate_strategy(value):
         """Validate the strategy value."""
         if value not in (valid_strategies := ("GridHODL", "GridSell", "SWING", "cDCA")):
             raise ValueError(f"Strategy must be one of: {', '.join(valid_strategies)}")
@@ -47,9 +57,8 @@ class DBConfigDTO(BaseModel):
 class TelegramConfigDTO(BaseModel):
     """Pydantic model for Telegram notification configuration."""
 
-    enabled: bool = Field(default=False)
-    bot_token: str = Field(...)  # required field
-    chat_id: str = Field(...)  # required field
+    token: str | None
+    chat_id: str | None
 
 
 class NotificationConfigDTO(BaseModel):
