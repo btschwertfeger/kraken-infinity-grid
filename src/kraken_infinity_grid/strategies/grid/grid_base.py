@@ -23,6 +23,8 @@ from datetime import datetime
 from logging import getLogger
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.services import OrderbookService
+from kraken_infinity_grid.exceptions import GridBotStateError
+import traceback
 
 LOG = getLogger(__name__)
 from time import sleep
@@ -54,7 +56,6 @@ class IGridBaseStrategy(IStrategy):
         self._unsold_buy_order_txids_table = unsold_buy_order_txids_table
         self._ticker: SimpleNamespace = None
 
-
     # ==========================================================================
     ## Event handlers
     def on_ticker_update(self, event: Event) -> None:
@@ -66,7 +67,7 @@ class IGridBaseStrategy(IStrategy):
             if self._unsold_buy_order_txids_table.count() != 0:
                 self._orderbook_service.add_missed_sell_orders()
 
-            self.check_price_range()
+            self.__check_price_range()
 
     def on_order_placed(self, event: Event) -> None:
         LOG.debug("Got order_placed event: %s", event.data)
@@ -80,13 +81,266 @@ class IGridBaseStrategy(IStrategy):
         LOG.debug("Got order_cancelled event: %s", event.data)
         self._orderbook_service.handle_cancel_order(event.data["order_id"])
 
-
     def on_prepare_for_trading(self, event: Event) -> None:
-        pass
+        """
+        This function gets triggered once during the setup of the algorithm. It
+        prepares the algorithm for live trading by checking the asset pair
+        parameters, syncing the local with the upstream orderbook, place missing
+        sell orders that not get through because of e.g. "missing funds", and
+        updating the orderbook.
+
+        This function must be sync, since it must block until the setup is done.
+        """
+        LOG.info(
+            "Preparing for trading by initializing and updating local orderbook...",
+        )
+
+        self.__s.t.send_to_telegram(
+            message=f"✅ {self.__s.name} - {self.__s.symbol} is live again!",
+            exception=True,
+            log=False,
+        )
+        # ======================================================================
+
+        # Check the fee and altname of the asset pair
+        ##
+        self.__check_asset_pair_parameter()
+
+        # Append orders to local orderbook in case they are not saved yet
+        ##
+        self._orderbook_service.assign_all_pending_transactions()
+
+        # Try to place missing sell orders that not get through because
+        # of "missing funds".
+        ##
+        self.__add_missed_sell_orders()
+
+        # Update the orderbook, check for closed, filled, cancelled trades,
+        # and submit new orders if necessary.
+        ##
+
+        try:
+            self.__update_order_book()
+        except Exception as exc:
+            message = f"Exception while updating the orderbook: {exc}: {traceback.format_exc()}"
+            LOG.error(message)
+            self._state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(message) from exc
+
+        # Check if the configured amount per grid or the interval have changed,
+        # requiring a cancellation of all open buy orders.
+        ##
+        self.__check_configuration_changes()
+
+        # Everything is done, the bot is ready to trade live.
+        ##
+        self._state_machine.facts["ready_to_trade"] = True
+        LOG.info("Algorithm is ready to trade!")
+
+        # Checks if the open orders match the range and cancel if necessary. It
+        # is the heart of this algorithm and gets triggered every time the price
+        # changes.
+        ##
+        self.__check_price_range()
+        self._state_machine.transition_to(States.RUNNING)
+
+    # ==========================================================================
+    ## Setup methods
+
+    def __update_orderbook_get_open_orders(self: Self) -> tuple[list, list]:
+        """Get the open orders and txid as lists."""
+        LOG.info("  - Retrieving open orders from upstream...")
+
+        open_orders, open_txids = [], []
+        for txid, order in self._rest_api.get_open_orders(
+            userref=self._config["userref"],
+        )["open"].items():
+            if order["descr"]["pair"] == self.__s.altname:
+                order["txid"] = txid  # IMPORTANT
+                open_orders.append(order)
+                open_txids.append(order["txid"])
+        return open_orders, open_txids
+
+    def __update_order_book_handle_closed_order(self: Self, closed_order: dict) -> None:
+        """
+        Gets executed when an order of the local orderbook was closed in the
+        upstream orderbook during the ``update_orderbook`` function in the init
+        of the algorithm.
+
+        This function triggers the Telegram message of the executed order and
+        places a new order.
+        """
+        LOG.info("Handling executed order: %s", closed_order["txid"])
+        closed_order["side"] = closed_order["descr"]["type"]
+
+        message = str(
+            f"✅ {self.__s.symbol}: {closed_order['side'][0].upper()}{closed_order['side'][1:]} "
+            "order executed"
+            f"\n ├ Price » {closed_order['price']} {self._config['quote_currency']}"
+            f"\n ├ Size » {closed_order['vol_exec']} {self._config['base_currency']}"
+            f"\n └ Size in {self._config['quote_currency']} » "
+            f"{float(closed_order['price']) * float(closed_order['vol_exec'])}",
+        )
+
+        self.__s.t.send_to_telegram(message)
+
+        # ======================================================================
+        # If a buy order was filled, the sell order needs to be placed.
+        if closed_order["side"] == "buy":
+            self.handle_arbitrage(
+                side="sell",
+                order_price=self._get_order_price(
+                    side="sell",
+                    last_price=float(closed_order["price"]),
+                ),
+                txid_to_delete=closed_order["txid"],
+            )
+
+        # ======================================================================
+        # If a sell order was filled, we may need to place a new buy order.
+        elif closed_order["side"] == "sell":
+            # A new buy order will only be placed if there is another sell
+            # order, because if the last sell order was filled, the price is so
+            # high, that all buy orders will be canceled anyway and new buy
+            # orders will be placed in ``check_price_range`` during shift-up.
+            if (
+                self._orderbook_table.count(
+                    filters={"side": "sell"},
+                    exclude={"txid": closed_order["txid"]},
+                )
+                != 0
+            ):
+                self._orderbook_service.handle_arbitrage(
+                    side="buy",
+                    order_price=self._get_order_price(
+                        side="buy",
+                        last_price=float(closed_order["price"]),
+                    ),
+                    txid_to_delete=closed_order["txid"],
+                )
+            else:
+                self._orderbook_table.remove(filters={"txid": closed_order["txid"]})
+
+    def __update_order_book(self: Self) -> None:
+        """
+        This function only gets triggered once during the setup of the
+        algorithm.
+
+        It checks:
+        - ... if the orderbook is up to date, remove filled, closed, and
+          canceled orders.
+        - ... the local orderbook for changes - comparison with upstream
+          orderbook
+        - ... and will place new orders if filled.
+        """
+        LOG.info("- Syncing the orderbook with upstream...")
+
+        # ======================================================================
+        # Only track orders that belong to this instance.
+        ##
+        open_orders, open_txids = self.__update_orderbook_get_open_orders()
+
+        # ======================================================================
+        # Orders of the upstream which are not yet tracked in the local
+        # orderbook will now be added to the local orderbook.
+        ##
+        local_txids = [order["txid"] for order in self._orderbook_table.get_orders()]
+        something_changed = False
+        for order in open_orders:
+            if order["txid"] not in local_txids:
+                LOG.info(
+                    "  - Adding upstream order to local orderbook: %s",
+                    order["txid"],
+                )
+                self._orderbook_table.add(order)
+                something_changed = True
+        if not something_changed:
+            LOG.info("  - Nothing changed!")
+
+        # ======================================================================
+        # Check all orders of the local orderbook against those from upstream.
+        # If they got filled -> place new orders.
+        # If canceled -> remove from local orderbook.
+        ##
+        for order in self._orderbook_table.get_orders():
+            if order["txid"] not in open_txids:
+                closed_order = self._orderbook_service.get_orders_info_with_retry(
+                    txid=order["txid"],
+                )
+                # ==============================================================
+                # Order was filled
+                if closed_order["status"] == "closed":
+                    self.__update_order_book_handle_closed_order(
+                        closed_order=closed_order,
+                    )
+
+                # ==============================================================
+                # Order was closed
+                elif closed_order["status"] in {"canceled", "expired"}:
+                    self._orderbook_table.remove(filters={"txid": order["txid"]})
+
+                else:
+                    # pending || open order - still active
+                    ##
+                    continue
+
+        # There are no more filled/closed and cancelled orders in the local
+        # orderbook and all upstream orders are tracked locally.
+        LOG.info("- Orderbook initialized!")
+
+    def __check_asset_pair_parameter(self: Self) -> None:
+        """Check the asset pair parameter."""
+        LOG.info("- Checking asset pair parameters...")
+        pair_data = self._rest_api.get_asset_pairs(
+            pair=[self.__s.symbol.replace("/", "")],
+        )
+        LOG.debug(pair_data)
+
+        self.__s.xsymbol = next(iter(pair_data.keys()))
+        data = pair_data[self.__s.xsymbol]
+
+        self.__s.altname = data["altname"]
+        self.__s.zbase_currency = data["base"]  # XXBT
+        self.__s.xquote_currency = data["quote"]  # ZEUR
+        self.__s.cost_decimals = data["cost_decimals"]  # 5, i.e., 0.00001 EUR
+
+        if self.__s.fee is None:
+            # This is the case if the '--fee' parameter was not passed, then we
+            # take the highest maker fee.
+            self.__s.fee = float(data["fees_maker"][0][1]) / 100
+
+        self.__s.amount_per_grid_plus_fee = self.__s.amount_per_grid * (
+            1 + self.__s.fee
+        )
+
+    def __check_configuration_changes(self: Self) -> None:
+        """
+        Checking if the database content match with the setup parameters.
+
+        Checking if the order size or the interval have changed, requiring
+        all open buy orders to be cancelled.
+        """
+        LOG.info("- Checking configuration changes...")
+        cancel_all_orders = False
+
+        if self.__s.amount_per_grid != self._configuration_table.get()["amount_per_grid"]:
+            LOG.info(" - Amount per grid changed => cancel open buy orders soon...")
+            self._configuration_table.update({"amount_per_grid": self.__s.amount_per_grid})
+            cancel_all_orders = True
+
+        if self.__s.interval != self._configuration_table.get()["interval"]:
+            LOG.info(" - Interval changed => cancel open buy orders soon...")
+            self._configuration_table.update({"interval": self.__s.interval})
+            cancel_all_orders = True
+
+        if cancel_all_orders:
+            self.__s.om.cancel_all_open_buy_orders()
+
+        LOG.info("- Configuration checked and up-to-date!")
 
     # ==========================================================================
     ## Stuff
-    def check_price_range(self: Self) -> None:
+    def __check_price_range(self: Self) -> None:
         """
         Checks if the orders prices match the conditions of the bot respecting
         the current price.
@@ -257,7 +511,7 @@ class IGridBaseStrategy(IStrategy):
             * 1.001
         ):
             self._orderbook_service.cancel_all_open_buy_orders()
-            self.check_price_range()
+            self.__check_price_range()
             return True
 
         return False
@@ -382,10 +636,7 @@ class IGridBaseStrategy(IStrategy):
         LOG.warning("Current balances: %s", current_balances)
         return
 
-    def handle_filled_order_event(
-        self: Self,
-        txid: str
-    ) -> None:
+    def handle_filled_order_event(self: Self, txid: str) -> None:
         """
         Gets triggered by a filled order event from the ``on_message`` function.
 
@@ -597,6 +848,9 @@ class IGridBaseStrategy(IStrategy):
                         "vol_of_unfilled_remaining_max_price": 0,
                     },
                 )
+
+    # ==========================================================================
+    ## Abstract methods
     @abstractmethod
     def _get_order_price(
         self,
@@ -631,4 +885,3 @@ class IGridBaseStrategy(IStrategy):
         This method should be implemented by the concrete strategy classes.
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
-

@@ -6,17 +6,22 @@
 #
 
 from logging import getLogger
-from types import SimpleNamespace
 from typing import Any
-
+from contextlib import suppress
 from kraken.spot import Market, SpotWSClient, Trade, User
-
+from kraken.exceptions import (
+    KrakenInvalidOrderError,
+    KrakenAuthenticationError,
+    KrakenPermissionDeniedError,
+)
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.interfaces.interfaces import (
     IExchangeRESTService,
-    IExchangeWebsocketService,
+    IExchangeWebSocketService,
 )
+from time import sleep
+from typing import Self
 
 LOG = getLogger(__name__)
 
@@ -24,38 +29,107 @@ LOG = getLogger(__name__)
 class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     """Adapter for the Kraken exchange user service implementation."""
 
-    def __init__(self, api_key: str, api_secret: str) -> None:
+    def __init__(
+        self: Self, api_key: str, api_secret: str, state_machine: StateMachine
+    ) -> None:
         self._user_service: User = User(key=api_key, secret=api_secret)
         self._trade_service: Trade = Trade(key=api_key, secret=api_secret)
         self._market_service: Market = Market()
+        self._state_machine: StateMachine = state_machine
+
+    def check_api_key_permissions(self: Self) -> None:
+        """
+        Checks if the credentials are valid and if the API keys have the
+        required permissions.
+        """
+        try:
+            LOG.info("- Checking permissions of API keys...")
+
+            LOG.info(" - Checking if 'Query Funds' permission set...")
+            self._user_service.get_account_balance()
+
+            LOG.info(" - Checking if 'Query open order & trades' permission set...")
+            self._user_service.get_open_orders(trades=True)
+
+            LOG.info(" - Checking if 'Query closed order & trades' permission set...")
+            self._user_service.get_closed_orders(trades=True)
+
+            LOG.info(" - Checking if 'Create & modify orders' permission set...")
+            self._trade_service.create_order(
+                pair="BTC/USD",
+                side="buy",
+                ordertype="market",
+                volume="10",
+                price="10",
+                validate=True,
+            )
+            LOG.info(" - Checking if 'Cancel & close orders' permission set...")
+            with suppress(KrakenInvalidOrderError):
+                self._trade_service.cancel_order(
+                    txid="",
+                    extra_params={"cl_ord_id": "kraken_infinity_grid_internal"},
+                )
+
+            LOG.info(" - Checking if 'Websocket interface' permission set...")
+            self._user_service.request(
+                method="POST",
+                uri="/0/private/GetWebSocketsToken",
+            )
+
+            LOG.info(" - Passed API keys and permissions are valid!")
+        except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
+            self._state_machine.transition_to(States.ERROR)
+            LOG.error(
+                (
+                    "Passed API keys are invalid!"
+                    if isinstance(exc, KrakenAuthenticationError)
+                    else "Passed API keys are missing permissions!"
+                ),
+            )
+
+    def check_exchange_status(self: Self, tries: int = 0) -> None:
+        """Checks whether the Kraken API is available."""
+        if tries == 3:
+            LOG.error("- Could not connect to the Kraken Exchange API.")
+            self._state_machine.transition_to(States.ERROR)
+        try:
+            self._market_service.get_system_status()
+            LOG.info("- Kraken Exchange API Status: Available")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            LOG.debug(
+                "Exception while checking Kraken API status: %s", exc, exc_info=exc
+            )
+            LOG.warning("- Kraken not available. (Try %d/3)", tries + 1)
+            sleep(3)
+            self.check_exchange_status(tries=tries + 1)
 
     # == Getters for exchange user operations ==================================
-    def get_orders_info(self, txid: int = None) -> dict[str, Any]:
+    def get_orders_info(self: Self, txid: int = None) -> dict[str, Any]:
         return self._user_service.get_orders_info(txid=txid)
 
     def get_open_orders(
-        self,
+        self: Self,
         userref: int = None,
         trades: bool = None,
     ) -> dict[str, Any]:
         return self._user_service.get_open_orders(userref=userref, trades=trades)
 
-    def get_account_balance(self) -> dict[str, float]:
+    def get_account_balance(self: Self) -> dict[str, float]:
         return self._user_service.get_account_balance()
 
     def get_closed_orders(
-        self,
+        self: Self,
         userref: int = None,
         trades: bool = None,
     ) -> dict[str, Any]:
         return self._user_service.get_closed_orders(userref=userref, trades=trades)
 
-    def get_balances(self) -> dict[str, float]:
+    def get_balances(self: Self) -> dict[str, float]:
         return self._user_service.get_balances()
 
     # == Getters for exchange trade operations =================================
     def create_order(
-        self,
+        self: Self,
         ordertype: str,
         side: str,
         volume: float,
@@ -77,11 +151,11 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             oflags=oflags,
         )
 
-    def cancel_order(self, txid: str) -> dict[str, Any]:
+    def cancel_order(self: Self, txid: str, **kwargs) -> dict[str, Any]:
         """Cancel an order."""
-        return self._trade_service.cancel_order(txid=txid)
+        return self._trade_service.cancel_order(txid=txid, **kwargs)
 
-    def truncate(self, amount: float, amount_type: str, pair: str) -> str:
+    def truncate(self: Self, amount: float, amount_type: str, pair: str) -> str:
         """Truncate amount according to exchange precision."""
         return self._trade_service.truncate(
             amount=amount,
@@ -90,20 +164,20 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         )
 
     # == Getters for exchange market operations ================================
-    def get_system_status(self) -> dict[str, Any]:
+    def get_system_status(self: Self) -> dict[str, Any]:
         """Get the current system status of the exchange."""
         return self._market_service.get_system_status()
 
-    def get_asset_pairs(self, pair: str) -> dict[str, Any]:
+    def get_asset_pairs(self: Self, pair: str) -> dict[str, Any]:
         """Get available asset pairs on the exchange."""
         return self._market_service.get_asset_pairs(pair=[pair])
 
 
-class KrakenExchangeWebsocketServiceAdapter(IExchangeWebsocketService):
+class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
     """Adapter for the Kraken exchange websocket service implementation."""
 
     def __init__(
-        self,
+        self: Self,
         api_key: str,
         api_secret: str,
         state_machine: StateMachine,
@@ -112,7 +186,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebsocketService):
         self._websocket_service: SpotWSClient = SpotWSClient(
             key=api_key,
             secret=api_secret,
-            callback=self.__on_message,
+            callback=self.on_message,
         )
         self._state_machine: StateMachine = state_machine
         self._event_bus: EventBus = event_bus
@@ -120,20 +194,20 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebsocketService):
         # Store messages received before the algorithm is ready to trade.
         self.__missed_messages = []
 
-    async def start(self) -> None:
+    async def start(self: Self) -> None:
         """Start the websocket service."""
         await self._websocket_service.start()
 
-    async def close(self) -> None:
+    async def close(self: Self) -> None:
         """Cancel the websocket service."""
         await self._websocket_service.close()
 
-    async def subscribe(self, params: dict[str, Any]) -> None:
+    async def subscribe(self: Self, params: dict[str, Any]) -> None:
         """Subscribe to the websocket service."""
         await self._websocket_service.subscribe(params=params)
 
-    async def __on_message(
-        self, message: dict[str, Any], **kwargs: dict[str, Any]
+    async def on_message(
+        self: Self, message: dict[str, Any], **kwargs: dict[str, Any]
     ) -> None:
         """Handle incoming messages from the websocket."""
 
@@ -190,7 +264,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebsocketService):
 
                 # If there are any missed messages, process them now.
                 for msg in self.__missed_messages:
-                    await self.__on_message(msg)
+                    await self.on_message(msg)
                 self.__missed_messages = []
 
             if not self._state_machine.facts["ready_to_trade"]:

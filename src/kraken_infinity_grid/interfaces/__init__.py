@@ -6,12 +6,13 @@
 #
 
 from kraken_infinity_grid.interfaces.interfaces import (
-    IExchangeRESTService as IExchangeRESTService,
+    IExchangeRESTService,
+    IExchangeWebSocketService,
+    IStrategy,
 )
-from kraken_infinity_grid.interfaces.interfaces import (
-    IExchangeWebsocketService as IExchangeWebsocketService,
-)
-from kraken_infinity_grid.interfaces.interfaces import (
-    IOrderbookService as IOrderbookService,
-)
-from kraken_infinity_grid.interfaces.interfaces import IStrategy as IStrategy
+
+__all__ = [
+    "IExchangeRESTService",
+    "IExchangeWebSocketService",
+    "IStrategy",
+]

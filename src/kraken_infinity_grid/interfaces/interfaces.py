@@ -19,13 +19,17 @@ from kraken_infinity_grid.core.state_machine import StateMachine
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     Orderbook,
-    PendingTxids,
-    UnsoldBuyOrderTxids,
+    PendingTXIDs,
+    UnsoldBuyOrderTXIDs,
 )
 
 
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
+
+    @abstractmethod
+    def check_api_key_permissions(self) -> None:
+        """Check if the API key permissions are set correctly."""
 
     # == Getters for exchange user operations ==================================
     @abstractmethod
@@ -85,7 +89,7 @@ class IExchangeRESTService(ABC):
         """Get available asset pairs on the exchange."""
 
 
-class IExchangeWebsocketService(ABC):
+class IExchangeWebSocketService(ABC):
     """Interface for exchange websocket operations."""
 
     @abstractmethod
@@ -102,7 +106,7 @@ class IExchangeWebsocketService(ABC):
 
     @abstractmethod
     async def on_message(
-        self,__on_message
+        self,
         message: dict[str, Any],
         **kwargs: dict[str, Any],
     ) -> None:
@@ -119,8 +123,8 @@ class IStrategy(ABC):
         rest_api: IExchangeRESTService,
         config: Configuration,
         orderbook: Orderbook,
-        pending_txids: PendingTxids,
-        unsold_buy_order_txids: UnsoldBuyOrderTxids,
+        pending_txids: PendingTXIDs,
+        unsold_buy_order_txids: UnsoldBuyOrderTXIDs,
         event_bus: EventBus,
     ) -> None:
         """Initialize the strategy with necessary services and configurations."""
@@ -136,3 +140,7 @@ class IStrategy(ABC):
     @abstractmethod
     def on_order_canceled(self, event: Event) -> None:
         """Handle order canceled events."""
+
+    @abstractmethod
+    def on_prepare_for_trading(self, event: Event) -> None:
+        """Prepare the strategy for trading."""

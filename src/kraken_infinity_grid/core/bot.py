@@ -31,6 +31,7 @@ from importlib.metadata import version
 from typing import Self
 import sys
 from datetime import datetime, timedelta
+
 LOG = getLogger(__name__)
 
 
@@ -130,6 +131,7 @@ class InfinityGridBot:
                 "REST": KrakenExchangeRESTServiceAdapter(
                     api_key=api_key,
                     api_secret=api_secret,
+                    state_machine=state_machine,
                 ),
                 "websocket": KrakenExchangeWebsocketServiceAdapter(
                     api_key=api_key,
@@ -142,8 +144,11 @@ class InfinityGridBot:
 
     def __setup_event_handlers(self):
         # Subscribe to events
+
+        # prepare_for_trading is called after the initial setup is done and the
+        # websocket connection is established.
         self.__event_bus.subscribe(
-            "prepare_for_trading", self.strategy.prepare_for_trading
+            "prepare_for_trading", self.strategy.on_prepare_for_trading
         )
         self.__event_bus.subscribe("ticker_update", self.strategy.on_ticker_update)
         self.__event_bus.subscribe("order_placed", self.strategy.on_order_placed)
@@ -152,6 +157,7 @@ class InfinityGridBot:
 
     async def run(self):
         """Start the bot"""
+        LOG.info("Starting the Kraken Infinity Grid Algorithm...")
 
         # ======================================================================
         # Handle the shutdown signals
@@ -170,7 +176,15 @@ class InfinityGridBot:
             loop.add_signal_handler(sig, _signal_handler)
 
         # ======================================================================
-        # FIXME: API key verification is required here
+        # Try to connect to the Kraken API, validate credentials and API key
+        # permissions.
+        ##
+        # FIXME: if failed, termination should be handled here
+        self.rest_api.check_exchange_status()
+        self.rest_api.check_api_key_permissions()
+
+        if self.__state_machine.state == States.ERROR:
+            await self.terminate("The algorithm was shut down during initialization!")
 
         # ======================================================================
         # Start the websocket connection
@@ -204,7 +218,7 @@ class InfinityGridBot:
             self.ws_client.subscribe(subscription)
 
         # Set this initially in case the DB contains a value that is too old.
-        # FIXME: self.configuration.update({"last_price_time": datetime.now()})
+        self.__configuration_table.update({"last_price_time": datetime.now()})
 
         # ======================================================================
         # Start the websocket connections and run the main function
@@ -260,9 +274,7 @@ class InfinityGridBot:
                     self.__state_machine.transition_to(States.ERROR)
                     return
 
-            except (
-                Exception  # pylint: disable=broad-exception-caught
-            ) as exc:
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 LOG.error("Exception in main.", exc_info=exc)
                 self.__state_machine.transition_to(States.ERROR)
                 return
@@ -294,134 +306,6 @@ class InfinityGridBot:
         sys.exit(exception)
 
 
-# """Module that implements the main strategy"""
-
-# import asyncio
-# import signal
-# import sys
-# import traceback
-# from contextlib import suppress
-# from datetime import datetime, timedelta
-# from decimal import Decimal
-# from importlib.metadata import version
-# from logging import getLogger
-# from time import sleep
-# from types import SimpleNamespace
-# from typing import Iterable, Optional, Self
-
-# from kraken.exceptions import (
-#     KrakenAuthenticationError,
-#     KrakenInvalidOrderError,
-#     KrakenPermissionDeniedError,
-# )
-# from kraken.spot import Market, SpotWSClient, Trade, User
-
-# from kraken_infinity_grid.infrastructure.database import (
-#     Configuration,
-#     DBConnect,
-#     Orderbook,
-#     PendingIXIDs,
-#     UnsoldBuyOrderTXIDs,
-# )
-# from kraken_infinity_grid.order_management import OrderManager
-# from kraken_infinity_grid.setup import SetupManager
-# from kraken_infinity_grid.core.state_machine import StateMachine, States
-# from kraken_infinity_grid.infrastructure.telegram import Telegram
-
-# LOG = getLogger(__name__)
-
-
-# class KrakenInfinityGridBot(SpotWSClient):
-#     """
-#     The KrakenInfinityGridBot class implements the infinity grid trading bot
-#     strategy.
-
-#     The bot is designed to trade on the Kraken exchange and uses the Kraken API
-#     to place orders and fetch information about the current trading pair.
-
-#     All actions are triggered via websocket messages received by the
-#     ``on_message`` function, which is a callback function used by the
-#     python-kraken-sdk.
-
-#     The algorithm manages its orders in an orderbook, configuration, and pending
-#     transactions in separate tables in a SQL-based database (PostgreSQL). It
-#     uses the passed ``userref`` to distinguish between different instances.
-#     E.g.: For one instance of the algorithm one uses the userref 1680953420 for
-#     the DOT/USD pair, and 1680953421 for the BTC/USD pair.
-
-#     The available strategies are documented in the README.md file of this
-#     project.
-
-#     Internal
-#     ========
-
-#     The following steps are a rough description of the internal workflow of the
-#     algorithm.
-
-#     Initialization:
-
-#     - This class is derived from the python-kraken-sdk's websocket client, which
-#       allows for subscribing to channels and receiving messages. During the
-#       init, the algorithm will establish the connection to the database as well
-#       as initializing the user, trade, and market clients.
-#     - The after the bot is created, events that came from subscribed websocket
-#       feeds will trigger the ``on_message`` function. Subscribed feeds are the
-#       ticker (of the asset pair) and execution (for order execution updates).
-#     - If both channels are connected, the algorithm does an initial setup:
-#         - Check pre-conditions
-#         - Validate the configuration
-#         - Retrieve information about the trading pair (fee, min order size,
-#           etc.)
-#         - Check, update, and sync the local orderbook with upstream while
-#           recovering orders that might not yet found their way into the
-#           orderbook after placing.
-#         - If there are executed buy orders during downtime, the corresponding
-#           sell orders will be placed (depending on the strategy in use).
-#         - If all of these are done, the bot is ready to handle new incoming
-#           messages.
-
-#     New ticker message:
-
-#     - If the init is not done yet, the algorithm ignores the message.
-#     - The ticker will be updated.
-#     - The missing sell orders will be assigned (if any). This is done at this
-#       place in order to have a frequent check for missing sell orders.
-#     - The ``check_price_range`` function will be triggered.
-#         - This either calls ``assign_all_pending_txids`` to add orders that were
-#           placed but are not yet added to the local orderbook.
-#         - Or checks the current price range. The price range check is skipped in
-#           case of pending transactions to avoid double orders.
-#             - Ensure the existence $n$ open buy orders.
-#             - Cancel the lowest buy order if more than $n$ buy orders are open.
-#             - Shift-up buy orders if price rises to high.
-#                 - Cancel all open buy orders
-#                 - Calls ``check_price_range``
-#             - If strategy==SWING: Place sell orders if possible
-
-#     New execution message - new order:
-
-#     - If the init is not done yet, the algorithm ignores the message.
-#     - The algorithm ties to assign the new order to the orderbook. In some cases
-#       this fails, as newly placed orders may not be fetchable via REST API for
-#       some time. For this reason, there are some retries implemented.
-
-#     New execution message - filled order:
-
-#     - If the init is not done yet, the algorithm ignores the message.
-#     - If the filled order was a buy order (depending on the strategy), the
-#       algorithm places a sell order and updates the local orderbook.
-#     - If the filled order was a sell order (depending on the strategy), the
-#       algorithm places a buy order and updates the local orderbook.
-
-#     New execution message - cancelled order:
-
-#     - If the init is not done yet, the algorithm ignores the message.
-#     - The algorithm removes the order from the local orderbook and ensures that
-#       in case of a partly filled order, the remaining volume is saved and placed
-#       as sell order somewhen later (if it was a buy order). Sell orders usually
-#       don't get cancelled.
-
-#     """
 
 #     def __init__(  # pylint: disable=too-many-arguments
 #         self: Self,
@@ -520,142 +404,3 @@ class InfinityGridBot:
 #         )
 
 #     # ==========================================================================
-
-#     async def run(self: Self) -> None:
-#         """
-#         Main function that starts the algorithm and runs it until it is
-#         interrupted.
-#         """
-#         LOG.info("Starting the Kraken Infinity Grid Algorithm...")
-
-#         # ======================================================================
-#         # Try to connect to the Kraken API, validate credentials and API key
-#         # permissions.
-#         ##
-#         self.__check_kraken_status()
-
-#         try:
-#             self.__check_api_keys()
-#         except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
-#             await self.terminate(
-#                 (
-#                     "Passed API keys are invalid!"
-#                     if isinstance(exc, KrakenAuthenticationError)
-#                     else "Passed API keys are missing permissions!"
-#                 ),
-#             )
-
-#         # ======================================================================
-#         # Handle the shutdown signals
-#         #
-#         # A controlled shutdown is initiated by sending a SIGINT or SIGTERM
-#         # signal to the process. Since requests and database interactions are
-#         # executed synchronously, we only need to set the stop_event during
-#         # on_message, ensuring no further messages are processed.
-#         ##
-#         def _signal_handler() -> None:
-#             LOG.warning("Initiate a controlled shutdown of the algorithm...")
-#             self.state_machine.transition_to(States.SHUTDOWN_REQUESTED)
-
-#         loop = asyncio.get_running_loop()
-#         for sig in (signal.SIGINT, signal.SIGTERM):
-#             loop.add_signal_handler(sig, _signal_handler)
-
-#         # ======================================================================
-#         # Start the websocket connections and run the main function
-#         ##
-#         try:
-#             await asyncio.wait(
-#                 [
-#                     asyncio.create_task(self.__main()),
-#                     asyncio.create_task(self.__stop_event.wait()),
-#                 ],
-#                 return_when=asyncio.FIRST_COMPLETED,
-#             )
-#         except asyncio.CancelledError as exc:
-#             self.state_machine.transition_to(States.ERROR)
-#             await asyncio.sleep(5)
-#             await self.terminate(f"The algorithm was interrupted: {exc}")
-#         except (
-#             Exception  # pylint: disable=broad-exception-caught
-#         ) as exc:
-#             self.state_machine.transition_to(States.ERROR)
-#             await asyncio.sleep(5)
-#             await self.terminate(f"The algorithm was interrupted by exception: {exc}")
-
-#         await asyncio.sleep(5)
-
-#         if self.state_machine.state == States.SHUTDOWN_REQUESTED:
-#             # The algorithm was interrupted by a signal.
-#             await self.terminate(
-#                 "The algorithm was shut down successfully!",
-#                 exception=False,
-#             )
-#         elif self.state_machine.state == States.ERROR:
-#             await self.terminate(
-#                 "The algorithm was shut down due to an error!",
-#             )
-
-
-#     def __check_kraken_status(self: Self, tries: int = 0) -> None:
-#         """Checks whether the Kraken API is available."""
-#         if tries == 3:
-#             LOG.error("- Could not connect to the Kraken Exchange API.")
-#             sys.exit(1)
-#         try:
-#             self.market.get_system_status()
-#             LOG.info("- Kraken Exchange API Status: Available")
-#         except (
-#             Exception  # pylint: disable=broad-exception-caught
-#         ) as exc:
-#             LOG.debug(
-#                 "Exception while checking Kraken availability {exc} {traceback}",
-#                 extra={"exc": exc, "traceback": traceback.format_exc()},
-#             )
-#             LOG.warning("- Kraken not available. (Try %d/3)", tries + 1)
-#             sleep(3)
-#             self.__check_kraken_status(tries=tries + 1)
-
-#     def __check_api_keys(self: Self) -> None:
-#         """
-#         Checks if the credentials are valid and if the API keys have the
-#         required permissions.
-#         """
-#         LOG.info("- Checking permissions of API keys...")
-
-#         LOG.info(" - Checking if 'Query Funds' permission set...")
-#         self.user.get_account_balance()
-
-#         LOG.info(" - Checking if 'Query open order & trades' permission set...")
-#         self.user.get_open_orders(trades=True)
-
-#         LOG.info(" - Checking if 'Query closed order & trades' permission set...")
-#         self.user.get_closed_orders(trades=True)
-
-#         LOG.info(" - Checking if 'Create & modify orders' permission set...")
-#         self.trade.create_order(
-#             pair="BTC/USD",
-#             side="buy",
-#             ordertype="market",
-#             volume="10",
-#             price="10",
-#             validate=True,
-#         )
-#         LOG.info(" - Checking if 'Cancel & close orders' permission set...")
-#         with suppress(KrakenInvalidOrderError):
-#             self.trade.cancel_order(
-#                 txid="",
-#                 extra_params={"cl_ord_id": "kraken_infinity_grid_internal"},
-#             )
-
-#         LOG.info(" - Checking if 'Websocket interface' permission set...")
-#         self.trade.request(
-#             method="POST",
-#             uri="/0/private/GetWebSocketsToken",
-#         )
-
-#         LOG.info(" - Passed API keys and permissions are valid!")
-
-#     # ======================================================================
-#     # Helper Functions
-#     ##
