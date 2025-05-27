@@ -380,6 +380,9 @@ class IGridBaseStrategy(IStrategy):
         # Place extra sell order (only for SWING strategy)
         self._check_extra_sell_order()
 
+    # ==========================================================================
+    #           C R E A T E / C A N C E L - O R D E R S
+    # ==========================================================================
     def __add_missed_sell_orders(self: Self) -> None:
         """
         This functions can create sell orders in case there is at least one
@@ -423,7 +426,7 @@ class IGridBaseStrategy(IStrategy):
             ):
                 for order in self._orderbook_table.get_orders(filters={"side": "buy"}):
                     if order["price"] == buy_prices[i]:
-                        self.handle_cancel_order(txid=order["txid"])
+                        self._handle_cancel_order(txid=order["txid"])
                         break
 
     def __check_n_open_buy_orders(self: Self) -> None:
@@ -484,7 +487,24 @@ class IGridBaseStrategy(IStrategy):
                 order_by=("price", "asc"),
                 limit=n_to_cancel,
             ):
-                self.handle_cancel_order(txid=order["txid"])
+                self._handle_cancel_order(txid=order["txid"])
+
+    def cancel_all_open_buy_orders(self: Self) -> None:
+        """
+        Cancels all open buy orders and removes them from the orderbook.
+        """
+        LOG.info("Cancelling all open buy orders...")
+        for txid, order in self._rest_api.get_open_orders(
+            userref=self.__config.userref,
+        )["open"].items():
+            if (
+                order["descr"]["type"] == "buy"
+                and order["descr"]["pair"] == self.__s.altname
+            ):
+                self._handle_cancel_order(txid=txid)
+                sleep(0.2)  # Avoid rate limiting
+
+        self._orderbook_table.remove(filters={"side": "buy"})
 
     def __shift_buy_orders_up(self: Self) -> bool:
         """
@@ -751,7 +771,7 @@ class IGridBaseStrategy(IStrategy):
             # Remove filled order from list of all orders
             self._orderbook_table.remove(filters={"txid": txid})
 
-    def handle_cancel_order(self: Self, txid: str) -> None:
+    def _handle_cancel_order(self: Self, txid: str) -> None:
         """
         Cancels an order by txid, removes it from the orderbook, and checks if
         there there was some volume executed which can be sold later.

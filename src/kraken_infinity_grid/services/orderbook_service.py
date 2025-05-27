@@ -19,6 +19,8 @@ from kraken_infinity_grid.infrastructure.database import (
     UnsoldBuyOrderTXIDs,
 )
 
+from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
+
 LOG = getLogger(__name__)
 
 
@@ -27,7 +29,7 @@ class OrderbookService:
 
     def __init__(
         self,
-        config: dict,
+        config: BotConfigDTO,
         rest_api,
         event_bus: EventBus,
         state_machine: StateMachine,
@@ -35,19 +37,13 @@ class OrderbookService:
         pending_txids_table: PendingTXIDs,
         unsold_buy_order_txids_table: UnsoldBuyOrderTXIDs,
     ) -> None:
-        self.__userref = config["userref"]
-        self.__quote_currency = config["quote_currency"]
-        self.__base_currency = config["base_currency"]
-        self.__max_investment = config["max_investment"]
-
+        self.__config = config
         self._rest_api = rest_api
         self._event_bus = event_bus
         self._state_machine = state_machine
         self._orderbook = orderbook_table
         self._pending_txids = pending_txids_table
         self._unsold_buy_order_txids = unsold_buy_order_txids_table
-
-
 
     def assign_all_pending_transactions(self: Self) -> None:
         """Assign all pending transactions to the orderbook."""
@@ -73,7 +69,7 @@ class OrderbookService:
 
         if (
             order_details["descr"]["pair"] != self.__s.altname
-            or order_details["userref"] != self.__s.userref
+            or order_details["userref"] != self.__config.userref
         ):
             LOG.info("Order '%s' does not belong to this instance.", txid)
             return
@@ -91,8 +87,8 @@ class OrderbookService:
         LOG.info(
             "Current investment: %f / %d %s",
             self.investment,
-            self.__max_investment,
-            self.__quote_currency,
+            self.__config.max_investment,
+            self.__config.quote_currency,
         )
 
     def get_current_buy_prices(self: Self) -> Iterable[float]:
@@ -107,7 +103,9 @@ class OrderbookService:
         investment = sum(
             float(order["price"]) * float(order["volume"]) for order in orders
         )
-        LOG.debug("Value of open orders: %d %s", investment, self.quote_currency)
+        LOG.debug(
+            "Value of open orders: %d %s", investment, self.__config.quote_currency
+        )
         return investment
 
     @property
@@ -119,8 +117,9 @@ class OrderbookService:
     def max_investment_reached(self: Self) -> bool:
         """Returns True if the maximum investment is reached."""
         return (
-            self.__max_investment <= self.investment + self.amount_per_grid_plus_fee
-        ) or (self.__max_investment <= self.investment)
+            self.__config.max_investment
+            <= self.investment + self.amount_per_grid_plus_fee
+        ) or (self.__config.max_investment <= self.investment)
 
     def get_balances(self: Self) -> dict[str, float]:
         """
@@ -167,26 +166,6 @@ class OrderbookService:
             self.assign_all_pending_transactions()
             return True
         return False
-
-    # ==========================================================================
-    #           C R E A T E / C A N C E L - O R D E R S
-    # ==========================================================================
-    def cancel_all_open_buy_orders(self: Self) -> None:
-        """
-        Cancels all open buy orders and removes them from the orderbook.
-        """
-        LOG.info("Cancelling all open buy orders...")
-        for txid, order in self._rest_api.get_open_orders(
-            userref=self.__userref,
-        )["open"].items():
-            if (
-                order["descr"]["type"] == "buy"
-                and order["descr"]["pair"] == self.__s.altname
-            ):
-                self.handle_cancel_order(txid=txid)
-                sleep(0.2)  # Avoid rate limiting
-
-        self._orderbook.remove(filters={"side": "buy"})
 
     def get_orders_info_with_retry(
         self: Self,

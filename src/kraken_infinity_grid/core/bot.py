@@ -31,28 +31,38 @@ from importlib.metadata import version
 from typing import Self
 import sys
 from datetime import datetime, timedelta
+from kraken_infinity_grid.models.dto.configuration import (
+    DBConfigDTO,
+    NotificationConfigDTO,
+    BotConfig,
+)
 
 LOG = getLogger(__name__)
+from kraken_infinity_grid.services.notification_service import NotificationService
 
 
-class InfinityGridBot:
+class Bot:
     """
     Orchestrates the trading bot's components but delegates specific
     responsibilities to specialized classes.
     """
 
-    def __init__(self, config: dict, db_config: dict, dry_run: bool = False):
+    def __init__(
+        self,
+        bot_config: BotConfig,
+        db_config: DBConfigDTO,
+        notification_config: NotificationConfigDTO,
+    ):
         LOG.info(
             "Initiate the Kraken Infinity Grid Algorithm instance (v%s)",
             version("kraken-infinity-grid"),
         )
-        LOG.debug("Config: %s", config)
+        LOG.debug("Config: %s", bot_config)
 
         self.__event_bus = EventBus()
         self.__state_machine = StateMachine()
-        self.__config = config
-        self.__userref: int = config["userref"]
-        self.dry_run: bool = dry_run
+        self.__config = bot_config
+        self.__userref: int = self.__config.userref
 
         # == Infrastructure components =========================================
         ##
@@ -66,21 +76,16 @@ class InfinityGridBot:
         )
         self.__db.init_db()
 
-        exchange_services = self.__exchange_factory(
-            config["exchange"],
-            config["api_key"],
-            config["api_secret"],
-            event_bus=self.__event_bus,
-            state_machine=self.__state_machine,
-        )
-        self.rest_api = exchange_services["REST"]
+        exchange_services = self.__exchange_factory()
+        self.__rest_api = exchange_services["REST"]
         self.ws_client = exchange_services["websocket"]
 
         # == Application services ==============================================
         ##
-        self.orderbook_service = OrderbookService(
-            config=config,
-            rest_api=self.rest_api,
+        self.__notification_service = NotificationService(notification_config)
+        self.__orderbook_service = OrderbookService(
+            config=self.__config,
+            rest_api=self.__rest_api,
             event_bus=self.__event_bus,
             state_machine=self.__state_machine,
             orderbook_table=self.__orderbook_table,
@@ -89,13 +94,13 @@ class InfinityGridBot:
         )
 
         # Create the appropriate strategy based on config
-        self.strategy = self.__strategy_factory(config, self.__state_machine)
+        self.strategy = self.__strategy_factory()
 
         # Setup event subscriptions
         self.__setup_event_handlers()
 
-    def __strategy_factory(self, config: dict, state_machine: StateMachine) -> Any:
-        if (strategy_type := config["strategy"]) not in (
+    def __strategy_factory(self) -> Any:
+        if (strategy_type := self.__config["strategy"]) not in (
             strategies := {
                 "SWING": SwingStrategy,
                 "GridHODL": GridHodlStrategy,
@@ -106,22 +111,15 @@ class InfinityGridBot:
             raise ValueError(f"Unknown strategy type: {strategy_type}")
 
         return strategies[strategy_type](
-            state_machine=state_machine,
-            rest_api=self.rest_api,
-            orderbook_service=self.orderbook_service,
+            state_machine=self.__state_machine,
+            rest_api=self.__rest_api,
+            orderbook_service=self.__orderbook_service,
             event_bus=self.__event_bus,
         )
 
-    def __exchange_factory(
-        self,
-        exchange: str,
-        api_key: str,
-        api_secret: str,
-        event_bus: EventBus,
-        state_machine: StateMachine,
-    ) -> dict:
+    def __exchange_factory(self) -> dict:
         """Create the exchange service based on the configuration."""
-        if exchange == "Kraken":
+        if self.__config["exchange"] == "Kraken":
             from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel
                 KrakenExchangeRESTServiceAdapter,
                 KrakenExchangeWebsocketServiceAdapter,
@@ -129,15 +127,15 @@ class InfinityGridBot:
 
             return {
                 "REST": KrakenExchangeRESTServiceAdapter(
-                    api_key=api_key,
-                    api_secret=api_secret,
-                    state_machine=state_machine,
+                    api_key=self.__config["api_key"],
+                    api_secret=self.__config["api_secret"],
+                    state_machine=self.__state_machine,
                 ),
                 "websocket": KrakenExchangeWebsocketServiceAdapter(
-                    api_key=api_key,
-                    api_secret=api_secret,
-                    state_machine=state_machine,
-                    event_bus=event_bus,
+                    api_key=self.__config["api_key"],
+                    api_secret=self.__config["api_secret"],
+                    state_machine=self.__state_machine,
+                    event_bus=self.__event_bus,
                 ),
             }
         raise ValueError(f"Unsupported exchange: {exchange}")
@@ -179,12 +177,13 @@ class InfinityGridBot:
         # Try to connect to the Kraken API, validate credentials and API key
         # permissions.
         ##
-        # FIXME: if failed, termination should be handled here
-        self.rest_api.check_exchange_status()
-        self.rest_api.check_api_key_permissions()
+        self.__rest_api.check_exchange_status()
+        self.__rest_api.check_api_key_permissions()
 
         if self.__state_machine.state == States.ERROR:
-            await self.terminate("The algorithm was shut down during initialization!")
+            await self.terminate(
+                "The algorithm was shut down by error during initialization!"
+            )
 
         # ======================================================================
         # Start the websocket connection
@@ -304,7 +303,6 @@ class InfinityGridBot:
             exception=exception,
         )
         sys.exit(exception)
-
 
 
 #     def __init__(  # pylint: disable=too-many-arguments

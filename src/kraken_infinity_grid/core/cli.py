@@ -11,6 +11,12 @@ from typing import Any
 from click import FLOAT, INT, STRING, Context, echo, pass_context
 from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option, option_group
 from cloup.constraints import If, accept_none, require_all
+from kraken_infinity_grid.models.dto import (
+    DBConfigDTO,
+    NotificationConfigDTO,
+    BotConfig,
+    TelegramConfigDTO,
+)
 
 
 def print_version(ctx: Context, param: Any, value: Any) -> None:  # noqa: ANN401, ARG001
@@ -102,7 +108,8 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     ctx.ensure_object(dict)
     ctx.obj |= kwargs
 
-    verbosity = kwargs.get("verbose", 0)
+    kwargs.pop("version")
+    verbosity = kwargs.pop("verbose", 0)
 
     basicConfig(
         format="%(asctime)s %(levelname)8s | %(message)s",
@@ -137,133 +144,149 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         ),
     ),
 )
-@option(
-    "--strategy",
-    type=Choice(choices=("cDCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True),
-    help="The strategy to run.",
-    required=True,
+@option_group(
+    "Strategy Configuration",
+    option(
+        "--strategy",
+        type=Choice(
+            choices=("cDCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True
+        ),
+        help="The strategy to run.",
+        required=True,
+    ),
+    option(
+        "--name",
+        required=True,
+        type=STRING,
+        help="""
+        The name of the instance. Can be any name that is used to differentiate
+        between instances of the kraken-infinity-grid.
+        """,
+    ),
+    option(
+        "--exchange",
+        type=Choice(choices=("Kraken",), case_sensitive=True),
+        help="The exchange to trade on.",
+        required=True,
+    ),
+    option(
+        "--max-investment",
+        required=False,
+        type=FLOAT,
+        default=10e10,
+        callback=ensure_larger_than_zero,
+        help="""
+        The maximum investment, e.g. 1000 USD that the algorithm will manage.
+        """,
+    ),
+    option(
+        "--userref",
+        required=True,
+        type=INT,
+        callback=ensure_larger_than_zero,
+        help="""
+        A reference number to identify the algorithm's orders. This can be a
+        timestamp or any integer number. Use different userref's for different
+        instances!
+        """,
+    ),
+    option(
+        "--fee",
+        type=FLOAT,
+        required=False,
+        callback=ensure_larger_equal_zero,
+        help="""
+        The fee percentage to respect, e.g. '0.0026' for 0.26 %. This value does not
+        change the actual paid fee, instead it used to estimate order sizes. If not
+        passed, the highest maker fee will be used.
+        """,
+    ),
 )
-@option(
-    "--name",
-    required=True,
-    type=STRING,
-    help="""
-    The name of the instance. Can be any name that is used to differentiate
-    between instances of the kraken-infinity-grid.
-    """,
+@option_group(
+    "Trading Pair Configuration",
+    option(
+        "--base-currency",
+        required=True,
+        type=STRING,
+        help="The base currency.",
+    ),
+    option(
+        "--quote-currency",
+        required=True,
+        type=STRING,
+        help="The quote currency.",
+    ),
 )
-@option(
-    "--exchange",
-    type=Choice(choices=("Kraken",), case_sensitive=True),
-    help="The exchange to trade on.",
-    required=True,
+@option_group(
+    "Grid Strategy Options",
+    option(
+        "--amount-per-grid",
+        required=True,
+        type=FLOAT,
+        help="The quote amount to use per interval.",
+    ),
+    option(
+        "--interval",
+        required=True,
+        type=FLOAT,
+        default=0.04,
+        callback=ensure_larger_than_zero,
+        help="The interval between orders.",
+    ),
+    option(
+        "--n-open-buy-orders",
+        required=True,
+        type=INT,
+        default=3,
+        callback=ensure_larger_than_zero,
+        help="""
+        The number of concurrent open buy orders e.g., ``5``. The number of
+        always open buy positions specifies how many buy positions should be
+        open at the same time. If the interval is defined to 2%, a number of 5
+        open buy positions ensures that a rapid price drop of almost 10% that
+        can be caught immediately.
+        """,
+    ),
+    constraint=If(
+        "strategy",
+        lambda val: val in ("cDCA", "GridHODL", "GridSell", "SWING"),
+        require_all,
+    ),
 )
-@option(
-    "--base-currency",
-    required=True,
-    type=STRING,
-    help="The base currency.",
+@option_group(
+    "Notification Options",
+    option(
+        "--telegram-token",
+        required=False,
+        type=STRING,
+        help="The Telegram token to use.",
+    ),
+    option(
+        "--telegram-chat-id",
+        required=False,
+        type=STRING,
+        help="The telegram chat ID to use.",
+    ),
 )
-@option(
-    "--quote-currency",
-    required=True,
-    type=STRING,
-    help="The quote currency.",
-)
-@option(
-    "--amount-per-grid",
-    required=True,
-    type=FLOAT,
-    help="The quote amount to use per interval.",
-)
-@option(
-    "--interval",
-    required=True,
-    type=FLOAT,
-    default=0.04,
-    callback=ensure_larger_than_zero,
-    help="The interval between orders.",
-)
-@option(
-    "--n-open-buy-orders",
-    required=True,
-    type=INT,
-    default=3,
-    callback=ensure_larger_than_zero,
-    help="""
-    The number of concurrent open buy orders e.g., ``5``. The number of
-    always open buy positions specifies how many buy positions should be
-    open at the same time. If the interval is defined to 2%, a number of 5
-    open buy positions ensures that a rapid price drop of almost 10% that
-    can be caught immediately.
-    """,
-)
-@option(
-    "--telegram-token",
-    required=False,
-    type=STRING,
-    help="The Telegram token to use.",
-)
-@option(
-    "--telegram-chat-id",
-    required=False,
-    type=STRING,
-    help="The telegram chat ID to use.",
-)
-@option(
-    "--exception-token",
-    required=False,
-    type=STRING,
-    help="The telegram token to use for exceptions.",
-)
-@option(
-    "--exception-chat-id",
-    required=False,
-    type=STRING,
-    help="The telegram chat ID to use for exceptions.",
-)
-@option(
-    "--max-investment",
-    required=False,
-    type=FLOAT,
-    default=10e10,
-    callback=ensure_larger_than_zero,
-    help="""
-    The maximum investment, e.g. 1000 USD that the algorithm will manage.
-    """,
-)
-@option(
-    "--userref",
-    required=True,
-    type=INT,
-    callback=ensure_larger_than_zero,
-    help="""
-    A reference number to identify the algorithm's orders. This can be a
-    timestamp or any integer number. Use different userref's for different
-    instances!
-    """,
-)
-@option(
-    "--fee",
-    type=FLOAT,
-    required=False,
-    callback=ensure_larger_equal_zero,
-    help="""
-    The fee percentage to respect, e.g. '0.0026' for 0.26 %. This value does not
-    change the actual paid fee, instead it used to estimate order sizes. If not
-    passed, the highest maker fee will be used.
-    """,
-)
-@option(
-    "--sqlite-file",
-    type=STRING,
-    help="SQLite file to use as database.",
-)
-@option(
-    "--db-name",
-    type=STRING,
-    default="kraken_infinity_grid",
-    help="The database name.",
+@option_group(
+    "Database Configuration",
+    option(
+        "--db-name",
+        type=STRING,
+        default="kraken_infinity_grid",
+        help="The database name.",
+    ),
+    option(
+        "--sqlite-file",
+        type=STRING,
+        help="SQLite file to use as database.",
+    ),
+    option(
+        "--in-memory",
+        is_flag=True,
+        default=False,
+        help="Use an in-memory database (SQLite :memory:).",
+    ),
 )
 @option_group(
     "PostgreSQL Database Options",
@@ -288,9 +311,10 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         help="PostgreSQL DB port",
     ),
     constraint=If(
-        "sqlite_file",
-        then=accept_none,
-        else_=require_all,
+        lambda ctx: not ctx.params.get("sqlite_file")
+        and not ctx.params.get("in_memory"),
+        then=require_all,
+        else_=accept_none,
     ),
 )
 @pass_context
@@ -299,26 +323,31 @@ def run(ctx: Context, **kwargs: dict) -> None:
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
 
-    from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot  # noqa: PLC0415
+    from kraken_infinity_grid.core.bot import Bot  # noqa: PLC0415
 
-    db_config = {
-        "sqlite_file": kwargs.pop("sqlite_file"),
-        "db_user": kwargs.pop("db_user"),
-        "db_password": kwargs.pop("db_password"),
-        "db_host": kwargs.pop("db_host"),
-        "db_port": kwargs.pop("db_port"),
-        "db_name": kwargs.pop("db_name"),
-    }
-    ctx.obj |= kwargs
+    # Handle in-memory database option
+    if kwargs.pop("in_memory", False):
+        kwargs["sqlite_file"] = ":memory:"
 
-    async def main() -> None:
-        gridbot = KrakenInfinityGridBot(
-            key=ctx.obj.pop("api_key"),
-            secret=ctx.obj.pop("secret_key"),
-            dry_run=ctx.obj.pop("dry_run"),
-            config=kwargs,
-            db_config=db_config,
+    db_config = DBConfigDTO(
+        sqlite_file=kwargs.pop("sqlite_file", None),
+        db_user=kwargs.pop("db_user", None),
+        db_password=kwargs.pop("db_password", None),
+        db_host=kwargs.pop("db_host", None),
+        db_port=kwargs.pop("db_port", None),
+        db_name=kwargs.pop("db_name", "kraken_infinity_grid"),
+    )
+    notification_config = NotificationConfigDTO(
+        telegram=TelegramConfigDTO(
+            token=kwargs.pop("telegram_token", None),
+            chat_id=kwargs.pop("telegram_chat_id", None),
         )
-        await gridbot.run()
-
-    asyncio.run(main())
+    )
+    ctx.obj |= kwargs
+    asyncio.run(
+        Bot(
+            bot_config=BotConfig(**ctx.obj),
+            db_config=db_config,
+            notification_config=notification_config,
+        ).run()
+    )

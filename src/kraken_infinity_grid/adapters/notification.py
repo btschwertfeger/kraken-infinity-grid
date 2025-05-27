@@ -1,0 +1,34 @@
+# -*- mode: python; coding: utf-8 -*-
+#
+# Copyright (C) 2025 Benjamin Thomas Schwertfeger
+# All rights reserved.
+# https://github.com/btschwertfeger
+#
+
+from kraken_infinity_grid.interfaces import INotificationChannel
+import requests
+
+from logging import getLogger
+
+LOG = getLogger(__name__)
+
+class TelegramNotificationChannelAdapter(INotificationChannel):
+    """Telegram implementation of the notification channel."""
+
+    def __init__(self, bot_token: str, chat_id: str):
+        self.__chat_id = chat_id
+        self.__base_url = f"https://api.telegram.org/bot{bot_token}"
+
+    def send(self, message: str) -> bool:
+        """Send a notification message through Telegram."""
+        LOG.info(f"Sending Telegram notification: {message}")
+        try:
+            url = f"{self.__base_url}/sendMessage"
+            response = requests.post(
+                url,
+                data={"chat_id": self.__chat_id, "text": message, "parse_mode": "markdown"},
+                timeout=10,
+            )
+            return response.status_code == 200
+        except Exception as e:
+            LOG.error(f"Failed to send Telegram notification: {e}")

@@ -1,88 +1,66 @@
 # -*- mode: python; coding: utf-8 -*-
 #
-# Copyright (C) 2023 Benjamin Thomas Schwertfeger
+# Copyright (C) 2025 Benjamin Thomas Schwertfeger
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
 
-from datetime import datetime
-from logging import getLogger
-from typing import TYPE_CHECKING, Self
+from kraken_infinity_grid.models.dto.configuration import NotificationConfigDTO
 
-import requests
-
-if TYPE_CHECKING:
-
-    from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
-
-LOG = getLogger(__name__)
+from kraken_infinity_grid.interfaces import INotificationChannel
 
 
-class Telegram:
-    """Telegram class to send messages to a Telegram chat."""
 
-    def __init__(
-        self: Self,
-        strategy: "KrakenInfinityGridBot",
-        telegram_token: str,
-        telegram_chat_id: str,
-        exception_token: str,
-        exception_chat_id: str,
-    ) -> None:
-        self.__s = strategy
-        self.__telegram_token = telegram_token
-        self.__telegram_chat_id = telegram_chat_id
-        self.__exception_token = exception_token
-        self.__exception_chat_id = exception_chat_id
 
-    def send_to_telegram(
-        self: Self,
-        message: str,
-        exception: bool | None = False,
-        log: bool = True,
-    ) -> None:
-        """Send a message to a Telegram chat"""
-        if exception:
-            if log:
-                LOG.error(message)
-            if not (self.__exception_token and self.__exception_chat_id):
-                return
-            response = requests.post(
-                url=f"https://api.telegram.org/bot{self.__exception_token}/sendMessage",
-                params={
-                    "chat_id": self.__exception_chat_id,
-                    "text": f"```\n{message}\n```",
-                    "parse_mode": "markdown",
-                },
-                timeout=10,
-            )
-        else:
-            if log:
-                LOG.info(message)
-            if not (self.__telegram_token and self.__telegram_chat_id):
-                return
-            response = requests.post(
-                url=f"https://api.telegram.org/bot{self.__telegram_token}/sendMessage",
-                params={
-                    "chat_id": self.__telegram_chat_id,
-                    "text": message,
-                    "parse_mode": "markdown",
-                },
-                timeout=10,
+class NotificationService:
+    """Service for sending notifications through configured channels."""
+
+    def __init__(self, config: NotificationConfigDTO):
+        self.__channels: list[INotificationChannel] = []
+        self.__config = config
+        self._setup_channels_from_config()
+
+    def _setup_channels_from_config(self):
+        """Set up notification channels from the loaded config."""
+        if self.__config.telegram and self.__config.telegram.enabled:
+            self.add_telegram_channel(
+                bot_token=self.__config.telegram.bot_token,
+                chat_id=self.__config.telegram.chat_id,
             )
 
-        if response.status_code != 200:
-            # Its not that important to send telegram messages... so we just log
-            # this here. The user will know that something is wrong when not
-            # receiving regular status updates.
-            LOG.error(
-                "Failed to send message to Telegram. Status code: %d, message: \n%s",
-                response.status_code,
-                message,
-            )
+    def add_channel(self, channel: INotificationChannel):
+        """Add a notification channel to the service."""
+        self.__channels.append(channel)
 
-    def send_telegram_update(self: Self) -> None:
-        """Send a message to the Telegram chat with the current status."""
+    def add_telegram_channel(self, bot_token: str, chat_id: str):
+        """Convenience method to add a Telegram notification channel."""
+        from kraken_infinity_grid.adapters.notification import (
+            TelegramNotificationChannelAdapter,
+        )
+
+        self.add_channel(TelegramNotificationChannelAdapter(bot_token, chat_id))
+
+    def notify(self, message: str) -> bool:
+        """Send a notification through all configured channels.
+
+        Args:
+            message: The message to send
+
+        Returns:
+            bool: True if the message was sent through at least one channel
+        """
+        if not self.__channels:
+            return False
+
+        success = False
+        for channel in self.__channels:
+            if channel.send(message):
+                success = True
+
+        return success
+
+    def build_update_message() -> str:
+        """Build a message for updates."""
         balances = self.__s.get_balances()
 
         message = f"👑 {self.__s.symbol}\n"
@@ -147,3 +125,4 @@ class Telegram:
 
         self.send_to_telegram(message)
         self.__s.configuration.update({"last_telegram_update": datetime.now()})
+
