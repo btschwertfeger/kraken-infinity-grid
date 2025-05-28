@@ -23,14 +23,17 @@ from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
-from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
+from kraken_infinity_grid.models.schemas.exchange import (
+    AssetPairInfoSchema,
+    AssetBalanceSchema,
+)
 
 LOG = getLogger(__name__)
 
 # FIXME: Make altname and wsname uniform
 from kraken_infinity_grid.models.schemas.exchange import (
     OrderInfoSchema,
-    OrderInfoListSchema,
+    CreateOrderResponseSchema,
 )
 
 
@@ -104,8 +107,13 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             LOG.error("- Could not connect to the Kraken Exchange API.")
             self.__state_machine.transition_to(States.ERROR)
         try:
-            self.__market_service.get_system_status()
-            LOG.info("- Kraken Exchange API Status: Available")
+            if (
+                status := self.__market_service.get_system_status().lower()
+            ) == "online":
+                LOG.info("- Kraken Exchange API Status: Online")
+                return
+            LOG.warning("- Kraken Exchange API Status: %s", status)
+            raise ConnectionError("Kraken API is not online.")
         except Exception as exc:  # pylint: disable=broad-exception-caught
             LOG.debug(
                 "Exception while checking Kraken API status: %s",
@@ -140,17 +148,26 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return orders
 
     def get_account_balance(self: Self) -> dict[str, float]:
+        """
+        NOTE: Currently only used during initialization to check if permissions
+        are set.
+        """
         return self.__user_service.get_account_balance()
 
     def get_closed_orders(
-        self: Self,
-        userref: int = None,
-        trades: bool = None,
+        self: Self, userref: int = None, trades: bool = None
     ) -> dict[str, Any]:
+        """
+        NOTE: Currently only used during initialization to check if permissions
+        are set.
+        """
         return self.__user_service.get_closed_orders(userref=userref, trades=trades)
 
-    def get_balances(self: Self) -> dict[str, float]:
-        return self.__user_service.get_balances()
+    def get_balances(self: Self) -> list[AssetBalanceSchema]:
+        balances = []
+        for symbol, data in self.__user_service.get_balances().items():
+            balances.append(AssetBalanceSchema(asset=symbol, **data))
+        return balances
 
     # == Getters for exchange trade operations =================================
     def create_order(
@@ -163,40 +180,40 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         userref: int,
         validate: bool = False,
         oflags: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> CreateOrderResponseSchema:
         """Create a new order."""
-        return self.__trade_service.create_order(
-            ordertype=ordertype,
-            side=side,
-            volume=volume,
-            pair=pair,
-            price=price,
-            userref=userref,
-            validate=validate,
-            oflags=oflags,
+        return CreateOrderResponseSchema(
+            txid=self.__trade_service.create_order(
+                ordertype=ordertype,
+                side=side,
+                volume=volume,
+                pair=pair,
+                price=price,
+                userref=userref,
+                validate=validate,
+                oflags=oflags,
+            )["txid"][0]
         )
 
-    def cancel_order(self: Self, txid: str, **kwargs) -> dict[str, Any]:
+    def cancel_order(self: Self, txid: str, **kwargs) -> None:
         """Cancel an order."""
-        return self.__trade_service.cancel_order(txid=txid, **kwargs)
+        self.__trade_service.cancel_order(txid=txid, **kwargs)
 
     def truncate(self: Self, amount: float, amount_type: str, pair: str) -> str:
         """Truncate amount according to exchange precision."""
         return self.__trade_service.truncate(
-            amount=amount,
-            amount_type=amount_type,
-            pair=pair,
+            amount=amount, amount_type=amount_type, pair=pair
         )
 
     # == Getters for exchange market operations ================================
-    def get_system_status(self: Self) -> dict[str, Any]:
+    def get_system_status(self: Self) -> str:
         """Get the current system status of the exchange."""
-        return self.__market_service.get_system_status()
+        return self.__market_service.get_system_status()["status"]
 
     def get_asset_pair_info(self: Self, pair: str) -> AssetPairInfoSchema:
         """Get available asset pair information from the exchange."""
         # FIXME: Proper error handling
-        if pair_info := self.__market_service.get_asset_pairs(pair=pair) is not dict():
+        if (pair_info := self.__market_service.get_asset_pairs(pair=pair)) != {}:
             raise ValueError(
                 f"Could not get asset pair info for {pair}. "
                 "Please check the pair name and try again.",

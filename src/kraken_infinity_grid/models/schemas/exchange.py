@@ -7,6 +7,11 @@
 
 from pydantic import BaseModel
 
+"""
+FIXME: docstring
+
+All schemas can be extended with additional fields as needed.
+"""
 
 class AssetPairInfoSchema(BaseModel):
     """Model for required asset pair information"""
@@ -30,7 +35,14 @@ class OrderInfoSchema(BaseModel):
     price: float  # primary price
     type: str  # Side (buy or sell) # FIXME: rename to side?
 
-class OrderInfoListSchema(BaseModel):
-    """Model for a list of order information"""
 
-    orders: list[OrderInfoSchema] = []
+class AssetBalanceSchema(BaseModel):
+
+    asset: str  # Asset name, e.g. "XXBT"
+    balance: float # Current balance of the asset
+    hold_trade: float  # Balance held in trades
+
+class CreateOrderResponseSchema(BaseModel):
+    """Model for the response of a create order operation"""
+
+    txid: str  # Transaction ID of the created order

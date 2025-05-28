@@ -174,8 +174,7 @@ class GridSellStrategy(IGridBaseStrategy):
                 validate=self._config.dry_run,
             )
 
-            placed_order_txid = placed_order["txid"][0]
-            self._pending_txids_table.add(placed_order_txid)
+            self._pending_txids_table.add(placed_order.txid)
 
             if txid_to_delete is not None:
                 # Other than with buy orders, we can only delete the
@@ -183,7 +182,7 @@ class GridSellStrategy(IGridBaseStrategy):
                 self._orderbook_table.remove(filters={"txid": txid_to_delete})
                 self._unsold_buy_order_txids_table.remove(txid=txid_to_delete)
 
-            self._orderbook_service.assign_order_by_txid(txid=placed_order_txid)
+            self._orderbook_service.assign_order_by_txid(txid=placed_order.txid)
             return
 
         # ======================================================================

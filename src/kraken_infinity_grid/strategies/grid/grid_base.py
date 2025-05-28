@@ -431,13 +431,13 @@ class IGridBaseStrategy(IStrategy):
         quote_balance = Decimal(0)
         quote_available = Decimal(0)
 
-        for symbol, data in self._rest_api.get_balances().items():
-            if symbol == self.zbase_currency:
-                base_balance = Decimal(data["balance"])
-                base_available = base_balance - Decimal(data["hold_trade"])
-            elif symbol == self.xquote_currency:
-                quote_balance = Decimal(data["balance"])
-                quote_available = quote_balance - Decimal(data["hold_trade"])
+        for balance in self._rest_api.get_balances():
+            if balance.symbol == self.zbase_currency:
+                base_balance = Decimal(balance.balance)
+                base_available = base_balance - Decimal(balance.hold_trade)
+            elif balance.symbol == self.xquote_currency:
+                quote_balance = Decimal(balance.balance)
+                quote_available = quote_balance - Decimal(balance.hold_trade)
 
         balances = {
             "base_balance": float(base_balance),

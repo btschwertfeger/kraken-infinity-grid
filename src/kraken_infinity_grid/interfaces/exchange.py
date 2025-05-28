@@ -16,9 +16,9 @@ from typing import Any
 
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
-    OrderInfoSchema,OrderInfoListSchema
+    OrderInfoSchema,
+    AssetBalanceSchema,CreateOrderResponseSchema
 )
-
 
 
 class IExchangeRESTService(ABC):
@@ -50,7 +50,7 @@ class IExchangeRESTService(ABC):
         """Get closed orders for a userref with an optional limit."""
 
     @abstractmethod
-    def get_balances(self) -> dict[str, float]:
+    def get_balances(self) -> list[AssetBalanceSchema]:
         """Get current balances."""
 
     # == Getters for exchange trade operations =================================
@@ -65,11 +65,11 @@ class IExchangeRESTService(ABC):
         userref: int,
         validate: bool = False,
         oflags: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> CreateOrderResponseSchema:
         """Create a new order."""
 
     @abstractmethod
-    def cancel_order(self, txid: str) -> dict[str, Any]:
+    def cancel_order(self, txid: str) ->None:
         """Cancel an order."""
 
     @abstractmethod
@@ -78,8 +78,12 @@ class IExchangeRESTService(ABC):
 
     # == Getters for exchange market operations ================================
     @abstractmethod
-    def get_system_status(self) -> dict[str, Any]:
-        """Get the current system status of the exchange."""
+    def get_system_status(self) -> str:
+        """
+        Get the current system status of the exchange.
+
+        Must be "online" to succeed.
+        """
 
     @abstractmethod
     def get_asset_pair_info(self, pair: str) -> AssetPairInfoSchema:

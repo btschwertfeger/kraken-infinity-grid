@@ -36,7 +36,7 @@ class NotificationService:
 
     def add_telegram_channel(self, bot_token: str, chat_id: str):
         """Convenience method to add a Telegram notification channel."""
-        from kraken_infinity_grid.adapters.notification import (
+        from kraken_infinity_grid.adapters.notification import ( # pylint: disable=import-outside-toplevel
             TelegramNotificationChannelAdapter,
         )
 
@@ -53,6 +53,7 @@ class NotificationService:
         """
         LOG.info("Sending notification: %s", message)
         if not self.__channels:
+            LOG.warning("No notification channels configured.")
             return False
 
         success = False
