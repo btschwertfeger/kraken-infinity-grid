@@ -4,4 +4,19 @@
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
-# Core business Objects
+# Domain models
+
+from dataclasses import dataclass
+from enum import Enum
+
+
+class OrderSide(str, Enum):
+    BUY = "buy"
+    SELL = "sell"
+
+
+class OrderStatus(str, Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    CANCELED = "canceled"
+    PENDING = "pending"

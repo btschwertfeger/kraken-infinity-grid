@@ -5,8 +5,8 @@
 # https://github.com/btschwertfeger
 #
 
-from kraken_infinity_grid.services.orderbook_service import OrderbookService
+from kraken_infinity_grid.services.notification_service import NotificationService
 
 __all__ = [
-    "OrderbookService",
+    "NotificationService",
 ]

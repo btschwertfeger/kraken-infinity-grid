@@ -6,11 +6,11 @@
 #
 
 from logging import getLogger
+from typing import Self
 
 import requests
 
 from kraken_infinity_grid.interfaces import INotificationChannel
-from typing import Self
 
 LOG = getLogger(__name__)
 

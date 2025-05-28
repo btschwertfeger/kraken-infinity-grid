@@ -318,7 +318,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     ),
 )
 @pass_context
-def run(ctx: Context, **kwargs: dict) -> None:
+def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
     """Run the trading algorithm using the specified options."""
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415

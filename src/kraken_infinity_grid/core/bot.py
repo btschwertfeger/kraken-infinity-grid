@@ -15,6 +15,7 @@ from typing import Any, Self
 
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     DBConnect,
@@ -27,10 +28,9 @@ from kraken_infinity_grid.models.dto.configuration import (
     DBConfigDTO,
     NotificationConfigDTO,
 )
-from kraken_infinity_grid.services import OrderbookService
+from kraken_infinity_grid.services.notification_service import NotificationService
 
 LOG = getLogger(__name__)
-from kraken_infinity_grid.services.notification_service import NotificationService
 
 
 class Bot:
@@ -40,11 +40,11 @@ class Bot:
     """
 
     def __init__(
-        self,
+        self: Self,
         bot_config: BotConfigDTO,
         db_config: DBConfigDTO,
         notification_config: NotificationConfigDTO,
-    ):
+    ) -> None:
         LOG.info(
             "Initiate the Kraken Infinity Grid Algorithm instance (v%s)",
             version("kraken-infinity-grid"),
@@ -75,15 +75,6 @@ class Bot:
         # == Application services ==============================================
         ##
         self.__notification_service = NotificationService(notification_config)
-        self.__orderbook_service = OrderbookService(
-            config=self.__config,
-            rest_api=self.__rest_api,
-            event_bus=self.__event_bus,
-            state_machine=self.__state_machine,
-            orderbook_table=self.__orderbook_table,
-            pending_txids_table=self.__pending_txids_table,
-            unsold_buy_order_txids_table=self.__unsold_buy_order_txids_table,
-        )
 
         # Create the appropriate strategy based on config
         self.__strategy = self.__strategy_factory()
@@ -91,7 +82,7 @@ class Bot:
         # Setup event subscriptions
         self.__setup_event_handlers()
 
-    def __strategy_factory(self) -> Any:
+    def __strategy_factory(self: Self) -> Any:
         from kraken_infinity_grid.strategies.grid import (  # pylint: disable=import-outside-toplevel
             CDCAStrategy,
             GridHodlStrategy,
@@ -110,13 +101,17 @@ class Bot:
             raise ValueError(f"Unknown strategy type: {self.__config.strategy}")
 
         return strategies[self.__config.strategy](
+            config=self.__config,
             state_machine=self.__state_machine,
             rest_api=self.__rest_api,
-            orderbook_service=self.__orderbook_service,
             event_bus=self.__event_bus,
+            configuration_table=self.__configuration_table,
+            orderbook_table=self.__orderbook_table,
+            pending_txids_table=self.__pending_txids_table,
+            unsold_buy_order_txids_table=self.__unsold_buy_order_txids_table,
         )
 
-    def __exchange_factory(self) -> dict:
+    def __exchange_factory(self: Self) -> dict:
         """Create the exchange service based on the configuration."""
         if self.__config.exchange == "Kraken":
             from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel
@@ -139,7 +134,7 @@ class Bot:
             }
         raise ValueError(f"Unsupported exchange: {self.__config.exchange}")
 
-    def __setup_event_handlers(self):
+    def __setup_event_handlers(self: Self) -> None:
         # Subscribe to events
 
         # prepare_for_trading is called after the initial setup is done and the
@@ -160,7 +155,7 @@ class Bot:
             self.__notification_service.on_notification,
         )
 
-    async def run(self):
+    async def run(self: Self) -> None:
         """Start the bot"""
         LOG.info("Starting the Kraken Infinity Grid Algorithm...")
 
@@ -242,7 +237,10 @@ class Bot:
             self.__state_machine.transition_to(States.ERROR)
             await asyncio.sleep(5)
             await self.terminate(f"The algorithm was interrupted: {exc}")
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (
+            GridBotStateError,
+            Exception,
+        ) as exc:  # pylint: disable=broad-exception-caught
             self.__state_machine.transition_to(States.ERROR)
             await asyncio.sleep(5)
             await self.terminate(f"The algorithm was interrupted by exception: {exc}")
@@ -307,6 +305,6 @@ class Bot:
 
         self.__event_bus.publish(
             "notification",
-            {"message": f"{self.name} terminated.\nReason: {reason}"},
+            {"message": f"{self.__config.name} terminated.\nReason: {reason}"},
         )
         sys.exit(exception)

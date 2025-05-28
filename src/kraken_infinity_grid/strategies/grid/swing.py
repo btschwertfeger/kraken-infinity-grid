@@ -82,7 +82,10 @@ class SwingStrategy(IGridBaseStrategy):
         """
         LOG.debug("Checking if extra sell order can be placed...")
         if self._orderbook_table.count(filters={"side": "sell"}) == 0:
-            fetched_balances = self._get_balances()
+            fetched_balances = self._rest_api.get_pair_balance(
+                self._runtime_attrs.xbase_currency,
+                self._runtime_attrs.zquote_currency,
+            )
 
             if (
                 fetched_balances["base_available"] * self._ticker.last
@@ -96,10 +99,10 @@ class SwingStrategy(IGridBaseStrategy):
                 self._event_bus.publish(
                     "notification",
                     {
-                        "message": f"ℹ️ {self._runtime_attrs.symbol}: Placing extra sell order",
+                        "message": f"ℹ️ {self._config.symbol}: Placing extra sell order",
                     },
                 )
-                self.handle_arbitrage(side="sell", order_price=order_price)
+                self._handle_arbitrage(side="sell", order_price=order_price)
 
     def _new_sell_order(
         self: Self,
@@ -132,7 +135,7 @@ class SwingStrategy(IGridBaseStrategy):
             # ==================================================================
             # Get the corresponding buy order in order to retrieve the volume.
             corresponding_buy_order: OrderInfoSchema = (
-                self._orderbook_service.get_orders_info_with_retry(
+                self._rest_api.get_order_with_retry(
                     txid=txid_to_delete,
                 )
             )
@@ -160,7 +163,7 @@ class SwingStrategy(IGridBaseStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self._runtime_attrs.symbol,
+                pair=self._config.symbol,
             ),
         )
 
@@ -171,13 +174,16 @@ class SwingStrategy(IGridBaseStrategy):
                 amount=Decimal(self._config.amount_per_grid)
                 / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
                 amount_type="volume",
-                pair=self._runtime_attrs.symbol,
+                pair=self._config.symbol,
             ),
         )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
-        fetched_balances = self._get_balances()
+        fetched_balances = self._rest_api.get_pair_balance(
+            self._runtime_attrs.xbase_currency,
+            self._runtime_attrs.zquote_currency,
+        )
         if fetched_balances["base_available"] >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
@@ -193,7 +199,7 @@ class SwingStrategy(IGridBaseStrategy):
                 ordertype="limit",
                 side="sell",
                 volume=volume,
-                pair=self._runtime_attrs.symbol,
+                pair=self._config.symbol,
                 price=order_price,
                 userref=self._config.userref,
                 validate=self._config.dry_run,
@@ -207,12 +213,12 @@ class SwingStrategy(IGridBaseStrategy):
                 self._orderbook_table.remove(filters={"txid": txid_to_delete})
                 self._unsold_buy_order_txids_table.remove(txid=txid_to_delete)
 
-            self._orderbook_service.om.assign_order_by_txid(txid=placed_order.txid)
+            self._assign_order_by_txid(txid=placed_order.txid)
             return
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._runtime_attrs.symbol}"
+        message = f"⚠️ {self._config.symbol}"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"

@@ -5,18 +5,21 @@
 # https://github.com/btschwertfeger
 #
 
-from pydantic import BaseModel
-
 """
 FIXME: docstring
 
 All schemas can be extended with additional fields as needed.
 """
 
+from pydantic import BaseModel
+
+from kraken_infinity_grid.models.schemas.domain import OrderSide
+
+
 class AssetPairInfoSchema(BaseModel):
     """Model for required asset pair information"""
 
-    altname: str  # e.g. "XBTUSD"
+    pair: str  # e.g. "XBTUSD"
     base: str  # "XXBT"
     quote: str  # "ZUSD"
     cost_decimals: int  # Number of decimals for cost, e.g. 5
@@ -33,14 +36,15 @@ class OrderInfoSchema(BaseModel):
     userref: int  # User reference number
     txid: str  # transaction ID
     price: float  # primary price
-    type: str  # Side (buy or sell) # FIXME: rename to side?
+    side: OrderSide
 
 
 class AssetBalanceSchema(BaseModel):
 
     asset: str  # Asset name, e.g. "XXBT"
-    balance: float # Current balance of the asset
+    balance: float  # Current balance of the asset
     hold_trade: float  # Balance held in trades
+
 
 class CreateOrderResponseSchema(BaseModel):
     """Model for the response of a create order operation"""

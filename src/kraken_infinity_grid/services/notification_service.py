@@ -36,7 +36,7 @@ class NotificationService:
 
     def add_telegram_channel(self, bot_token: str, chat_id: str):
         """Convenience method to add a Telegram notification channel."""
-        from kraken_infinity_grid.adapters.notification import ( # pylint: disable=import-outside-toplevel
+        from kraken_infinity_grid.adapters.notification import (  # pylint: disable=import-outside-toplevel
             TelegramNotificationChannelAdapter,
         )
 

@@ -4,8 +4,8 @@
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
-
 from contextlib import suppress
+from decimal import Decimal
 from logging import getLogger
 from time import sleep
 from typing import Any, Self
@@ -19,22 +19,21 @@ from kraken.spot import Market, SpotWSClient, Trade, User
 
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
+
+# FIXME: Make pair and symbol uniform
 from kraken_infinity_grid.models.schemas.exchange import (
-    AssetPairInfoSchema,
     AssetBalanceSchema,
+    AssetPairInfoSchema,
+    CreateOrderResponseSchema,
+    OrderInfoSchema,
 )
 
 LOG = getLogger(__name__)
-
-# FIXME: Make altname and wsname uniform
-from kraken_infinity_grid.models.schemas.exchange import (
-    OrderInfoSchema,
-    CreateOrderResponseSchema,
-)
 
 
 class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
@@ -138,14 +137,56 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return OrderInfoSchema(**order_info, **order_info["descr"], txid=txid)
 
     def get_open_orders(
-        self: Self, userref: int = None, trades: bool = None
+        self: Self,
+        userref: int = None,
+        trades: bool = None,
     ) -> list[OrderInfoSchema]:
         orders = []
         for txid, order in self.__user_service.get_open_orders(
-            userref=userref, trades=trades
+            userref=userref,
+            trades=trades,
         )["open"].items():
             orders.append(OrderInfoSchema(**order, **order["descr"], txid=txid))
         return orders
+
+    def get_order_with_retry(
+        self: Self,
+        txid: str,
+        tries: int = 0,
+        max_tries: int = 5,
+        exit_on_fail: bool = True,
+    ) -> dict | None:
+        """
+        Returns the order details for a given txid.
+
+        NOTE: We need retry here, since Kraken lacks of fast processing of
+              placed/filled orders and making them available via REST API.
+        """
+        while tries < max_tries and not (
+            order_details := self.get_orders_info(txid=txid)
+        ):
+            tries += 1
+            LOG.warning(
+                "Could not find order '%s'. Retry %d/%d in %d seconds...",
+                txid,
+                tries,
+                max_tries,
+                (wait_time := 2 * tries),
+            )
+            sleep(wait_time)
+
+        if exit_on_fail and order_details is None:
+            LOG.error(
+                "Failed to retrieve order info for '%s' after %d retries!",
+                txid,
+                max_tries,
+            )
+            # FIXME: self._state_machine.transition_to(States.ERROR)
+            raise GridBotStateError(
+                f"Failed to retrieve order info for '{txid}' after {max_tries} retries!",
+            )
+
+        return order_details  # type: ignore[no-any-return]
 
     def get_account_balance(self: Self) -> dict[str, float]:
         """
@@ -155,7 +196,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return self.__user_service.get_account_balance()
 
     def get_closed_orders(
-        self: Self, userref: int = None, trades: bool = None
+        self: Self,
+        userref: int = None,
+        trades: bool = None,
     ) -> dict[str, Any]:
         """
         NOTE: Currently only used during initialization to check if permissions
@@ -164,9 +207,46 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return self.__user_service.get_closed_orders(userref=userref, trades=trades)
 
     def get_balances(self: Self) -> list[AssetBalanceSchema]:
+        LOG.debug("Retrieving the user's balances...")
         balances = []
         for symbol, data in self.__user_service.get_balances().items():
             balances.append(AssetBalanceSchema(asset=symbol, **data))
+        return balances
+
+    def get_pair_balance(
+        self: Self,
+        base_currency: str,
+        quote_currency: str,
+    ) -> dict[str, float]:
+        """
+        Returns the available and overall balances of the quote and base
+        currency.
+
+        FIXME: Is there a way to get the balances of the asset pair directly?
+        """
+
+        base_balance = Decimal(0)
+        base_available = Decimal(0)
+        quote_balance = Decimal(0)
+        quote_available = Decimal(0)
+
+        for balance in self.get_balances():
+            if balance.symbol == base_currency:
+                base_balance = Decimal(balance.balance)
+                base_available = base_balance - Decimal(balance.hold_trade)
+            elif balance.symbol == quote_currency:
+                quote_balance = Decimal(balance.balance)
+                quote_available = quote_balance - Decimal(balance.hold_trade)
+
+        LOG.debug(
+            "Retrieved balances: %s",
+            balances := {
+                "base_balance": float(base_balance),
+                "quote_balance": float(quote_balance),
+                "base_available": float(base_available),
+                "quote_available": float(quote_available),
+            },
+        )
         return balances
 
     # == Getters for exchange trade operations =================================
@@ -192,7 +272,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 userref=userref,
                 validate=validate,
                 oflags=oflags,
-            )["txid"][0]
+            )["txid"][0],
         )
 
     def cancel_order(self: Self, txid: str, **kwargs) -> None:
@@ -202,7 +282,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     def truncate(self: Self, amount: float, amount_type: str, pair: str) -> str:
         """Truncate amount according to exchange precision."""
         return self.__trade_service.truncate(
-            amount=amount, amount_type=amount_type, pair=pair
+            amount=amount,
+            amount_type=amount_type,
+            pair=pair,
         )
 
     # == Getters for exchange market operations ================================

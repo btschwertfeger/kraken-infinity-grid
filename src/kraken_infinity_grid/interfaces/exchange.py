@@ -15,9 +15,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from kraken_infinity_grid.models.schemas.exchange import (
+    AssetBalanceSchema,
     AssetPairInfoSchema,
+    CreateOrderResponseSchema,
     OrderInfoSchema,
-    AssetBalanceSchema,CreateOrderResponseSchema
 )
 
 
@@ -34,7 +35,11 @@ class IExchangeRESTService(ABC):
         """Get information about the user on the exchange."""
 
     @abstractmethod
-    def get_open_orders(self, userref: int, trades: bool = None) -> OrderInfoListSchema:
+    def get_open_orders(
+        self,
+        userref: int,
+        trades: bool = None,
+    ) -> list[OrderInfoSchema]:
         """Get all open orders for a userref."""
 
     @abstractmethod
@@ -69,7 +74,7 @@ class IExchangeRESTService(ABC):
         """Create a new order."""
 
     @abstractmethod
-    def cancel_order(self, txid: str) ->None:
+    def cancel_order(self, txid: str) -> None:
         """Cancel an order."""
 
     @abstractmethod
