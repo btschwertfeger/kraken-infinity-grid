@@ -21,6 +21,7 @@ from kraken_infinity_grid.infrastructure.database import (
 
 from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
 
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 LOG = getLogger(__name__)
 
 
@@ -64,25 +65,25 @@ class OrderbookService:
         case of closed orders.
         """
         LOG.info("Processing order '%s' ...", txid)
-        order_details = self.get_orders_info_with_retry(txid=txid)
+        order_details: OrderInfoSchema = self.get_orders_info_with_retry(txid=txid)
         LOG.debug("- Order information: %s", order_details)
 
         if (
-            order_details["descr"]["pair"] != self.__s.altname
-            or order_details["userref"] != self.__config.userref
+            order_details.pair != self.__s.altname
+            or order_details.userref != self.__config.userref
         ):
             LOG.info("Order '%s' does not belong to this instance.", txid)
             return
 
-        if self._pending_txids.count(filters={"txid": order_details["txid"]}) != 0:
+        if self._pending_txids.count(filters={"txid": order_details.txid}) != 0:
             self._orderbook.add(order_details)
-            self._pending_txids.remove(order_details["txid"])
+            self._pending_txids.remove(order_details.txid)
         else:
             self._orderbook.update(
                 order_details,
-                filters={"txid": order_details["txid"]},
+                filters={"txid": order_details.txid},
             )
-            LOG.info("Updated order '%s' in orderbook.", order_details["txid"])
+            LOG.info("Updated order '%s' in orderbook.", order_details.txid)
 
         LOG.info(
             "Current investment: %f / %d %s",
@@ -121,7 +122,6 @@ class OrderbookService:
             <= self.investment + self.amount_per_grid_plus_fee
         ) or (self.__config.max_investment <= self.investment)
 
-
     def check_pending_txids(self: Self) -> bool:
         """
         Skip checking the price range, because first all missing orders
@@ -149,9 +149,7 @@ class OrderbookService:
               placed/filled orders and making them available via REST API.
         """
         while tries < max_tries and not (
-            order_details := self._rest_api.get_orders_info(
-                txid=txid,
-            ).get(txid)
+            order_details := self._rest_api.get_orders_info(txid=txid)
         ):
             tries += 1
             LOG.warning(
@@ -174,5 +172,4 @@ class OrderbookService:
                 f"Failed to retrieve order info for '{txid}' after {max_tries} retries!",
             )
 
-        order_details["txid"] = txid
         return order_details  # type: ignore[no-any-return]

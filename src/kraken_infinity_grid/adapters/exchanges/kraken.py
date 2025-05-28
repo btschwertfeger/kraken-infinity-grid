@@ -16,15 +16,18 @@ from kraken.exceptions import (
 )
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.interfaces.interfaces import (
+from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
 from time import sleep
 from typing import Self
-from kraken_infinity_grid.models.schemas import AssetPairInfoSchema
+from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
 
 LOG = getLogger(__name__)
+
+# FIXME: Make altname and wsname uniform
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 
 
 class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
@@ -105,8 +108,22 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             self.check_exchange_status(tries=tries + 1)
 
     # == Getters for exchange user operations ==================================
-    def get_orders_info(self: Self, txid: int = None) -> dict[str, Any]:
-        return self.__user_service.get_orders_info(txid=txid)
+    def get_orders_info(self: Self, txid: int = None) -> OrderInfoSchema | None:
+        """
+        {
+            "descr": {"pair": "XBTUSD", "price": "10000.0", "type": "buy"},
+            "txid": "O5X7QF-3W5X7Q-3W5X7Q", # added manually
+            "userref": 123456,
+        }
+        """
+        if not (order_info := self.__user_service.get_orders_info(txid=txid).get(txid)):
+            return None
+
+        return OrderInfoSchema(
+            **order_info["descr"],
+            userref=order_info["userref"],
+            txid=txid,
+        )
 
     def get_open_orders(
         self: Self,

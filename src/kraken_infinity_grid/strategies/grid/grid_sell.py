@@ -13,6 +13,8 @@ from decimal import Decimal
 from logging import getLogger
 from time import sleep
 
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+
 LOG = getLogger(__name__)
 
 
@@ -89,7 +91,7 @@ class GridSellStrategy(IGridBaseStrategy):
 
             # ==================================================================
             # Get the corresponding buy order in order to retrieve the volume.
-            corresponding_buy_order = (
+            corresponding_buy_order: OrderInfoSchema = (
                 self._orderbook_service.get_orders_info_with_retry(
                     txid=txid_to_delete,
                 )
@@ -99,8 +101,8 @@ class GridSellStrategy(IGridBaseStrategy):
             # the vol_exec is missing. In this case, the function will be
             # called again after a short delay.
             if (
-                corresponding_buy_order["status"] != "closed"
-                or corresponding_buy_order["vol_exec"] == 0
+                corresponding_buy_order.status != "closed"
+                or corresponding_buy_order.vol_exec == 0
             ):
                 LOG.warning(
                     "Can't place sell order, since the corresponding buy order"
@@ -118,7 +120,7 @@ class GridSellStrategy(IGridBaseStrategy):
             # buy order.
             volume = float(
                 self._rest_api.truncate(
-                    amount=float(corresponding_buy_order["vol_exec"]),
+                    amount=float(corresponding_buy_order.vol_exec),
                     amount_type="volume",
                     pair=self._runtime_attrs.symbol,
                 ),

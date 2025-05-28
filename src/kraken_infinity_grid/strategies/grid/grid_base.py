@@ -8,7 +8,7 @@
 # FIXME: Address pylint issues with too many arguments, not applicable in this
 #        project context.
 
-from kraken_infinity_grid.models.schemas import AssetPairInfoSchema
+from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
 from abc import abstractmethod
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.interfaces.strategy import IStrategy
@@ -33,6 +33,7 @@ import traceback
 
 from time import sleep
 
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 from pydantic import BaseModel
 from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
 from pydantic import BaseModel
@@ -319,19 +320,21 @@ class IGridBaseStrategy(IStrategy):
         ##
         for order in self._orderbook_table.get_orders():
             if order["txid"] not in open_txids:
-                closed_order = self._orderbook_service.get_orders_info_with_retry(
-                    txid=order["txid"],
+                closed_order: OrderInfoSchema = (
+                    self._orderbook_service.get_orders_info_with_retry(
+                        txid=order["txid"],
+                    )
                 )
                 # ==============================================================
                 # Order was filled
-                if closed_order["status"] == "closed":
+                if closed_order.status == "closed":
                     self.__update_order_book_handle_closed_order(
                         closed_order=closed_order,
                     )
 
                 # ==============================================================
                 # Order was closed
-                elif closed_order["status"] in {"canceled", "expired"}:
+                elif closed_order.status in {"canceled", "expired"}:
                     self._orderbook_table.remove(filters={"txid": order["txid"]})
 
                 else:
@@ -741,14 +744,16 @@ class IGridBaseStrategy(IStrategy):
         # ======================================================================
         # Fetch the order details for the given txid.
         ##
-        order_details = self._orderbook_service.get_orders_info_with_retry(txid=txid)
+        order_details: OrderInfoSchema = (
+            self._orderbook_service.get_orders_info_with_retry(txid=txid)
+        )
 
         # ======================================================================
         # Check if the order belongs to this bot and return if not
         ##
         if (
-            order_details["descr"]["pair"] != self._runtime_attrs.altname
-            or order_details["userref"] != self._config.userref
+            order_details.pair != self._runtime_attrs.altname
+            or order_details.userref != self._config.userref
         ):
             LOG.debug(
                 "Filled order %s was not from this bot or pair.",
@@ -758,12 +763,15 @@ class IGridBaseStrategy(IStrategy):
 
         # ======================================================================
         # Sometimes the order is not closed yet, so retry fetching the order.
+        # FIXME: can't this be done in orderbook_service?
         ##
         tries = 1
-        while order_details["status"] != "closed" and tries <= 3:
-            order_details = self._orderbook_service.get_orders_info_with_retry(
-                txid=txid,
-                exit_on_fail=False,
+        while order_details.status != "closed" and tries <= 3:
+            order_details: OrderInfoSchema = (
+                self._orderbook_service.get_orders_info_with_retry(
+                    txid=txid,
+                    exit_on_fail=False,
+                )
             )
             LOG.warning(
                 "Order '%s' is not closed! Retry %d/3 in %d seconds...",
@@ -774,7 +782,7 @@ class IGridBaseStrategy(IStrategy):
             sleep(wait_time)
             tries += 1
 
-        if order_details["status"] != "closed":
+        if order_details.status != "closed":
             LOG.warning(
                 "Can not handle filled order, since the fetched order is not"
                 " closed in upstream!"
@@ -785,7 +793,7 @@ class IGridBaseStrategy(IStrategy):
             return
 
         # ======================================================================
-        if self._config["dry_run"]:
+        if self._config.dry_run:
             LOG.info("Dry run, not handling filled order event.")
             return
 
@@ -797,12 +805,12 @@ class IGridBaseStrategy(IStrategy):
             {
                 "message": str(
                     f"✅ {self._runtime_attrs.symbol}: "
-                    f"{order_details['descr']['type'][0].upper()}{order_details['descr']['type'][1:]} "
+                    f"{order_details.type[0].upper()}{order_details.type[1:]} "
                     "order executed"
-                    f"\n ├ Price » {order_details['descr']['price']} {self._config.quote_currency}"
-                    f"\n ├ Size » {order_details['vol_exec']} {self._config.base_currency}"
+                    f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
+                    f"\n ├ Size » {order_details.vol_exec} {self._config.base_currency}"
                     f"\n └ Size in {self._config.quote_currency} » "
-                    f"{round(float(order_details['descr']['price']) * float(order_details['vol_exec']), self._runtime_attrs.cost_decimals)}",
+                    f"{round(order_details.price * order_details.vol_exec, self._runtime_attrs.cost_decimals)}",
                 )
             },
         )
@@ -810,12 +818,11 @@ class IGridBaseStrategy(IStrategy):
         # ======================================================================
         # Create a sell order for the executed buy order.
         ##
-        if order_details["descr"]["type"] == "buy":
+        if order_details.type == "buy":
             self.handle_arbitrage(
                 side="sell",
                 order_price=self._get_order_price(
-                    side="sell",
-                    last_price=float(order_details["descr"]["price"]),
+                    side="sell", last_price=order_details.price
                 ),
                 txid_to_delete=txid,
             )
@@ -836,8 +843,7 @@ class IGridBaseStrategy(IStrategy):
             self.handle_arbitrage(
                 side="buy",
                 order_price=self._get_order_price(
-                    side="buy",
-                    last_price=float(order_details["descr"]["price"]),
+                    side="buy", last_price=order_details.price
                 ),
                 txid_to_delete=txid,
             )
@@ -866,15 +872,15 @@ class IGridBaseStrategy(IStrategy):
         if self._orderbook_table.count(filters={"txid": txid}) == 0:
             return
 
-        order_details = self._orderbook_service.get_orders_info_with_retry(txid=txid)
+        order_details : OrderInfoSchema = self._orderbook_service.get_orders_info_with_retry(txid=txid)
 
         if (
-            order_details["descr"]["pair"] != self._runtime_attrs.altname
-            or order_details["userref"] != self._config.userref
+            order_details.pair != self._runtime_attrs.altname
+            or order_details.userref != self._config.userref
         ):
             return
 
-        if self._config["dry_run"]:
+        if self._config.dry_run:
             LOG.info("DRY RUN: Not cancelling order: %s", txid)
             return
 
@@ -892,7 +898,7 @@ class IGridBaseStrategy(IStrategy):
 
         # Check if the order has some vol_exec to sell
         ##
-        if float(order_details["vol_exec"]) != 0.0:
+        if order_details.vol_exec != 0.0:
             LOG.info(
                 "Order '%s' is partly filled - saving those funds.",
                 txid,
@@ -902,18 +908,12 @@ class IGridBaseStrategy(IStrategy):
             # Add vol_exec to remaining funds
             updates = {
                 "vol_of_unfilled_remaining": b["vol_of_unfilled_remaining"]
-                + float(order_details["vol_exec"]),
+                + order_details.vol_exec,
             }
 
             # Set new highest buy price.
-            if b["vol_of_unfilled_remaining_max_price"] < float(
-                order_details["descr"]["price"],
-            ):
-                updates |= {
-                    "vol_of_unfilled_remaining_max_price": float(
-                        order_details["descr"]["price"],
-                    ),
-                }
+            if b["vol_of_unfilled_remaining_max_price"] < order_details.price:
+                updates |= {"vol_of_unfilled_remaining_max_price": order_details.price}
             self._configuration_table.update(updates)
 
             # Sell remaining funds if there is enough to place a sell order.
@@ -923,7 +923,7 @@ class IGridBaseStrategy(IStrategy):
             if (
                 b["vol_of_unfilled_remaining"]
                 * b["vol_of_unfilled_remaining_max_price"]
-                >= self._config["amount_per_grid"]
+                >= self._config.amount_per_grid
             ):
                 LOG.info(
                     "Collected enough funds via partly filled buy orders to"

@@ -19,6 +19,7 @@ from decimal import Decimal
 from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.core.state_machine import States
 
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 
 class SwingStrategy(IGridBaseStrategy):
 
@@ -133,7 +134,7 @@ class SwingStrategy(IGridBaseStrategy):
 
             # ==================================================================
             # Get the corresponding buy order in order to retrieve the volume.
-            corresponding_buy_order = (
+            corresponding_buy_order: OrderInfoSchema = (
                 self._orderbook_service.get_orders_info_with_retry(
                     txid=txid_to_delete,
                 )
@@ -143,8 +144,8 @@ class SwingStrategy(IGridBaseStrategy):
             # the vol_exec is missing. In this case, the function will be
             # called again after a short delay.
             if (
-                corresponding_buy_order["status"] != "closed"
-                or corresponding_buy_order["vol_exec"] == 0
+                corresponding_buy_order.status != "closed"
+                or corresponding_buy_order.vol_exec == 0
             ):
                 LOG.warning(
                     "Can't place sell order, since the corresponding buy order"
