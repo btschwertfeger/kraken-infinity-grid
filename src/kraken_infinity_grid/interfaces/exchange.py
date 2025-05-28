@@ -13,11 +13,14 @@ FIXME: Add comprehensive examples and documentation for each method.
 
 from abc import ABC, abstractmethod
 from typing import Any
+
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
+    OrderInfoSchema,OrderInfoListSchema
 )
 
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+
+
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
 
@@ -31,7 +34,7 @@ class IExchangeRESTService(ABC):
         """Get information about the user on the exchange."""
 
     @abstractmethod
-    def get_open_orders(self, userref: int, trades: bool = None) -> dict[str, Any]:
+    def get_open_orders(self, userref: int, trades: bool = None) -> OrderInfoListSchema:
         """Get all open orders for a userref."""
 
     @abstractmethod
@@ -105,6 +108,3 @@ class IExchangeWebSocketService(ABC):
         **kwargs: dict[str, Any],
     ) -> None:
         """Handle incoming messages from the websocket."""
-
-
-

@@ -17,7 +17,7 @@ class BotConfigDTO(BaseModel):
     """
 
     # ==========================================================================
-    ## General attributes
+    # General attributes
     strategy: str
     api_key: str
     secret_key: str
@@ -30,7 +30,7 @@ class BotConfigDTO(BaseModel):
     max_investment: float
 
     # ==========================================================================
-    ## Grid-specific attributes
+    # Grid-specific attributes
     # We expect these values to be set by the user via CLI or environment
     # variables. Cloup is handling the validation of these values.
     amount_per_grid: float | None
@@ -64,4 +64,4 @@ class TelegramConfigDTO(BaseModel):
 class NotificationConfigDTO(BaseModel):
     """Pydantic model for notification service configuration."""
 
-    telegram: TelegramConfigDTO | None = None
+    telegram: TelegramConfigDTO

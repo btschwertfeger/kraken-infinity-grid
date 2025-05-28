@@ -5,11 +5,16 @@
 # https://github.com/btschwertfeger
 #
 
-from typing import Any
 import asyncio
 import signal
+import sys
+from datetime import datetime, timedelta
+from importlib.metadata import version
+from logging import getLogger
+from typing import Any, Self
+
 from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.core.state_machine import StateMachine
+from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     DBConnect,
@@ -17,20 +22,12 @@ from kraken_infinity_grid.infrastructure.database import (
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
-from kraken_infinity_grid.services import OrderbookService
-
-from logging import getLogger
-from kraken_infinity_grid.core.state_machine import States
-from importlib.metadata import version
-
-from typing import Self
-import sys
-from datetime import datetime, timedelta
 from kraken_infinity_grid.models.dto.configuration import (
+    BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
-    BotConfigDTO,
 )
+from kraken_infinity_grid.services import OrderbookService
 
 LOG = getLogger(__name__)
 from kraken_infinity_grid.services.notification_service import NotificationService
@@ -95,12 +92,13 @@ class Bot:
         self.__setup_event_handlers()
 
     def __strategy_factory(self) -> Any:
-        from kraken_infinity_grid.strategies.grid import ( # pylint: disable=import-outside-toplevel
+        from kraken_infinity_grid.strategies.grid import (  # pylint: disable=import-outside-toplevel
             CDCAStrategy,
             GridHodlStrategy,
             GridSellStrategy,
             SwingStrategy,
         )
+
         if self.__config.strategy not in (
             strategies := {
                 "SWING": SwingStrategy,
@@ -147,13 +145,20 @@ class Bot:
         # prepare_for_trading is called after the initial setup is done and the
         # websocket connection is established.
         self.__event_bus.subscribe(
-            "prepare_for_trading", self.__strategy.on_prepare_for_trading
+            "prepare_for_trading",
+            self.__strategy.on_prepare_for_trading,
         )
         self.__event_bus.subscribe("ticker_update", self.__strategy.on_ticker_update)
         self.__event_bus.subscribe("order_placed", self.__strategy.on_order_placed)
         self.__event_bus.subscribe("order_filled", self.__strategy.on_order_filled)
-        self.__event_bus.subscribe("order_cancelled", self.__strategy.on_order_cancelled)
-        self.__event_bus.subscribe("notification", self.__notification_service.on_notification)
+        self.__event_bus.subscribe(
+            "order_cancelled",
+            self.__strategy.on_order_cancelled,
+        )
+        self.__event_bus.subscribe(
+            "notification",
+            self.__notification_service.on_notification,
+        )
 
     async def run(self):
         """Start the bot"""
@@ -184,7 +189,7 @@ class Bot:
 
         if self.__state_machine.state == States.ERROR:
             await self.terminate(
-                "The algorithm was shut down by error during initialization!"
+                "The algorithm was shut down by error during initialization!",
             )
 
         # ======================================================================
@@ -203,7 +208,7 @@ class Bot:
                 {
                     "channel": "ticker",
                     "symbol": [
-                        f"{self.__config.base_currency}/{self.__config.quote_currency}"
+                        f"{self.__config.base_currency}/{self.__config.quote_currency}",
                     ],
                 },
                 {
@@ -213,7 +218,7 @@ class Bot:
                     "snap_orders": True,
                     "snap_trades": True,
                 },
-            ]
+            ],
         }
         for subscription in subscriptions[self.__config["exchange"]]:
             self.__ws_client.subscribe(subscription)
@@ -301,7 +306,7 @@ class Bot:
         self.__db.close()
 
         self.__event_bus.publish(
-            "notification", {"message": f"{self.name} terminated.\nReason: {reason}"}
+            "notification",
+            {"message": f"{self.name} terminated.\nReason: {reason}"},
         )
         sys.exit(exception)
-

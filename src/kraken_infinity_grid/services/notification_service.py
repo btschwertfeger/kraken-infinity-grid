@@ -5,12 +5,11 @@
 # https://github.com/btschwertfeger
 #
 
-from kraken_infinity_grid.models.dto.configuration import NotificationConfigDTO
-
-from kraken_infinity_grid.interfaces import INotificationChannel
+from logging import getLogger
 
 from kraken_infinity_grid.core.event_bus import Event
-from logging import getLogger
+from kraken_infinity_grid.interfaces import INotificationChannel
+from kraken_infinity_grid.models.dto.configuration import NotificationConfigDTO
 
 LOG = getLogger(__name__)
 

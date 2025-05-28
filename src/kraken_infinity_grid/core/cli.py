@@ -10,14 +10,14 @@ from typing import Any
 
 from click import FLOAT, INT, STRING, Context, echo, pass_context
 from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option, option_group
-from cloup.constraints import If, accept_none, require_all
+from cloup.constraints import Equal, If, IsSet, accept_none, require_all
+
 from kraken_infinity_grid.models.dto import (
+    BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
-    BotConfigDTO,
     TelegramConfigDTO,
 )
-from cloup.constraints import If, RequireAtLeast, require_all, accept_none, IsSet, Equal
 
 
 def print_version(ctx: Context, param: Any, value: Any) -> None:  # noqa: ANN401, ARG001
@@ -149,7 +149,8 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     option(
         "--strategy",
         type=Choice(
-            choices=("cDCA", "GridHODL", "GridSell", "SWING"), case_sensitive=True
+            choices=("cDCA", "GridHODL", "GridSell", "SWING"),
+            case_sensitive=True,
         ),
         help="The strategy to run.",
         required=True,
@@ -340,7 +341,7 @@ def run(ctx: Context, **kwargs: dict) -> None:
         telegram=TelegramConfigDTO(
             token=kwargs.pop("telegram_token", None),
             chat_id=kwargs.pop("telegram_chat_id", None),
-        )
+        ),
     )
     ctx.obj |= kwargs
 
@@ -349,5 +350,5 @@ def run(ctx: Context, **kwargs: dict) -> None:
             bot_config=BotConfigDTO(**ctx.obj),
             db_config=db_config,
             notification_config=notification_config,
-        ).run()
+        ).run(),
     )

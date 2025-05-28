@@ -5,7 +5,6 @@
 # https://github.com/btschwertfeger
 #
 
-from decimal import Decimal
 from logging import getLogger
 from time import sleep
 from typing import Iterable, Self
@@ -18,10 +17,9 @@ from kraken_infinity_grid.infrastructure.database import (
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
-
 from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
-
 from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+
 LOG = getLogger(__name__)
 
 
@@ -105,7 +103,9 @@ class OrderbookService:
             float(order["price"]) * float(order["volume"]) for order in orders
         )
         LOG.debug(
-            "Value of open orders: %d %s", investment, self.__config.quote_currency
+            "Value of open orders: %d %s",
+            investment,
+            self.__config.quote_currency,
         )
         return investment
 

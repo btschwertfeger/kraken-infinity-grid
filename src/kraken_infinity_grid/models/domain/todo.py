@@ -6,11 +6,13 @@
 #
 
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
 class Order(BaseModel):
     """Domain model representing an order in the grid strategy"""
+
     txid: str
     userref: int
     symbol: str

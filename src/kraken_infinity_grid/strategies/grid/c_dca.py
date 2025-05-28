@@ -8,8 +8,8 @@
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.core.state_machine import States
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)

@@ -22,7 +22,7 @@ class AssetPairInfoSchema(BaseModel):
 class OrderInfoSchema(BaseModel):
     """Model for order information"""
 
-    status: str # e.g. "open", "closed", "canceled"
+    status: str  # e.g. "open", "closed", "canceled"
     vol_exec: float  # Volume executed
     pair: str  # altname / Asset Pair Name
     userref: int  # User reference number
@@ -30,3 +30,7 @@ class OrderInfoSchema(BaseModel):
     price: float  # primary price
     type: str  # Side (buy or sell) # FIXME: rename to side?
 
+class OrderInfoListSchema(BaseModel):
+    """Model for a list of order information"""
+
+    orders: list[OrderInfoSchema] = []

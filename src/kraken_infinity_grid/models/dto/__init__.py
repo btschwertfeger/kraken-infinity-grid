@@ -8,9 +8,9 @@
 
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
-    TelegramConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
+    TelegramConfigDTO,
 )
 
-__all__ = ["BotConfigDTO", "TelegramConfigDTO", "DBConfigDTO", "NotificationConfigDTO"]
+__all__ = ["BotConfigDTO", "DBConfigDTO", "NotificationConfigDTO", "TelegramConfigDTO"]

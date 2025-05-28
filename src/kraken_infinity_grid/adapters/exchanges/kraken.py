@@ -5,36 +5,43 @@
 # https://github.com/btschwertfeger
 #
 
-from logging import getLogger
-from typing import Any
 from contextlib import suppress
-from kraken.spot import Market, SpotWSClient, Trade, User
+from logging import getLogger
+from time import sleep
+from typing import Any, Self
+
 from kraken.exceptions import (
-    KrakenInvalidOrderError,
     KrakenAuthenticationError,
+    KrakenInvalidOrderError,
     KrakenPermissionDeniedError,
 )
+from kraken.spot import Market, SpotWSClient, Trade, User
+
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
-from time import sleep
-from typing import Self
 from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
 
 LOG = getLogger(__name__)
 
 # FIXME: Make altname and wsname uniform
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+from kraken_infinity_grid.models.schemas.exchange import (
+    OrderInfoSchema,
+    OrderInfoListSchema,
+)
 
 
 class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     """Adapter for the Kraken exchange user service implementation."""
 
     def __init__(
-        self: Self, api_key: str, api_secret: str, state_machine: StateMachine
+        self: Self,
+        api_key: str,
+        api_secret: str,
+        state_machine: StateMachine,
     ) -> None:
         self.__user_service: User = User(key=api_key, secret=api_secret)
         self.__trade_service: Trade = Trade(key=api_key, secret=api_secret)
@@ -101,7 +108,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             LOG.info("- Kraken Exchange API Status: Available")
         except Exception as exc:  # pylint: disable=broad-exception-caught
             LOG.debug(
-                "Exception while checking Kraken API status: %s", exc, exc_info=exc
+                "Exception while checking Kraken API status: %s",
+                exc,
+                exc_info=exc,
             )
             LOG.warning("- Kraken not available. (Try %d/3)", tries + 1)
             sleep(3)
@@ -118,19 +127,17 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         """
         if not (order_info := self.__user_service.get_orders_info(txid=txid).get(txid)):
             return None
-
-        return OrderInfoSchema(
-            **order_info["descr"],
-            userref=order_info["userref"],
-            txid=txid,
-        )
+        return OrderInfoSchema(**order_info, **order_info["descr"], txid=txid)
 
     def get_open_orders(
-        self: Self,
-        userref: int = None,
-        trades: bool = None,
-    ) -> dict[str, Any]:
-        return self.__user_service.get_open_orders(userref=userref, trades=trades)
+        self: Self, userref: int = None, trades: bool = None
+    ) -> list[OrderInfoSchema]:
+        orders = []
+        for txid, order in self.__user_service.get_open_orders(
+            userref=userref, trades=trades
+        )["open"].items():
+            orders.append(OrderInfoSchema(**order, **order["descr"], txid=txid))
+        return orders
 
     def get_account_balance(self: Self) -> dict[str, float]:
         return self.__user_service.get_account_balance()
@@ -232,7 +239,9 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
         await self.__websocket_service.subscribe(params=params)
 
     async def on_message(
-        self: Self, message: dict[str, Any], **kwargs: dict[str, Any]
+        self: Self,
+        message: dict[str, Any],
+        **kwargs: dict[str, Any],
     ) -> None:
         """Handle incoming messages from the websocket."""
 
@@ -269,7 +278,8 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                 self.__state_machine.facts["ticker_channel_connected"] = True
                 # Set ticker the first time to have the ticker set during setup.
                 self.__event_bus.publish(
-                    "ticker_update", {"last": float(message["data"][0]["last"])}
+                    "ticker_update",
+                    {"last": float(message["data"][0]["last"])},
                 )
                 LOG.info("- Subscribed to ticker channel successfully!")
 
@@ -323,11 +333,13 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                     match execution["exec_type"]:
                         case "new":
                             self.__event_bus.publish(
-                                "on_order_placed", {"order_id": execution["order_id"]}
+                                "on_order_placed",
+                                {"order_id": execution["order_id"]},
                             )
                         case "filled":
                             self.__event_bus.publish(
-                                "on_order_filled", {"order_id": execution["order_id"]}
+                                "on_order_filled",
+                                {"order_id": execution["order_id"]},
                             )
                         case "canceled" | "expired":
                             self.__event_bus.publish(

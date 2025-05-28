@@ -12,14 +12,11 @@ from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)
 
+from decimal import Decimal
 from time import sleep
 
-from decimal import Decimal
-
-from kraken_infinity_grid.exceptions import GridBotStateError
-from kraken_infinity_grid.core.state_machine import States
-
 from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+
 
 class SwingStrategy(IGridBaseStrategy):
 
@@ -99,12 +96,12 @@ class SwingStrategy(IGridBaseStrategy):
                 self._event_bus.publish(
                     "notification",
                     {
-                        "message": f"ℹ️ {self._runtime_attrs.symbol}: Placing extra sell order"
+                        "message": f"ℹ️ {self._runtime_attrs.symbol}: Placing extra sell order",
                     },
                 )
                 self.handle_arbitrage(side="sell", order_price=order_price)
 
-    def _new_sell_order(  # noqa: C901
+    def _new_sell_order(
         self: Self,
         order_price: float,
         txid_to_delete: str | None = None,

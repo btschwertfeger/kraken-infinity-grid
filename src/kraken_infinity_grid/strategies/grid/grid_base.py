@@ -8,35 +8,36 @@
 # FIXME: Address pylint issues with too many arguments, not applicable in this
 #        project context.
 
-from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
+import traceback
 from abc import abstractmethod
-from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.interfaces.strategy import IStrategy
-from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
-from kraken.exceptions import KrakenUnknownOrderError
+from datetime import datetime
 from decimal import Decimal
+from logging import getLogger
+from time import sleep
+from types import SimpleNamespace
+from typing import Self
+
+from kraken.exceptions import KrakenUnknownOrderError
+from pydantic import BaseModel
+
+from kraken_infinity_grid.core.event_bus import Event, EventBus
+from kraken_infinity_grid.core.state_machine import StateMachine, States
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.infrastructure.database import (
+    Configuration,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
-    Configuration,
 )
-from kraken_infinity_grid.core.event_bus import Event
-from typing import Self
-from types import SimpleNamespace
-from datetime import datetime
-from logging import getLogger
-from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.services import OrderbookService
-from kraken_infinity_grid.exceptions import GridBotStateError
-import traceback
-
-from time import sleep
-
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
-from pydantic import BaseModel
+from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
+from kraken_infinity_grid.interfaces.strategy import IStrategy
 from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
-from pydantic import BaseModel
+from kraken_infinity_grid.models.schemas.exchange import (
+    AssetPairInfoSchema,
+    OrderInfoSchema,
+)
+from kraken_infinity_grid.services import OrderbookService
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoListSchema
 
 LOG = getLogger(__name__)
 
@@ -83,7 +84,7 @@ class IGridBaseStrategy(IStrategy):
         self._runtime_attrs: GridStrategyRuntimeAttributesDTO = None
 
     # ==========================================================================
-    ## Event handlers
+    # Event handlers
     # FIXME: events should have basemodel class with data attribute
     def on_ticker_update(self, event: Event) -> None:
         if event.data["symbol"] != self._config.symbol:
@@ -128,7 +129,8 @@ class IGridBaseStrategy(IStrategy):
         )
 
         self._event_bus.publish(
-            "notification", {"message": f"✅ {self._config.name} is starting!"}
+            "notification",
+            {"message": f"✅ {self._config.name} is starting!"},
         )
 
         # ======================================================================
@@ -176,7 +178,7 @@ class IGridBaseStrategy(IStrategy):
         self._state_machine.transition_to(States.RUNNING)
 
     # ==========================================================================
-    ## Setup methods
+    # Setup methods
 
     def __retrieve_asset_information(self: Self) -> None:
         """Check the asset pair information."""
@@ -202,19 +204,15 @@ class IGridBaseStrategy(IStrategy):
             * (1 + self._config.fee),
         )
 
-    def __update_orderbook_get_open_orders(self: Self) -> tuple[list, list]:
+    def __update_orderbook_get_open_orders(self: Self) -> list[OrderInfoSchema]:
         """Get the open orders and txid as lists."""
         LOG.info("  - Retrieving open orders from upstream...")
 
-        open_orders, open_txids = [], []
-        for txid, order in self._rest_api.get_open_orders(
-            userref=self._config.userref,
-        )["open"].items():
-            if order["descr"]["pair"] == self._runtime_attrs.altname:
-                order["txid"] = txid  # IMPORTANT
+        open_orders = []
+        for order in self._rest_api.get_open_orders(userref=self._config.userref):
+            if order.pair == self._runtime_attrs.altname:
                 open_orders.append(order)
-                open_txids.append(order["txid"])
-        return open_orders, open_txids
+        return open_orders
 
     def __update_order_book_handle_closed_order(self: Self, closed_order: dict) -> None:
         """
@@ -294,7 +292,8 @@ class IGridBaseStrategy(IStrategy):
         # ======================================================================
         # Only track orders that belong to this instance.
         ##
-        open_orders, open_txids = self.__update_orderbook_get_open_orders()
+        open_orders: list[OrderInfoSchema] = self.__update_orderbook_get_open_orders()
+        open_txids: list[str] = [order.txid for order in open_orders]
 
         # ======================================================================
         # Orders of the upstream which are not yet tracked in the local
@@ -303,10 +302,10 @@ class IGridBaseStrategy(IStrategy):
         local_txids = [order["txid"] for order in self._orderbook_table.get_orders()]
         something_changed = False
         for order in open_orders:
-            if order["txid"] not in local_txids:
+            if order.txid not in local_txids:
                 LOG.info(
                     "  - Adding upstream order to local orderbook: %s",
-                    order["txid"],
+                    order.txid,
                 )
                 self._orderbook_table.add(order)
                 something_changed = True
@@ -322,7 +321,7 @@ class IGridBaseStrategy(IStrategy):
             if order["txid"] not in open_txids:
                 closed_order: OrderInfoSchema = (
                     self._orderbook_service.get_orders_info_with_retry(
-                        txid=order["txid"],
+                        txid=order["txid"]
                     )
                 )
                 # ==============================================================
@@ -362,7 +361,7 @@ class IGridBaseStrategy(IStrategy):
         ):
             LOG.info(" - Amount per grid changed => cancel open buy orders soon...")
             self._configuration_table.update(
-                {"amount_per_grid": self._config.amount_per_grid}
+                {"amount_per_grid": self._config.amount_per_grid},
             )
             cancel_all_orders = True
 
@@ -377,7 +376,7 @@ class IGridBaseStrategy(IStrategy):
         LOG.info("- Configuration checked and up-to-date!")
 
     # ==========================================================================
-    ## Kinda main
+    # Kinda main
     def __check_price_range(self: Self) -> None:
         """
         Checks if the orders prices match the conditions of the bot respecting
@@ -512,7 +511,7 @@ class IGridBaseStrategy(IStrategy):
         while (
             (
                 n_active_buy_orders := self._orderbook_table.count(
-                    filters={"side": "buy"}
+                    filters={"side": "buy"},
                 )
             )
             < self._config.n_open_buy_orders
@@ -566,14 +565,9 @@ class IGridBaseStrategy(IStrategy):
         Cancels all open buy orders and removes them from the orderbook.
         """
         LOG.info("Cancelling all open buy orders...")
-        for txid, order in self._rest_api.get_open_orders(
-            userref=self._config.userref,
-        )["open"].items():
-            if (
-                order["descr"]["type"] == "buy"
-                and order["descr"]["pair"] == self._runtime_attrs.altname
-            ):
-                self._handle_cancel_order(txid=txid)
+        for order in self._rest_api.get_open_orders(userref=self._config.userref):
+            if order.type == "buy" and order.pair == self._runtime_attrs.altname:
+                self._handle_cancel_order(txid=order.txid)
                 sleep(0.2)  # Avoid rate limiting
 
         self._orderbook_table.remove(filters={"side": "buy"})
@@ -811,7 +805,7 @@ class IGridBaseStrategy(IStrategy):
                     f"\n ├ Size » {order_details.vol_exec} {self._config.base_currency}"
                     f"\n └ Size in {self._config.quote_currency} » "
                     f"{round(order_details.price * order_details.vol_exec, self._runtime_attrs.cost_decimals)}",
-                )
+                ),
             },
         )
 
@@ -822,7 +816,8 @@ class IGridBaseStrategy(IStrategy):
             self.handle_arbitrage(
                 side="sell",
                 order_price=self._get_order_price(
-                    side="sell", last_price=order_details.price
+                    side="sell",
+                    last_price=order_details.price,
                 ),
                 txid_to_delete=txid,
             )
@@ -832,7 +827,8 @@ class IGridBaseStrategy(IStrategy):
         ##
         elif (
             self._orderbook_table.count(
-                filters={"side": "sell"}, exclude={"txid": txid}
+                filters={"side": "sell"},
+                exclude={"txid": txid},
             )
             != 0
         ):
@@ -843,7 +839,8 @@ class IGridBaseStrategy(IStrategy):
             self.handle_arbitrage(
                 side="buy",
                 order_price=self._get_order_price(
-                    side="buy", last_price=order_details.price
+                    side="buy",
+                    last_price=order_details.price,
                 ),
                 txid_to_delete=txid,
             )
@@ -872,7 +869,9 @@ class IGridBaseStrategy(IStrategy):
         if self._orderbook_table.count(filters={"txid": txid}) == 0:
             return
 
-        order_details : OrderInfoSchema = self._orderbook_service.get_orders_info_with_retry(txid=txid)
+        order_details: OrderInfoSchema = (
+            self._orderbook_service.get_orders_info_with_retry(txid=txid)
+        )
 
         if (
             order_details.pair != self._runtime_attrs.altname
@@ -1011,7 +1010,7 @@ class IGridBaseStrategy(IStrategy):
         self.__s.configuration.update({"last_telegram_update": datetime.now()})
 
     # ==========================================================================
-    ## Abstract methods
+    # Abstract methods
     @abstractmethod
     def _get_order_price(
         self,

@@ -11,9 +11,9 @@ State machine for the Kraken Infinity Grid trading bot.
 FIXME: This state machine may work for Kraken, but not for other exchanges.
 """
 
+import asyncio
 from enum import Enum, auto
 from typing import Callable, Self
-import asyncio
 
 
 class States(Enum):

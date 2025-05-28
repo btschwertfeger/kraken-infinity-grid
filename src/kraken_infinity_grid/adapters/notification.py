@@ -5,12 +5,14 @@
 # https://github.com/btschwertfeger
 #
 
-from kraken_infinity_grid.interfaces import INotificationChannel
-import requests
-
 from logging import getLogger
 
+import requests
+
+from kraken_infinity_grid.interfaces import INotificationChannel
+
 LOG = getLogger(__name__)
+
 
 class TelegramNotificationChannelAdapter(INotificationChannel):
     """Telegram implementation of the notification channel."""
@@ -26,7 +28,11 @@ class TelegramNotificationChannelAdapter(INotificationChannel):
             url = f"{self.__base_url}/sendMessage"
             response = requests.post(
                 url,
-                data={"chat_id": self.__chat_id, "text": message, "parse_mode": "markdown"},
+                data={
+                    "chat_id": self.__chat_id,
+                    "text": message,
+                    "parse_mode": "markdown",
+                },
                 timeout=10,
             )
             return response.status_code == 200

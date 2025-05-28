@@ -5,15 +5,15 @@
 # https://github.com/btschwertfeger
 #
 
-from kraken_infinity_grid.exceptions import GridBotStateError
-from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
-from typing import Self
 from decimal import Decimal
 from logging import getLogger
 from time import sleep
+from typing import Self
 
+from kraken_infinity_grid.core.state_machine import States
+from kraken_infinity_grid.exceptions import GridBotStateError
 from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)
 
@@ -61,7 +61,7 @@ class GridSellStrategy(IGridBaseStrategy):
     def _check_extra_sell_order(self: Self) -> None:
         pass
 
-    def _new_sell_order(  # noqa: C901
+    def _new_sell_order(
         self: Self,
         order_price: float,
         txid_to_delete: str | None = None,

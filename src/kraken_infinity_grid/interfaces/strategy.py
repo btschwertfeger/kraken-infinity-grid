@@ -17,6 +17,7 @@ from kraken_infinity_grid.infrastructure.database import (
 )
 from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
 
+
 class IStrategy(ABC):
     """Interface for trading strategies"""
 

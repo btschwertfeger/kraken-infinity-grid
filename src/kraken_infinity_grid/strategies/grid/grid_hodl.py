@@ -9,9 +9,8 @@ from decimal import Decimal
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
-
 from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)
 
@@ -84,7 +83,8 @@ class GridHodlStrategy(IGridBaseStrategy):
                 filters={"txid": txid_to_delete},
             ).first():  # type: ignore[no-untyped-call]
                 self._unsold_buy_order_txids_table.add(
-                    txid=txid_to_delete, price=order_price
+                    txid=txid_to_delete,
+                    price=order_price,
                 )
 
             # ==================================================================
@@ -109,7 +109,8 @@ class GridHodlStrategy(IGridBaseStrategy):
                 )
                 sleep(1)
                 self._new_sell_order(
-                    order_price=order_price, txid_to_delete=txid_to_delete
+                    order_price=order_price,
+                    txid_to_delete=txid_to_delete,
                 )
                 return
 
