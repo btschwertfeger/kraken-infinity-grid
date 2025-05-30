@@ -27,7 +27,6 @@ from kraken_infinity_grid.interfaces.exchange import (
 )
 from kraken_infinity_grid.models.domain import ExchangeDomain
 
-# FIXME: Make pair and symbol uniform
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
@@ -402,7 +401,12 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
         message: dict[str, Any],
         **kwargs: dict[str, Any],
     ) -> None:
-        """Handle incoming messages from the websocket."""
+        """
+        Handle incoming messages from the websocket.
+
+        FIXME: This one is a bit messy and needs refactoring as it only works
+        with grid trading
+        """
 
         if self.__state_machine.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:
             LOG.debug("Shutdown requested, not processing incoming messages.")

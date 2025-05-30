@@ -70,56 +70,73 @@ separation between domain logic (core), strategy plugins, infrastructure
 services, and external adapters. Below is a high-level component view:
 
 ```mermaid
+---
+title: High-level Architecture
+---
+
+%%{init: {'theme':'dark'}}%%
 graph TD
   subgraph Core
+    CLI[CLI]
     BE[Bot Engine]
     SM[State Machine]
     STRIF[Strategy Interface]
     EB[Event Bus]
   end
 
-  subgraph Interfaces
-    EXIF[Exchange Interface]
-    NOTIF[Notification Interface]
-    STRIF
-  end
-
   subgraph Infrastructure
     DB[Database]
-    CLI[CLI]
-    BTR[Backtesting Runner]
   end
 
-  subgraph Adapters
-    KRA[Kraken Adapter]
+  BTR[Backtesting Runner]
+
+  subgraph Notification
+    NOTIF[Notification Interface]
     TGM[Telegram Adapter]
+    DISC["Discord Adapter (TBD)"]
   end
 
   subgraph Strategies
-    GRID[Grid Strategy]
-    EVENT[Event Strategy]
+    GRID[Grid Strategies]
+    EVENT[Custom Strategy]
     SWING[Swing Flavor]
-    DCA[DCA Flavor]
+    CDCA[cDCA Flavor]
+    GRIDSELL[GridSell Flavor]
+    GRIDHODL[GridHODL Flavor]
+
+    subgraph Exchanges
+      EXIF[Exchange Interface]
+      KRA[Kraken Adapter]
+      BIN["Binance Adapter (TBD)"]
+    end
   end
 
+
+  STRIF --> GRID
+  STRIF --> EVENT
+  GRID --> SWING
+  GRID --> CDCA
+  GRID --> GRIDSELL
+  GRID --> GRIDHODL
+
+  BE --> Notification
   CLI --> BE
   BTR --> BE
   BE --> SM
   BE --> STRIF
-  BE --> EXIF
-  BE --> DB
+  BE --> Infrastructure
   BE --> EB
   DB -->|uses| POSTGRES[(PostgreSQL)]
   DB -->|uses| SQLITE[(SQLite)]
   DB -->|uses| MEMORY[(In-Memory)]
 
-  STRIF --> GRID
-  STRIF --> EVENT
-  GRID --> SWING
-  GRID --> DCA
+  Exchanges --> Strategies
 
   EXIF --> KRA
+  EXIF --> BIN
   NOTIF --> TGM
+  NOTIF --> DISC
+
 ```
 
 - Strategies are plugins implementing StrategyInterface, optionally subclassing
