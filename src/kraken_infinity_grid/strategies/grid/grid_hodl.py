@@ -34,7 +34,7 @@ class GridHodlStrategy(IGridBaseStrategy):
         price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
         last_price = float(last_price)
 
-        if side == "sell":  # New order is a sell
+        if side == self._exchange_domain.SELL:  # New order is a sell
             # Regular sell order (even for SWING) (cDCA will trigger this
             # but it will be filtered out later)
             if last_price > price_of_highest_buy:
@@ -46,7 +46,7 @@ class GridHodlStrategy(IGridBaseStrategy):
                 order_price = self._ticker.last * (1 + self._config.interval)
             return order_price
 
-        if side == "buy":  # New order is a buy
+        if side == self._exchange_domain.BUY:  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
             if order_price > self._ticker.last:
                 order_price = (
@@ -99,7 +99,7 @@ class GridHodlStrategy(IGridBaseStrategy):
             # the vol_exec is missing. In this case, the function will be
             # called again after a short delay.
             if (
-                corresponding_buy_order.status != "closed"
+                corresponding_buy_order.status != self._exchange_domain.CLOSED
                 or corresponding_buy_order.vol_exec == 0
             ):
                 LOG.warning(
@@ -118,7 +118,8 @@ class GridHodlStrategy(IGridBaseStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
             ),
         )
 
@@ -133,17 +134,18 @@ class GridHodlStrategy(IGridBaseStrategy):
                 amount=Decimal(self._config.amount_per_grid)
                 / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
                 amount_type="volume",
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
             ),
         )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
         fetched_balances = self._rest_api.get_pair_balance(
-            self._runtime_attrs.xbase_currency,
-            self._runtime_attrs.zquote_currency,
+            self._config.base_currency,
+            self._config.quote_currency,
         )
-        if fetched_balances["base_available"] >= volume:
+        if fetched_balances.base_available >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
             LOG.info(
@@ -156,9 +158,10 @@ class GridHodlStrategy(IGridBaseStrategy):
 
             placed_order = self._rest_api.create_order(
                 ordertype="limit",
-                side="sell",
+                side=self._exchange_domain.SELL,
                 volume=volume,
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
                 price=order_price,
                 userref=self._config.userref,
                 validate=self._config.dry_run,
@@ -177,7 +180,7 @@ class GridHodlStrategy(IGridBaseStrategy):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._config.symbol}"
+        message = f"⚠️ {self._symbol}"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"

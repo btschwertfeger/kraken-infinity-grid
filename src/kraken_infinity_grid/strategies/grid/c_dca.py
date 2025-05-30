@@ -29,14 +29,14 @@ class CDCAStrategy(IGridBaseStrategy):
         """
         LOG.debug("Computing the order price...")
 
-        if side == "sell":  # New order is a sell
+        if side == self._exchange_domain.SELL:  # New order is a sell
             self._state_machine.set_state(States.ERROR)
             raise BotStateError(
                 "cDCA strategy does not support sell orders! "
                 "Please use a different strategy for selling.",
             )
 
-        if side == "buy":  # New order is a buy
+        if side == self._exchange_domain.BUY:  # New order is a buy
             last_price = float(last_price)
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
             if order_price > self._ticker.last:
@@ -48,7 +48,7 @@ class CDCAStrategy(IGridBaseStrategy):
         raise ValueError(f"Unknown side: {side}!")
 
     def _check_extra_sell_order(self: Self) -> None:
-        pass
+        """Not applicable for cDCA strategy."""
 
     def _new_sell_order(
         self: Self,

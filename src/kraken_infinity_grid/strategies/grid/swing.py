@@ -35,7 +35,7 @@ class SwingStrategy(IGridBaseStrategy):
         price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
         last_price = float(last_price)
 
-        if side == "sell":  # New order is a sell
+        if side == self._exchange_domain.SELL:  # New order is a sell
             if extra_sell:
                 # Extra sell order when SWING
                 # 2x interval above [last close price | price of highest buy]
@@ -65,7 +65,7 @@ class SwingStrategy(IGridBaseStrategy):
                     order_price = self._ticker.last * (1 + self._config.interval)
             return order_price
 
-        if side == "buy":  # New order is a buy
+        if side == self._exchange_domain.BUY:  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
             if order_price > self._ticker.last:
                 order_price = (
@@ -81,18 +81,18 @@ class SwingStrategy(IGridBaseStrategy):
         SWING strategy.
         """
         LOG.debug("Checking if extra sell order can be placed...")
-        if self._orderbook_table.count(filters={"side": "sell"}) == 0:
+        if self._orderbook_table.count(filters={"side": self._exchange_domain.SELL}) == 0:
             fetched_balances = self._rest_api.get_pair_balance(
-                self._runtime_attrs.xbase_currency,
-                self._runtime_attrs.zquote_currency,
+                self._config.base_currency,
+                self._config.quote_currency,
             )
 
             if (
-                fetched_balances["base_available"] * self._ticker.last
+                fetched_balances.base_available * self._ticker.last
                 > self._runtime_attrs.amount_per_grid_plus_fee
             ):
                 order_price = self._get_order_price(
-                    side="sell",
+                    side=self._exchange_domain.SELL,
                     last_price=self._ticker.last,
                     extra_sell=True,
                 )
@@ -102,7 +102,7 @@ class SwingStrategy(IGridBaseStrategy):
                         "message": f"ℹ️ {self._config.symbol}: Placing extra sell order",
                     },
                 )
-                self._handle_arbitrage(side="sell", order_price=order_price)
+                self._handle_arbitrage(side=self._exchange_domain.SELL, order_price=order_price)
 
     def _new_sell_order(
         self: Self,
@@ -144,7 +144,7 @@ class SwingStrategy(IGridBaseStrategy):
             # the vol_exec is missing. In this case, the function will be
             # called again after a short delay.
             if (
-                corresponding_buy_order.status != "closed"
+                corresponding_buy_order.status != self._exchange_domain.CLOSED
                 or corresponding_buy_order.vol_exec == 0
             ):
                 LOG.warning(
@@ -163,7 +163,8 @@ class SwingStrategy(IGridBaseStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
             ),
         )
 
@@ -174,17 +175,18 @@ class SwingStrategy(IGridBaseStrategy):
                 amount=Decimal(self._config.amount_per_grid)
                 / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
                 amount_type="volume",
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
             ),
         )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
         fetched_balances = self._rest_api.get_pair_balance(
-            self._runtime_attrs.xbase_currency,
-            self._runtime_attrs.zquote_currency,
+            self._config.base_currency,
+            self._config.quote_currency,
         )
-        if fetched_balances["base_available"] >= volume:
+        if fetched_balances.base_available >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
             LOG.info(
@@ -197,9 +199,10 @@ class SwingStrategy(IGridBaseStrategy):
 
             placed_order = self._rest_api.create_order(
                 ordertype="limit",
-                side="sell",
+                side=self._exchange_domain.SELL,
                 volume=volume,
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
                 price=order_price,
                 userref=self._config.userref,
                 validate=self._config.dry_run,
@@ -218,7 +221,7 @@ class SwingStrategy(IGridBaseStrategy):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._config.symbol}"
+        message = f"⚠️ {self._symbol}"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"

@@ -19,7 +19,6 @@ from kraken_infinity_grid.models.schemas.domain import OrderSide
 class AssetPairInfoSchema(BaseModel):
     """Model for required asset pair information"""
 
-    pair: str  # e.g. "XBTUSD"
     base: str  # "XXBT"
     quote: str  # "ZUSD"
     cost_decimals: int  # Number of decimals for cost, e.g. 5
@@ -37,6 +36,12 @@ class OrderInfoSchema(BaseModel):
     txid: str  # transaction ID
     price: float  # primary price
     side: OrderSide
+
+class PairBalanceSchema(BaseModel):
+    base_balance: float
+    quote_balance: float
+    base_available: float
+    quote_available: float
 
 
 class AssetBalanceSchema(BaseModel):

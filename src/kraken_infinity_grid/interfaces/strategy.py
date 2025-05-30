@@ -10,13 +10,10 @@ from abc import ABC, abstractmethod
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine
 from kraken_infinity_grid.infrastructure.database import (
-    Configuration,
-    Orderbook,
-    PendingTXIDs,
-    UnsoldBuyOrderTXIDs,
+    DBConnect
 )
 from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
-
+from kraken_infinity_grid.models.dto import BotConfigDTO
 
 class IStrategy(ABC):
     """Interface for trading strategies"""
@@ -24,13 +21,11 @@ class IStrategy(ABC):
     @abstractmethod
     def __init__(
         self,
-        state_machine: StateMachine,
+        config: BotConfigDTO,
         rest_api: IExchangeRESTService,
-        config: Configuration,
-        orderbook: Orderbook,
-        pending_txids: PendingTXIDs,
-        unsold_buy_order_txids: UnsoldBuyOrderTXIDs,
         event_bus: EventBus,
+        state_machine: StateMachine,
+        db: DBConnect,
     ) -> None:
         """Initialize the strategy with necessary services and configurations."""
 

@@ -6,17 +6,21 @@
 #
 # Domain models
 
-from dataclasses import dataclass
-from enum import Enum
+from pydantic import BaseModel
 
 
-class OrderSide(str, Enum):
-    BUY = "buy"
-    SELL = "sell"
+class ExchangeDomain(BaseModel):
 
+    # General
+    EXCHANGE: str
 
-class OrderStatus(str, Enum):
-    OPEN = "open"
-    CLOSED = "closed"
-    CANCELED = "canceled"
-    PENDING = "pending"
+    # Order sides
+    BUY: str
+    SELL: str
+
+    # Order states
+    OPEN: str
+    CLOSED: str
+    CANCELED: str
+    EXPIRED: str
+    PENDING: str

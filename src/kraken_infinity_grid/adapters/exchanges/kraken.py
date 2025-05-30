@@ -9,6 +9,7 @@ from decimal import Decimal
 from logging import getLogger
 from time import sleep
 from typing import Any, Self
+from functools import cache
 
 from kraken.exceptions import (
     KrakenAuthenticationError,
@@ -32,6 +33,8 @@ from kraken_infinity_grid.models.schemas.exchange import (
     CreateOrderResponseSchema,
     OrderInfoSchema,
 )
+from kraken_infinity_grid.models.domain import ExchangeDomain
+from kraken_infinity_grid.models.schemas.exchange import PairBalanceSchema
 
 LOG = getLogger(__name__)
 
@@ -49,6 +52,8 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         self.__trade_service: Trade = Trade(key=api_key, secret=api_secret)
         self.__market_service: Market = Market()
         self.__state_machine: StateMachine = state_machine
+
+    # == Implemented abstract methods from IExchangeRESTService ================
 
     def check_api_key_permissions(self: Self) -> None:
         """
@@ -123,7 +128,6 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             sleep(3)
             self.check_exchange_status(tries=tries + 1)
 
-    # == Getters for exchange user operations ==================================
     def get_orders_info(self: Self, txid: int = None) -> OrderInfoSchema | None:
         """
         {
@@ -211,16 +215,18 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return balances
 
     def get_pair_balance(
-        self: Self,
-        base_currency: str,
-        quote_currency: str,
-    ) -> dict[str, float]:
+        self: Self, base_currency: str, quote_currency: str
+    ) -> PairBalanceSchema:
         """
         Returns the available and overall balances of the quote and base
         currency.
 
         FIXME: Is there a way to get the balances of the asset pair directly?
         """
+        custom_base, custom_quote = self.__retrieve_custom_base_quote_name(
+            base_currency=base_currency,
+            quote_currency=quote_currency,
+        )
 
         base_balance = Decimal(0)
         base_available = Decimal(0)
@@ -228,31 +234,42 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         quote_available = Decimal(0)
 
         for balance in self.get_balances():
-            if balance.symbol == base_currency:
+            if balance.symbol == custom_base:
                 base_balance = Decimal(balance.balance)
                 base_available = base_balance - Decimal(balance.hold_trade)
-            elif balance.symbol == quote_currency:
+            elif balance.symbol == custom_quote:
                 quote_balance = Decimal(balance.balance)
                 quote_available = quote_balance - Decimal(balance.hold_trade)
 
         LOG.debug(
             "Retrieved balances: %s",
-            balances := {
-                "base_balance": float(base_balance),
-                "quote_balance": float(quote_balance),
-                "base_available": float(base_available),
-                "quote_available": float(quote_available),
-            },
+            balances := PairBalanceSchema(
+                base_balance=float(base_balance),
+                quote_balance=float(quote_balance),
+                base_available=float(base_available),
+                quote_available=float(quote_available),
+            ),
         )
         return balances
 
-    # == Getters for exchange trade operations =================================
+    @cache
+    @staticmethod
+    def altname(base_currency: str, quote_currency: str) -> str:
+        return f"{base_currency}{quote_currency}".upper()
+
+    @cache
+    @staticmethod
+    def symbol(base_currency: str, quote_currency: str) -> str:
+        """Returns the symbol for the given base and quote currency."""
+        return f"{base_currency}/{quote_currency}".upper()
+
     def create_order(
         self: Self,
         ordertype: str,
         side: str,
         volume: float,
-        pair: str,
+        base_currency: str,
+        quote_currency: str,
         price: float,
         userref: int,
         validate: bool = False,
@@ -264,7 +281,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 ordertype=ordertype,
                 side=side,
                 volume=volume,
-                pair=pair,
+                pair=f"{base_currency}/{quote_currency}",
                 price=price,
                 userref=userref,
                 validate=validate,
@@ -276,22 +293,30 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         """Cancel an order."""
         self.__trade_service.cancel_order(txid=txid, **kwargs)
 
-    def truncate(self: Self, amount: float, amount_type: str, pair: str) -> str:
+    def truncate(
+        self: Self,
+        amount: float,
+        amount_type: str,
+        base_currency: str,
+        quote_currency: str,
+    ) -> str:
         """Truncate amount according to exchange precision."""
         return self.__trade_service.truncate(
             amount=amount,
             amount_type=amount_type,
-            pair=pair,
+            pair=f"{base_currency}/{quote_currency}",
         )
 
-    # == Getters for exchange market operations ================================
     def get_system_status(self: Self) -> str:
         """Get the current system status of the exchange."""
         return self.__market_service.get_system_status()["status"]
 
-    def get_asset_pair_info(self: Self, pair: str) -> AssetPairInfoSchema:
+    def get_asset_pair_info(
+        self: Self, base_currency: str, quote_currency: str
+    ) -> AssetPairInfoSchema:
         """Get available asset pair information from the exchange."""
         # FIXME: Proper error handling
+        pair = f"{base_currency}/{quote_currency}"
         if (pair_info := self.__market_service.get_asset_pairs(pair=pair)) != {}:
             raise ValueError(
                 f"Could not get asset pair info for {pair}. "
@@ -299,6 +324,38 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             )
 
         return AssetPairInfoSchema(**next(iter(pair_info)))
+
+    @cache
+    def get_exchange_domain(self) -> ExchangeDomain:
+        return ExchangeDomain(
+            EXCHANGE="Kraken",
+            BUY="buy",
+            SELL="sell",
+            OPEN="open",
+            CLOSED="closed",
+            CANCELED="canceled",
+            EXPIRED="expired",
+            PENDING="pending",
+        )
+
+    # == Custom Kraken Methods for convenience =================================
+
+    @cache
+    def __retrieve_custom_base_quote_name(
+        self: Self, base_currency: str, quote_currency: str
+    ) -> tuple[str, str]:
+        """
+        Returns the custom base and quote name for the given currencies.
+        On Kraken, crypto assets are prefixed with 'X' (e.g., 'XETH', 'XXBT'),
+        while fiat assets are prefixed with 'Z' (e.g., 'ZEUR', 'ZUSD').
+
+        This can be cached, since the asset names do not change frequently.
+        """
+        pair_info: AssetPairInfoSchema = self.get_asset_pair_info(
+            base_currency=base_currency,
+            quote_currency=quote_currency,
+        )
+        return pair_info.base, pair_info.quote
 
 
 class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):

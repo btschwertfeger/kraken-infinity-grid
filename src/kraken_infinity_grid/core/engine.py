@@ -16,13 +16,7 @@ from typing import Any, Self
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.infrastructure.database import (
-    Configuration,
-    DBConnect,
-    Orderbook,
-    PendingTXIDs,
-    UnsoldBuyOrderTXIDs,
-)
+from kraken_infinity_grid.infrastructure.database import DBConnect
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
     DBConfigDTO,
@@ -54,19 +48,10 @@ class BotEngine:
         self.__event_bus = EventBus()
         self.__state_machine = StateMachine()
         self.__config = bot_config
-        self.__userref: int = self.__config.userref
 
         # == Infrastructure components =========================================
         ##
         self.__db = DBConnect(**db_config)
-        self.__orderbook_table = Orderbook(userref=self.__userref, db=self.__db)
-        self.__configuration_table = Configuration(userref=self.__userref, db=self.__db)
-        self.__pending_txids_table = PendingTXIDs(userref=self.__userref, db=self.__db)
-        self.__unsold_buy_order_txids_table = UnsoldBuyOrderTXIDs(
-            userref=self.__userref,
-            db=self.__db,
-        )
-        self.__db.init_db()
 
         exchange_services = self.__exchange_factory()
         self.__rest_api = exchange_services["REST"]
@@ -105,10 +90,7 @@ class BotEngine:
             state_machine=self.__state_machine,
             rest_api=self.__rest_api,
             event_bus=self.__event_bus,
-            configuration_table=self.__configuration_table,
-            orderbook_table=self.__orderbook_table,
-            pending_txids_table=self.__pending_txids_table,
-            unsold_buy_order_txids_table=self.__unsold_buy_order_txids_table,
+            db=self.__db,
         )
 
     def __exchange_factory(self: Self) -> dict:
@@ -218,9 +200,6 @@ class BotEngine:
         for subscription in subscriptions[self.__config["exchange"]]:
             self.__ws_client.subscribe(subscription)
 
-        # Set this initially in case the DB contains a value that is too old.
-        self.__configuration_table.update({"last_price_time": datetime.now()})
-
         # ======================================================================
         # Start the websocket connections and run the main function
         ##
@@ -239,7 +218,7 @@ class BotEngine:
             await self.terminate(f"The algorithm was interrupted: {exc}")
         except (
             BotStateError,
-            Exception,
+            Exception
         ) as exc:  # pylint: disable=broad-exception-caught
             self.__state_machine.transition_to(States.ERROR)
             await asyncio.sleep(5)

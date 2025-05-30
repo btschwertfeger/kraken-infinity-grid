@@ -9,6 +9,7 @@
 #        project context.
 # FIXME: The configuration table of the database is not dynamic enough
 
+from functools import cached_property
 import traceback
 from abc import abstractmethod
 from datetime import datetime
@@ -32,28 +33,15 @@ from kraken_infinity_grid.infrastructure.database import (
 )
 from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
 from kraken_infinity_grid.interfaces.strategy import IStrategy
-from kraken_infinity_grid.models.domain import OrderSide
+from kraken_infinity_grid.models.domain import ExchangeDomain
 from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
     OrderInfoSchema,
 )
+from kraken_infinity_grid.infrastructure.database import DBConnect
 
 LOG = getLogger(__name__)
-
-
-class GridStrategyRuntimeAttributesDTO(BaseModel):
-    """
-    Custom attributes for grid strategies that are evaluated during
-    runtime.
-    """
-
-    pair: str  # e.g. "XBTUSD"
-    symbol: str  # 'wsname' on kraken e.g. "XBT/EUR"
-    cost_decimals: int
-    xbase_currency: str  # actual base currency e.g. "XXBT"
-    zquote_currency: str  # actual quote currency e.g. "ZEUR"
-    amount_per_grid_plus_fee: float
 
 
 class IGridBaseStrategy(IStrategy):
@@ -65,27 +53,34 @@ class IGridBaseStrategy(IStrategy):
         rest_api: IExchangeRESTService,
         event_bus: EventBus,
         state_machine: StateMachine,
-        configuration_table: Configuration,
-        orderbook_table: Orderbook,
-        pending_txids_table: PendingTXIDs,
-        unsold_buy_order_txids_table: UnsoldBuyOrderTXIDs,
+        db: DBConnect,
     ) -> None:
         self._config = config
         self._rest_api = rest_api
         self._event_bus = event_bus
         self._state_machine = state_machine
-        self._configuration_table = configuration_table
-        self._orderbook_table = orderbook_table
-        self._pending_txids_table = pending_txids_table
-        self._unsold_buy_order_txids_table = unsold_buy_order_txids_table
         self._ticker: SimpleNamespace = None
-        self._runtime_attrs: GridStrategyRuntimeAttributesDTO = None
+
+        self._orderbook_table = Orderbook(self._config.userref, db)
+        self._configuration_table = Configuration(self._config.userref, db)
+        self._pending_txids_table = PendingTXIDs(self._config.userref, db)
+        self._unsold_buy_order_txids_table = UnsoldBuyOrderTXIDs(
+            self._config.userref, db
+        )
+        db.init_db()
+
+        # Set this initially in case the DB contains a value that is too old.
+        self._configuration_table.update({"last_price_time": datetime.now()})
+        self._exchange_domain: ExchangeDomain = self._rest_api.get_exchange_domain()
+
+        self._cost_decimals: int
+        self._amount_per_grid_plus_fee: float
 
     # ==========================================================================
     # Event handlers
     # FIXME: events should have basemodel class with data attribute
     def on_ticker_update(self, event: Event) -> None:
-        if event.data["symbol"] != self._config.symbol:
+        if event.data["symbol"] != self._symbol:
             # The grid strategy is only interested in ticker updates for its
             # symbol.
             return
@@ -128,7 +123,7 @@ class IGridBaseStrategy(IStrategy):
 
         self._event_bus.publish(
             "notification",
-            {"message": f"✅ {self._config.name} is starting!"},
+            {"message": f"✅ {self._symbol} is starting!"},
         )
 
         # ======================================================================
@@ -182,7 +177,8 @@ class IGridBaseStrategy(IStrategy):
         """Check the asset pair information."""
         LOG.info("- Retrieving asset pair information...")
         pair_info: AssetPairInfoSchema = self._rest_api.get_asset_pair_info(
-            pair=self._config.symbol.replace("/", ""),  # == pair
+            base_currency=self._config.base_currency,
+            quote_currency=self._config.quote_currency,
         )
         LOG.debug(pair_info)
 
@@ -192,15 +188,8 @@ class IGridBaseStrategy(IStrategy):
             self._config.fee = float(pair_info.fees_maker[0][1]) / 100
 
         # Setup runtime attributes derived from asset pair info
-        self._runtime_attrs = GridStrategyRuntimeAttributesDTO(
-            pair=pair_info.pair,  # e.g. XBTZEUR
-            symbol=pair_info.wsname,  # e.g. XBT/EUR
-            cost_decimals=pair_info.cost_decimals,
-            xbase_currency=pair_info.base,  # e.g. XXBT
-            zquote_currency=pair_info.quote,  # e.g. ZEUR
-            amount_per_grid_plus_fee=self._config.amount_per_grid
-            * (1 + self._config.fee),
-        )
+        self._cost_decimals = pair_info.cost_decimals
+        self._amount_per_grid_plus_fee = self._config.amount_per_grid * (1 + self._config.fee)
 
     def __update_orderbook_get_open_orders(self: Self) -> list[OrderInfoSchema]:
         """Get the open orders and txid as lists."""
@@ -208,11 +197,13 @@ class IGridBaseStrategy(IStrategy):
 
         open_orders = []
         for order in self._rest_api.get_open_orders(userref=self._config.userref):
-            if order.pair == self._runtime_attrs.pair:
+            if order.pair == self._altname:
                 open_orders.append(order)
         return open_orders
 
-    def __update_order_book_handle_closed_order(self: Self, closed_order: OrderInfoSchema) -> None:
+    def __update_order_book_handle_closed_order(
+        self: Self, closed_order: OrderInfoSchema
+    ) -> None:
         """
         Gets executed when an order of the local orderbook was closed in the
         upstream orderbook during the ``update_orderbook`` function in the init
@@ -225,23 +216,26 @@ class IGridBaseStrategy(IStrategy):
         """
         LOG.info("Handling executed order: %s", closed_order.txid)
 
-        message = str(
-            f"✅ {self._config.symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
-            "order executed"
-            f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
-            f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
-            f"\n └ Size in {self._config.quote_currency} » "
-            f"{float(closed_order.price) * float(closed_order.vol_exec)}",
+        self._event_bus.publish(
+            "notification",
+            {
+                "message": str(
+                    f"✅ {self._symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
+                    "order executed"
+                    f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
+                    f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
+                    f"\n └ Size in {self._config.quote_currency} » "
+                    f"{float(closed_order.price) * float(closed_order.vol_exec)}",
+                )
+            },
         )
-
-        self._event_bus.publish("notification", {"message": message})
         # ======================================================================
         # If a buy order was filled, the sell order needs to be placed.
-        if closed_order.side == OrderSide.BUY:
+        if closed_order.side == self._exchange_domain.BUY:
             self._handle_arbitrage(
-                side=OrderSide.SELL,
+                side=self._exchange_domain.SELL,
                 order_price=self._get_order_price(
-                    side=OrderSide.SELL,
+                    side=self._exchange_domain.SELL,
                     last_price=closed_order.price,
                 ),
                 txid_to_delete=closed_order.txid,
@@ -249,22 +243,22 @@ class IGridBaseStrategy(IStrategy):
 
         # ======================================================================
         # If a sell order was filled, we may need to place a new buy order.
-        elif closed_order.side == OrderSide.SELL:
+        elif closed_order.side == self._exchange_domain.SELL:
             # A new buy order will only be placed if there is another sell
             # order, because if the last sell order was filled, the price is so
             # high, that all buy orders will be canceled anyway and new buy
             # orders will be placed in ``check_price_range`` during shift-up.
             if (
                 self._orderbook_table.count(
-                    filters={"side": OrderSide.SELL},
+                    filters={"side": self._exchange_domain.SELL},
                     exclude={"txid": closed_order.txid},
                 )
                 != 0
             ):
                 self._handle_arbitrage(
-                    side=OrderSide.BUY,
+                    side=self._exchange_domain.BUY,
                     order_price=self._get_order_price(
-                        side=OrderSide.BUY,
+                        side=self._exchange_domain.BUY,
                         last_price=closed_order.price,
                     ),
                     txid_to_delete=closed_order.txid,
@@ -290,13 +284,15 @@ class IGridBaseStrategy(IStrategy):
         # Only track orders that belong to this instance.
         ##
         open_orders: list[OrderInfoSchema] = self.__update_orderbook_get_open_orders()
-        open_txids: list[str] = [order.txid for order in open_orders]
+        open_txids: set[str] = {order.txid for order in open_orders}
 
         # ======================================================================
         # Orders of the upstream which are not yet tracked in the local
         # orderbook will now be added to the local orderbook.
         ##
-        local_txids = [order["txid"] for order in self._orderbook_table.get_orders()]
+        local_txids: set[str] = {
+            order["txid"] for order in self._orderbook_table.get_orders()
+        }
         something_changed = False
         for order in open_orders:
             if order.txid not in local_txids:
@@ -321,14 +317,17 @@ class IGridBaseStrategy(IStrategy):
                 )
                 # ==============================================================
                 # Order was filled
-                if closed_order.status == "closed":
+                if closed_order.status == self._exchange_domain.CLOSED:
                     self.__update_order_book_handle_closed_order(
                         closed_order=closed_order,
                     )
 
                 # ==============================================================
                 # Order was closed
-                elif closed_order.status in {"canceled", "expired"}:
+                elif closed_order.status in {
+                    self._exchange_domain.CANCELED,
+                    self._exchange_domain.EXPIRED,
+                }:
                     self._orderbook_table.remove(filters={"txid": order["txid"]})
 
                 else:
@@ -371,7 +370,7 @@ class IGridBaseStrategy(IStrategy):
         LOG.info("- Configuration checked and up-to-date!")
 
     # ==========================================================================
-    # Kinda main
+
     def __check_price_range(self: Self) -> None:
         """
         Checks if the orders prices match the conditions of the bot respecting
@@ -428,7 +427,7 @@ class IGridBaseStrategy(IStrategy):
         for entry in self._unsold_buy_order_txids_table.get():
             LOG.info("  - %s", entry)
             self._handle_arbitrage(
-                side=OrderSide.SELL,
+                side=self._exchange_domain.SELL,
                 order_price=entry["price"],
                 txid_to_delete=entry["txid"],
             )
@@ -454,7 +453,7 @@ class IGridBaseStrategy(IStrategy):
                 or (buy_prices[i] / price) - 1 < self._config.interval / 2
             ):
                 for order in self._orderbook_table.get_orders(
-                    filters={"side": OrderSide.BUY},
+                    filters={"side": self._exchange_domain.BUY},
                 ):
                     if order["price"] == buy_prices[i]:
                         self._handle_cancel_order(txid=order["txid"])
@@ -474,7 +473,7 @@ class IGridBaseStrategy(IStrategy):
         while (
             (
                 n_active_buy_orders := self._orderbook_table.count(
-                    filters={"side": OrderSide.BUY},
+                    filters={"side": self._exchange_domain.BUY},
                 )
             )
             < self._config.n_open_buy_orders
@@ -483,15 +482,15 @@ class IGridBaseStrategy(IStrategy):
             and not self._max_investment_reached
         ):
             fetched_balances = self._rest_api.get_pair_balance(
-                self._runtime_attrs.xbase_currency,
-                self._runtime_attrs.zquote_currency,
+                self._config.base_currency,
+                self._config.quote_currency,
             )
             if (
-                fetched_balances["quote_available"]
+                fetched_balances.quote_available
                 > self._runtime_attrs.amount_per_grid_plus_fee
             ):
                 order_price: float = self._get_order_price(
-                    side=OrderSide.BUY,
+                    side=self._exchange_domain.BUY,
                     last_price=(
                         self._ticker.last
                         if n_active_buy_orders == 0
@@ -499,7 +498,9 @@ class IGridBaseStrategy(IStrategy):
                     ),
                 )
 
-                self._handle_arbitrage(side=OrderSide.BUY, order_price=order_price)
+                self._handle_arbitrage(
+                    side=self._exchange_domain.BUY, order_price=order_price
+                )
                 buy_prices = list(self._get_current_buy_prices())
                 LOG.debug("Length of active buy orders: %s", n_active_buy_orders + 1)
             else:
@@ -515,12 +516,12 @@ class IGridBaseStrategy(IStrategy):
 
         if (
             n_to_cancel := (
-                self._orderbook_table.count(filters={"side": OrderSide.BUY})
+                self._orderbook_table.count(filters={"side": self._exchange_domain.BUY})
                 - self._config.n_open_buy_orders
             )
         ) > 0:
             for order in self._orderbook_table.get_orders(
-                filters={"side": OrderSide.BUY},
+                filters={"side": self._exchange_domain.BUY},
                 order_by=("price", "asc"),
                 limit=n_to_cancel,
             ):
@@ -532,11 +533,11 @@ class IGridBaseStrategy(IStrategy):
         """
         LOG.info("Cancelling all open buy orders...")
         for order in self._rest_api.get_open_orders(userref=self._config.userref):
-            if order.side == OrderSide.BUY and order.pair == self._runtime_attrs.pair:
+            if order.side == self._exchange_domain.BUY and order.pair == self._altname:
                 self._handle_cancel_order(txid=order.txid)
                 sleep(0.2)  # Avoid rate limiting
 
-        self._orderbook_table.remove(filters={"side": OrderSide.BUY})
+        self._orderbook_table.remove(filters={"side": self._exchange_domain.BUY})
 
     def __shift_buy_orders_up(self: Self) -> bool:
         """
@@ -551,15 +552,15 @@ class IGridBaseStrategy(IStrategy):
 
         if (
             max_buy_order := self._orderbook_table.get_orders(
-                filters={"side": OrderSide.BUY},
+                filters={"side": self._exchange_domain.BUY},
                 order_by=("price", "desc"),
                 limit=1,
             ).first()  # type: ignore[no-untyped-call]
         ) and (
             self._ticker.last
             > max_buy_order["price"]
-            * (1 + self._config["interval"])
-            * (1 + self._config["interval"])
+            * (1 + self._config.interval)
+            * (1 + self._config.interval)
             * 1.001
         ):
             self.__cancel_all_open_buy_orders()
@@ -592,12 +593,12 @@ class IGridBaseStrategy(IStrategy):
             LOG.info("Dry run, not placing %s order.", side)
             return
 
-        if side == OrderSide.BUY:
+        if side == self._exchange_domain.BUY:
             self.new_buy_order(
                 order_price=order_price,
                 txid_to_delete=txid_to_delete,
             )
-        elif side == OrderSide.SELL:
+        elif side == self._exchange_domain.SELL:
             self._new_sell_order(
                 order_price=order_price,
                 txid_to_delete=txid_to_delete,
@@ -612,7 +613,7 @@ class IGridBaseStrategy(IStrategy):
         txid_to_delete: str | None = None,
     ) -> None:
         """Places a new buy order."""
-        if self._config-dry_run:
+        if self._config.dry_run:
             LOG.info("Dry run, not placing buy order.")
             return
 
@@ -620,14 +621,14 @@ class IGridBaseStrategy(IStrategy):
             self._orderbook_table.remove(filters={"txid": txid_to_delete})
 
         if (
-            self._orderbook_table.count(filters={"side": OrderSide.BUY})
+            self._orderbook_table.count(filters={"side": self._exchange_domain.BUY})
             >= self._config.n_open_buy_orders
         ):
             # Don't place new buy orders if there are already enough
             return
 
         # Check if algorithm reached the max_investment value
-        if self._config["max_investment_reached"]: # FIXME: That doesnt work
+        if self._max_investment_reached:
             return
 
         # Compute the target price for the upcoming buy order.
@@ -635,7 +636,8 @@ class IGridBaseStrategy(IStrategy):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
             ),
         )
 
@@ -645,15 +647,16 @@ class IGridBaseStrategy(IStrategy):
             self._rest_api.truncate(
                 amount=Decimal(self._config["amount_per_grid"]) / Decimal(order_price),
                 amount_type="volume",
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
             ),
         )
 
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
         current_balances = self._rest_api.get_pair_balance(
-            self._runtime_attrs.xbase_currency,
-            self._runtime_attrs.zquote_currency,
+            self._config.base_currency,
+            self._config.quote_currency,
         )
         if (
             current_balances["quote_available"]
@@ -671,9 +674,10 @@ class IGridBaseStrategy(IStrategy):
             # corresponding sell order from local orderbook.
             placed_order = self._rest_api.create_order(
                 ordertype="limit",
-                side=OrderSide.BUY,
+                side=self._exchange_domain.BUY,
                 volume=volume,
-                pair=self._config.symbol,
+                base_currency=self._config.base_currency,
+                quote_currency=self._config.quote_currency,
                 price=order_price,
                 userref=self._config.userref,
                 validate=self._config.dry_run,
@@ -686,7 +690,7 @@ class IGridBaseStrategy(IStrategy):
 
         # ======================================================================
         # Not enough available funds to place a buy order.
-        message = f"⚠️ {self._config.symbol}"
+        message = f"⚠️ {self._symbol}"
         message += f"├ Not enough {self._config.quote_currency}"
         message += f"├ to buy {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
@@ -713,7 +717,7 @@ class IGridBaseStrategy(IStrategy):
         # Check if the order belongs to this bot and return if not
         ##
         if (
-            order_details.pair != self._runtime_attrs.pair
+            order_details.pair != self._altname
             or order_details.userref != self._config.userref
         ):
             LOG.debug(
@@ -726,7 +730,7 @@ class IGridBaseStrategy(IStrategy):
         # Sometimes the order is not closed yet, so retry fetching the order.
         ##
         tries = 1
-        while order_details.status != "closed" and tries <= 3:
+        while order_details.status != self._exchange_domain.CLOSED and tries <= 3:
             order_details: OrderInfoSchema = self._rest_api.get_order_with_retry(
                 txid=txid,
                 exit_on_fail=False,
@@ -740,7 +744,7 @@ class IGridBaseStrategy(IStrategy):
             sleep(wait_time)
             tries += 1
 
-        if order_details.status != "closed":
+        if order_details.status != self._exchange_domain.CLOSED:
             LOG.warning(
                 "Can not handle filled order, since the fetched order is not"
                 " closed in upstream!"
@@ -762,7 +766,7 @@ class IGridBaseStrategy(IStrategy):
             "notification",
             {
                 "message": str(
-                    f"✅ {self._config.symbol}: "
+                    f"✅ {self._symbol}: "
                     f"{order_details.side[0].upper()}{order_details.side[1:]} "
                     "order executed"
                     f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
@@ -776,11 +780,11 @@ class IGridBaseStrategy(IStrategy):
         # ======================================================================
         # Create a sell order for the executed buy order.
         ##
-        if order_details.side == OrderSide.BUY:
+        if order_details.side == self._exchange_domain.BUY:
             self._handle_arbitrage(
-                side=OrderSide.SELL,
+                side=self._exchange_domain.SELL,
                 order_price=self._get_order_price(
-                    side=OrderSide.SELL,
+                    side=self._exchange_domain.SELL,
                     last_price=order_details.price,
                 ),
                 txid_to_delete=txid,
@@ -791,7 +795,7 @@ class IGridBaseStrategy(IStrategy):
         ##
         elif (
             self._orderbook_table.count(
-                filters={"side": OrderSide.SELL},
+                filters={"side": self._exchange_domain.SELL},
                 exclude={"txid": txid},
             )
             != 0
@@ -801,9 +805,9 @@ class IGridBaseStrategy(IStrategy):
             # high, that all buy orders will be canceled anyway and new buy
             # orders will be placed in ``check_price_range`` during shift-up.
             self._handle_arbitrage(
-                side=OrderSide.BUY,
+                side=self._exchange_domain.BUY,
                 order_price=self._get_order_price(
-                    side=OrderSide.BUY,
+                    side=self._exchange_domain.BUY,
                     last_price=order_details.price,
                 ),
                 txid_to_delete=txid,
@@ -836,7 +840,7 @@ class IGridBaseStrategy(IStrategy):
         order_details: OrderInfoSchema = self._rest_api.get_order_with_retry(txid=txid)
 
         if (
-            order_details.pair != self._runtime_attrs.pair
+            order_details.pair != self._altname
             or order_details.userref != self._config.userref
         ):
             return
@@ -891,9 +895,9 @@ class IGridBaseStrategy(IStrategy):
                     " create a new sell order...",
                 )
                 self._handle_arbitrage(
-                    side=OrderSide.SELL,
+                    side=self._exchange_domain.SELL,
                     order_price=self._get_order_price(
-                        side=OrderSide.SELL,
+                        side=self._exchange_domain.SELL,
                         last_price=b["vol_of_unfilled_remaining_max_price"],
                     ),
                 )
@@ -927,7 +931,7 @@ class IGridBaseStrategy(IStrategy):
         LOG.debug("- Order information: %s", order_details)
 
         if (
-            order_details.pair != self._runtime_attrs.pair
+            order_details.pair != self._altname
             or order_details.userref != self._config.userref
         ):
             LOG.info("Order '%s' does not belong to this instance.", txid)
@@ -953,7 +957,9 @@ class IGridBaseStrategy(IStrategy):
     def _get_current_buy_prices(self: Self) -> Iterable[float]:
         """Returns a generator of the prices of open buy orders."""
         LOG.debug("Getting current buy prices...")
-        for order in self._orderbook_table.get_orders(filters={"side": "buy"}):
+        for order in self._orderbook_table.get_orders(
+            filters={"side": self._exchange_domain.BUY}
+        ):
             yield order["price"]
 
     def get_value_of_orders(self: Self, orders: Iterable) -> float:
@@ -994,6 +1000,28 @@ class IGridBaseStrategy(IStrategy):
             self._assign_all_pending_transactions()
             return True
         return False
+
+    # ==========================================================================
+    # Properties
+    @cached_property
+    def _altname(self) -> str:
+        """
+        Returns the alternative name for the given base and quote currency.
+        """
+        return self._rest_api.altname(
+            base_currency=self._config.base_currency,
+            quote_currency=self._config.quote_currency,
+        )
+
+    @cached_property
+    def _symbol(self) -> str:
+        """
+        Returns the alternative name for the given base and quote currency.
+        """
+        return self._rest_api.symbol(
+            base_currency=self._config.base_currency,
+            quote_currency=self._config.quote_currency,
+        )
 
     # ==========================================================================
     # Abstract methods
