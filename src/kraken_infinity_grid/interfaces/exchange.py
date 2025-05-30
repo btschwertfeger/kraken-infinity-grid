@@ -14,14 +14,15 @@ FIXME: Add comprehensive examples and documentation for each method.
 from abc import ABC, abstractmethod
 from typing import Any, Self
 
+from kraken_infinity_grid.models.domain import ExchangeDomain
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
     OrderInfoSchema,
+    PairBalanceSchema,
 )
-from kraken_infinity_grid.models.domain import ExchangeDomain
-from kraken_infinity_grid.models.schemas.exchange import PairBalanceSchema
+
 
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
@@ -36,6 +37,7 @@ class IExchangeRESTService(ABC):
 
         Raises an exception if the exchange is not online.
         """
+
     # == Getters for exchange user operations ==================================
     @abstractmethod
     def get_orders_info(self, txid: str | None) -> OrderInfoSchema | None:
@@ -70,14 +72,13 @@ class IExchangeRESTService(ABC):
     def get_closed_orders(
         self,
         userref: int,
-        trades: bool
+        trades: bool,
     ) -> dict[str, Any]:
         """Get closed orders for a userref with an optional limit."""
 
     @abstractmethod
     def get_balances(self) -> list[AssetBalanceSchema]:
         """Get current balances."""
-
 
     @abstractmethod
     def get_pair_balance(
@@ -118,7 +119,13 @@ class IExchangeRESTService(ABC):
         """Cancel an order."""
 
     @abstractmethod
-    def truncate(self, amount: float, amount_type: str, base_currency: str, quote_currency: str) -> str:
+    def truncate(
+        self,
+        amount: float,
+        amount_type: str,
+        base_currency: str,
+        quote_currency: str,
+    ) -> str:
         """Truncate amount according to exchange precision."""
 
     # == Getters for exchange market operations ================================
@@ -131,7 +138,11 @@ class IExchangeRESTService(ABC):
         """
 
     @abstractmethod
-    def get_asset_pair_info(self, base_currency: str, quote_currency: str) -> AssetPairInfoSchema:
+    def get_asset_pair_info(
+        self,
+        base_currency: str,
+        quote_currency: str,
+    ) -> AssetPairInfoSchema:
         """Get available asset pair info from the exchange."""
 
     @abstractmethod

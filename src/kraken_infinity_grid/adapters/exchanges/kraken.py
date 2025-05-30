@@ -6,10 +6,10 @@
 #
 from contextlib import suppress
 from decimal import Decimal
+from functools import cache
 from logging import getLogger
 from time import sleep
 from typing import Any, Self
-from functools import cache
 
 from kraken.exceptions import (
     KrakenAuthenticationError,
@@ -18,13 +18,14 @@ from kraken.exceptions import (
 )
 from kraken.spot import Market, SpotWSClient, Trade, User
 
-from kraken_infinity_grid.core.event_bus import EventBus
+from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
+from kraken_infinity_grid.models.domain import ExchangeDomain
 
 # FIXME: Make pair and symbol uniform
 from kraken_infinity_grid.models.schemas.exchange import (
@@ -32,9 +33,8 @@ from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
     OrderInfoSchema,
+    PairBalanceSchema,
 )
-from kraken_infinity_grid.models.domain import ExchangeDomain
-from kraken_infinity_grid.models.schemas.exchange import PairBalanceSchema
 
 LOG = getLogger(__name__)
 
@@ -215,7 +215,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return balances
 
     def get_pair_balance(
-        self: Self, base_currency: str, quote_currency: str
+        self: Self,
+        base_currency: str,
+        quote_currency: str,
     ) -> PairBalanceSchema:
         """
         Returns the available and overall balances of the quote and base
@@ -223,7 +225,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
         FIXME: Is there a way to get the balances of the asset pair directly?
         """
-        custom_base, custom_quote = self.__retrieve_custom_base_quote_name(
+        custom_base, custom_quote = self.__retrieve_custom_base_quote_names(
             base_currency=base_currency,
             quote_currency=quote_currency,
         )
@@ -312,7 +314,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return self.__market_service.get_system_status()["status"]
 
     def get_asset_pair_info(
-        self: Self, base_currency: str, quote_currency: str
+        self: Self,
+        base_currency: str,
+        quote_currency: str,
     ) -> AssetPairInfoSchema:
         """Get available asset pair information from the exchange."""
         # FIXME: Proper error handling
@@ -341,8 +345,10 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     # == Custom Kraken Methods for convenience =================================
 
     @cache
-    def __retrieve_custom_base_quote_name(
-        self: Self, base_currency: str, quote_currency: str
+    def __retrieve_custom_base_quote_names(
+        self: Self,
+        base_currency: str,
+        quote_currency: str,
     ) -> tuple[str, str]:
         """
         Returns the custom base and quote name for the given currencies.
@@ -431,8 +437,10 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                 self.__state_machine.facts["ticker_channel_connected"] = True
                 # Set ticker the first time to have the ticker set during setup.
                 self.__event_bus.publish(
-                    "ticker_update",
-                    {"last": float(message["data"][0]["last"])},
+                    Event(
+                        type="ticker_update",
+                        data={"last": float(message["data"][0]["last"])},
+                    ),
                 )
                 LOG.info("- Subscribed to ticker channel successfully!")
 
@@ -448,7 +456,9 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                 and self.__state_machine.facts["executions_channel_connected"]
                 and not self.__state_machine.facts["ready_to_trade"]
             ):
-                self.__event_bus.publish("prepare_for_trading", {})
+                self.__event_bus.publish(
+                    Event(type="prepare_for_trading", data={}),
+                )
 
                 # If there are any missed messages, process them now.
                 for msg in self.__missed_messages:
@@ -471,8 +481,10 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
 
             if channel == "ticker" and (data := message.get("data")):
                 self.__event_bus.publish(
-                    "ticker_update",
-                    {"symbol": data[0].get("symbol"), "last": data[0]["last"]},
+                    Event(
+                        type="ticker_update",
+                        data={"symbol": data[0].get("symbol"), "last": data[0]["last"]},
+                    ),
                 )
 
             elif channel == "executions" and (data := message.get("data", [])):
@@ -486,18 +498,24 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                     match execution["exec_type"]:
                         case "new":
                             self.__event_bus.publish(
-                                "on_order_placed",
-                                {"order_id": execution["order_id"]},
+                                Event(
+                                    type="on_order_placed",
+                                    data={"order_id": execution["order_id"]},
+                                ),
                             )
                         case "filled":
                             self.__event_bus.publish(
-                                "on_order_filled",
-                                {"order_id": execution["order_id"]},
+                                Event(
+                                    type="on_order_filled",
+                                    data={"order_id": execution["order_id"]},
+                                ),
                             )
                         case "canceled" | "expired":
                             self.__event_bus.publish(
-                                "on_order_cancelled",
-                                {"order_id": execution["order_id"]},
+                                Event(
+                                    type="on_order_cancelled",
+                                    data={"order_id": execution["order_id"]},
+                                ),
                             )
 
         except Exception as exc:  # noqa: BLE001

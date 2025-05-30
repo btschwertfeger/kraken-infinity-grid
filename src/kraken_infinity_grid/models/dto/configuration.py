@@ -19,6 +19,7 @@ class BotConfigDTO(BaseModel):
     # ==========================================================================
     # General attributes
     strategy: str
+    exchange: str
     api_key: str
     secret_key: str
     name: str

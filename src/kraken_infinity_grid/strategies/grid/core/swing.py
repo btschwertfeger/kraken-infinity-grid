@@ -5,19 +5,20 @@
 # https://github.com/btschwertfeger
 #
 
-from decimal import Decimal
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
-
-LOG = getLogger(__name__)
+from kraken_infinity_grid.core.event_bus import Event
+from decimal import Decimal
 
 from time import sleep
 
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+LOG = getLogger(__name__)
 
-class GridHodlStrategy(IGridBaseStrategy):
+
+class SwingStrategy(IGridBaseStrategy):
 
     def _get_order_price(
         self: Self,
@@ -35,15 +36,33 @@ class GridHodlStrategy(IGridBaseStrategy):
         last_price = float(last_price)
 
         if side == self._exchange_domain.SELL:  # New order is a sell
-            # Regular sell order (even for SWING) (cDCA will trigger this
-            # but it will be filtered out later)
-            if last_price > price_of_highest_buy:
-                self._configuration_table.update({"price_of_highest_buy": last_price})
+            if extra_sell:
+                # Extra sell order when SWING
+                # 2x interval above [last close price | price of highest buy]
+                order_price = (
+                    last_price
+                    * (1 + self._config.interval)
+                    * (1 + self._config.interval)
+                )
+                if order_price < price_of_highest_buy:
+                    order_price = (
+                        price_of_highest_buy
+                        * (1 + self._config.interval)
+                        * (1 + self._config.interval)
+                    )
 
-            # Sell price 1x interval above buy price
-            order_price = last_price * (1 + self._config.interval)
-            if self._ticker.last > order_price:
-                order_price = self._ticker.last * (1 + self._config.interval)
+            else:
+                # Regular sell order (even for SWING) (cDCA will trigger this
+                # but it will be filtered out later)
+                if last_price > price_of_highest_buy:
+                    self._configuration_table.update(
+                        {"price_of_highest_buy": last_price},
+                    )
+
+                # Sell price 1x interval above buy price
+                order_price = last_price * (1 + self._config.interval)
+                if self._ticker.last > order_price:
+                    order_price = self._ticker.last * (1 + self._config.interval)
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
@@ -57,7 +76,40 @@ class GridHodlStrategy(IGridBaseStrategy):
         raise ValueError(f"Unknown side: {side}!")
 
     def _check_extra_sell_order(self: Self) -> None:
-        pass
+        """
+        Checks if an extra sell order can be placed. This only applies for the
+        SWING strategy.
+        """
+        LOG.debug("Checking if extra sell order can be placed...")
+        if (
+            self._orderbook_table.count(filters={"side": self._exchange_domain.SELL})
+            == 0
+        ):
+            fetched_balances = self._rest_api.get_pair_balance(
+                self._config.base_currency,
+                self._config.quote_currency,
+            )
+
+            if (
+                fetched_balances.base_available * self._ticker.last
+                > self._runtime_attrs.amount_per_grid_plus_fee
+            ):
+                order_price = self._get_order_price(
+                    side=self._exchange_domain.SELL,
+                    last_price=self._ticker.last,
+                    extra_sell=True,
+                )
+                self._event_bus.publish(
+                   Event(
+                       type="notification",
+                       data={
+                           "message": f"ℹ️ {self._config.name}: Placing extra sell order",
+                       },
+                   )
+                )
+                self._handle_arbitrage(
+                    side=self._exchange_domain.SELL, order_price=order_price
+                )
 
     def _new_sell_order(
         self: Self,
@@ -123,10 +175,6 @@ class GridHodlStrategy(IGridBaseStrategy):
             ),
         )
 
-        # For GridSell: This is only the case if there is no corresponding
-        # buy order and the sell order was placed, e.g. due to an extra sell
-        # order via selling of partially filled buy orders.
-
         # Respect the fee to not reduce the quote currency over time, while
         # accumulating the base currency.
         volume = float(
@@ -184,8 +232,9 @@ class GridHodlStrategy(IGridBaseStrategy):
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
-
-        self._event_bus.publish("notification", {"message": message})
+        self._event_bus.publish(
+            Event(type="notification", data={"message": message})
+        )
         LOG.warning("Current balances: %s", fetched_balances)
 
         if txid_to_delete is not None:

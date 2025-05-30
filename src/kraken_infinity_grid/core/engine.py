@@ -8,12 +8,11 @@
 import asyncio
 import signal
 import sys
-from datetime import datetime, timedelta
 from importlib.metadata import version
 from logging import getLogger
 from typing import Any, Self
 
-from kraken_infinity_grid.core.event_bus import EventBus
+from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.infrastructure.database import DBConnect
@@ -53,10 +52,6 @@ class BotEngine:
         ##
         self.__db = DBConnect(**db_config)
 
-        exchange_services = self.__exchange_factory()
-        self.__rest_api = exchange_services["REST"]
-        self.__ws_client = exchange_services["websocket"]
-
         # == Application services ==============================================
         ##
         self.__notification_service = NotificationService(notification_config)
@@ -68,7 +63,7 @@ class BotEngine:
         self.__setup_event_handlers()
 
     def __strategy_factory(self: Self) -> Any:
-        from kraken_infinity_grid.strategies.grid import (  # pylint: disable=import-outside-toplevel
+        from kraken_infinity_grid.strategies.grid.core import (  # pylint: disable=import-outside-toplevel
             CDCAStrategy,
             GridHodlStrategy,
             GridSellStrategy,
@@ -88,33 +83,9 @@ class BotEngine:
         return strategies[self.__config.strategy](
             config=self.__config,
             state_machine=self.__state_machine,
-            rest_api=self.__rest_api,
             event_bus=self.__event_bus,
             db=self.__db,
         )
-
-    def __exchange_factory(self: Self) -> dict:
-        """Create the exchange service based on the configuration."""
-        if self.__config.exchange == "Kraken":
-            from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel
-                KrakenExchangeRESTServiceAdapter,
-                KrakenExchangeWebsocketServiceAdapter,
-            )
-
-            return {
-                "REST": KrakenExchangeRESTServiceAdapter(
-                    api_key=self.__config.api_key,
-                    api_secret=self.__config.api_secret,
-                    state_machine=self.__state_machine,
-                ),
-                "websocket": KrakenExchangeWebsocketServiceAdapter(
-                    api_key=self.__config.api_key,
-                    api_secret=self.__config.api_secret,
-                    state_machine=self.__state_machine,
-                    event_bus=self.__event_bus,
-                ),
-            }
-        raise ValueError(f"Unsupported exchange: {self.__config.exchange}")
 
     def __setup_event_handlers(self: Self) -> None:
         # Subscribe to events
@@ -158,56 +129,13 @@ class BotEngine:
             loop.add_signal_handler(sig, _signal_handler)
 
         # ======================================================================
-        # Try to connect to the Kraken API, validate credentials and API key
-        # permissions.
-        ##
-        self.__rest_api.check_exchange_status()
-        self.__rest_api.check_api_key_permissions()
-
-        if self.__state_machine.state == States.ERROR:
-            await self.terminate(
-                "The algorithm was shut down by error during initialization!",
-            )
-
-        # ======================================================================
-        # Start the websocket connection
-        ##
-        LOG.info("Starting the websocket connection...")
-        await self.__ws_client.start()
-        LOG.info("Websocket connection established!")
-
-        # ======================================================================
-        # Subscribe to the execution and ticker channels
-        ##
-        LOG.info("Subscribing to channels...")
-        subscriptions = {
-            "Kraken": [
-                {
-                    "channel": "ticker",
-                    "symbol": [
-                        f"{self.__config.base_currency}/{self.__config.quote_currency}",
-                    ],
-                },
-                {
-                    "channel": "executions",
-                    # Snapshots are only required to check if the channel is
-                    # connected. They are not used for any other purpose.
-                    "snap_orders": True,
-                    "snap_trades": True,
-                },
-            ],
-        }
-        for subscription in subscriptions[self.__config["exchange"]]:
-            self.__ws_client.subscribe(subscription)
-
-        # ======================================================================
-        # Start the websocket connections and run the main function
+        # Start running the strategy
         ##
         try:
             # Wait for shutdown
             await asyncio.wait(
                 [
-                    asyncio.create_task(self.__notification_loop()),
+                    asyncio.create_task(self.__strategy.run()),
                     asyncio.create_task(self.__state_machine.wait_for_shutdown()),
                 ],
                 return_when=asyncio.FIRST_COMPLETED,
@@ -218,7 +146,7 @@ class BotEngine:
             await self.terminate(f"The algorithm was interrupted: {exc}")
         except (
             BotStateError,
-            Exception
+            Exception,
         ) as exc:  # pylint: disable=broad-exception-caught
             self.__state_machine.transition_to(States.ERROR)
             await asyncio.sleep(5)
@@ -237,33 +165,6 @@ class BotEngine:
                 "The algorithm was shut down due to an error!",
             )
 
-    async def __notification_loop(self: Self) -> None:
-        while True:
-            try:
-                conf = self.__configuration_table.get()
-                last_hour = (now := datetime.now()) - timedelta(hours=1)
-
-                if self.__state_machine.state == States.RUNNING and (
-                    not conf["last_price_time"]
-                    or not conf["last_telegram_update"]
-                    or conf["last_telegram_update"] < last_hour
-                ):
-                    # Send update once per hour to Telegram
-                    self.t.send_telegram_update()
-
-                if conf["last_price_time"] + timedelta(seconds=600) < now:
-                    # Exit if no price update for a long time (10 minutes).
-                    LOG.error("No price update for a long time, exiting!")
-                    self.__state_machine.transition_to(States.ERROR)
-                    return
-
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                LOG.error("Exception in main.", exc_info=exc)
-                self.__state_machine.transition_to(States.ERROR)
-                return
-
-            await asyncio.sleep(6)
-
     async def terminate(
         self: Self,
         reason: str = "",
@@ -279,11 +180,13 @@ class BotEngine:
         3. Notifies the user via Telegram about the termination.
         4. Exits the algorithm.
         """
-        await self.__ws_client.close()
+        await self.__strategy.stop()
         self.__db.close()
 
         self.__event_bus.publish(
-            "notification",
-            {"message": f"{self.__config.name} terminated.\nReason: {reason}"},
+            Event(
+                type="notification",
+                data={"message": f"{self.__config.name} terminated.\nReason: {reason}"},
+            ),
         )
         sys.exit(exception)

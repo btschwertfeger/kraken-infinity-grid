@@ -9,7 +9,7 @@ from decimal import Decimal
 from logging import getLogger
 from time import sleep
 from typing import Self
-
+from kraken_infinity_grid.core.event_bus import Event
 from kraken_infinity_grid.core.state_machine import States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
@@ -199,7 +199,7 @@ class GridSellStrategy(IGridBaseStrategy):
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
 
-        self._event_bus.publish("notification", {"message": message})
+        self._event_bus.publish(Event(type="notification", data={"message": message}))
         LOG.warning("Current balances: %s", fetched_balances)
 
         # Restart the algorithm if there is not enough base currency to

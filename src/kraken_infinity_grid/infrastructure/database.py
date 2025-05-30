@@ -302,7 +302,7 @@ class Configuration:
             Column("amount_per_grid", Float),
             Column("interval", Float),
             Column("last_price_time", DateTime, nullable=False),
-            Column("last_telegram_update", DateTime, nullable=False),
+            Column("last_status_update", DateTime, nullable=False),
             extend_existing=True,
         )
 
@@ -320,7 +320,7 @@ class Configuration:
                 self.__table,
                 userref=self.__userref,
                 last_price_time=datetime.now(),
-                last_telegram_update=datetime.now(),
+                last_status_update=datetime.now(),
             )
 
     def get(self: Self, filters: dict | None = None) -> dict:

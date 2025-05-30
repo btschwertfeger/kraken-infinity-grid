@@ -8,30 +8,30 @@
 # FIXME: Address pylint issues with too many arguments, not applicable in this
 #        project context.
 # FIXME: The configuration table of the database is not dynamic enough
-
-from functools import cached_property
+from kraken_infinity_grid.core.event_bus import Event
+from datetime import datetime, timedelta
 import traceback
 from abc import abstractmethod
 from datetime import datetime
 from decimal import Decimal
+from functools import cached_property
 from logging import getLogger
 from time import sleep
 from types import SimpleNamespace
 from typing import Iterable, Self
-
+import asyncio
 from kraken.exceptions import KrakenUnknownOrderError
-from pydantic import BaseModel
 
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
+    DBConnect,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
-from kraken_infinity_grid.interfaces.exchange import IExchangeRESTService
 from kraken_infinity_grid.interfaces.strategy import IStrategy
 from kraken_infinity_grid.models.domain import ExchangeDomain
 from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
@@ -39,7 +39,6 @@ from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
     OrderInfoSchema,
 )
-from kraken_infinity_grid.infrastructure.database import DBConnect
 
 LOG = getLogger(__name__)
 
@@ -50,22 +49,35 @@ class IGridBaseStrategy(IStrategy):
     def __init__(
         self,
         config: BotConfigDTO,
-        rest_api: IExchangeRESTService,
         event_bus: EventBus,
         state_machine: StateMachine,
         db: DBConnect,
     ) -> None:
         self._config = config
-        self._rest_api = rest_api
         self._event_bus = event_bus
         self._state_machine = state_machine
         self._ticker: SimpleNamespace = None
+
+        self._rest_api = self._get_exchange_adapter(self._config.exchange, "rest")(
+            api_key=self._config.api_key,
+            api_secret=self._config.api_secret,
+            state_machine=self._state_machine,
+        )
+        self.__ws_client = self._get_exchange_adapter(
+            self._config.exchange, "websocket"
+        )(
+            api_key=self._config.api_key,
+            api_secret=self._config.api_secret,
+            state_machine=self._state_machine,
+            event_bus=self._event_bus,
+        )
 
         self._orderbook_table = Orderbook(self._config.userref, db)
         self._configuration_table = Configuration(self._config.userref, db)
         self._pending_txids_table = PendingTXIDs(self._config.userref, db)
         self._unsold_buy_order_txids_table = UnsoldBuyOrderTXIDs(
-            self._config.userref, db
+            self._config.userref,
+            db,
         )
         db.init_db()
 
@@ -75,6 +87,75 @@ class IGridBaseStrategy(IStrategy):
 
         self._cost_decimals: int
         self._amount_per_grid_plus_fee: float
+
+    async def run(self: Self) -> None:
+        # ======================================================================
+        # Try to connect to the API, validate credentials and API key
+        # permissions.
+        ##
+        self._rest_api.check_exchange_status()
+        self._rest_api.check_api_key_permissions()
+
+        if self._state_machine.state == States.ERROR:
+            raise BotStateError(
+                "The algorithm was shut down by error during initialization!",
+            )
+
+        # ======================================================================
+        # Start the websocket connection
+        ##
+        LOG.info("Starting the websocket connection...")
+        await self.__ws_client.start()
+        LOG.info("Websocket connection established!")
+
+        # ======================================================================
+        # Subscribe to the execution and ticker channels
+        ##
+        LOG.info("Subscribing to channels...")
+        # FIXME: improve this to be more generic and not hardcoded at this place
+        subscriptions = {
+            "Kraken": [
+                {"channel": "ticker", "symbol": [self._symbol]},
+                {
+                    "channel": "executions",
+                    # Snapshots are only required to check if the channel is
+                    # connected. They are not used for any other purpose.
+                    "snap_orders": True,
+                    "snap_trades": True,
+                },
+            ],
+        }
+        for subscription in subscriptions[self._config.exchange]:
+            self.__ws_client.subscribe(subscription)
+
+        while True:
+            try:
+                conf = self._configuration_table.get()
+                last_hour = (now := datetime.now()) - timedelta(hours=1)
+
+                if self._state_machine.state == States.RUNNING and (
+                    not conf["last_price_time"]
+                    or not conf["last_status_update"]
+                    or conf["last_status_update"] < last_hour
+                ):
+                    # Send update once per hour
+                    self.send_status_update()
+
+                if conf["last_price_time"] + timedelta(seconds=600) < now:
+                    # Exit if no price update for a long time (10 minutes).
+                    LOG.error("No price update for a long time, exiting!")
+                    self._state_machine.transition_to(States.ERROR)
+                    return
+
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                LOG.error("Exception in main.", exc_info=exc)
+                self._state_machine.transition_to(States.ERROR)
+                return
+
+            await asyncio.sleep(6)
+
+    async def stop(self: Self) -> None:
+        self.__ws_client.close()
 
     # ==========================================================================
     # Event handlers
@@ -122,8 +203,10 @@ class IGridBaseStrategy(IStrategy):
         )
 
         self._event_bus.publish(
-            "notification",
-            {"message": f"✅ {self._symbol} is starting!"},
+            Event(
+                type="notification",
+                data={"message": f"✅ {self._symbol} is starting!"},
+            )
         )
 
         # ======================================================================
@@ -187,9 +270,10 @@ class IGridBaseStrategy(IStrategy):
             # take the highest maker fee.
             self._config.fee = float(pair_info.fees_maker[0][1]) / 100
 
-        # Setup runtime attributes derived from asset pair info
         self._cost_decimals = pair_info.cost_decimals
-        self._amount_per_grid_plus_fee = self._config.amount_per_grid * (1 + self._config.fee)
+        self._amount_per_grid_plus_fee = self._config.amount_per_grid * (
+            1 + self._config.fee
+        )
 
     def __update_orderbook_get_open_orders(self: Self) -> list[OrderInfoSchema]:
         """Get the open orders and txid as lists."""
@@ -202,7 +286,8 @@ class IGridBaseStrategy(IStrategy):
         return open_orders
 
     def __update_order_book_handle_closed_order(
-        self: Self, closed_order: OrderInfoSchema
+        self: Self,
+        closed_order: OrderInfoSchema,
     ) -> None:
         """
         Gets executed when an order of the local orderbook was closed in the
@@ -217,17 +302,19 @@ class IGridBaseStrategy(IStrategy):
         LOG.info("Handling executed order: %s", closed_order.txid)
 
         self._event_bus.publish(
-            "notification",
-            {
-                "message": str(
-                    f"✅ {self._symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
-                    "order executed"
-                    f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
-                    f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
-                    f"\n └ Size in {self._config.quote_currency} » "
-                    f"{float(closed_order.price) * float(closed_order.vol_exec)}",
-                )
-            },
+            Event(
+                type="notification",
+                data={
+                    "message": str(
+                        f"✅ {self._symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
+                        "order executed"
+                        f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
+                        f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
+                        f"\n └ Size in {self._config.quote_currency} » "
+                        f"{float(closed_order.price) * float(closed_order.vol_exec)}",
+                    ),
+                },
+            )
         )
         # ======================================================================
         # If a buy order was filled, the sell order needs to be placed.
@@ -487,7 +574,7 @@ class IGridBaseStrategy(IStrategy):
             )
             if (
                 fetched_balances.quote_available
-                > self._runtime_attrs.amount_per_grid_plus_fee
+                > self._amount_per_grid_plus_fee
             ):
                 order_price: float = self._get_order_price(
                     side=self._exchange_domain.BUY,
@@ -499,7 +586,8 @@ class IGridBaseStrategy(IStrategy):
                 )
 
                 self._handle_arbitrage(
-                    side=self._exchange_domain.BUY, order_price=order_price
+                    side=self._exchange_domain.BUY,
+                    order_price=order_price,
                 )
                 buy_prices = list(self._get_current_buy_prices())
                 LOG.debug("Length of active buy orders: %s", n_active_buy_orders + 1)
@@ -660,7 +748,7 @@ class IGridBaseStrategy(IStrategy):
         )
         if (
             current_balances["quote_available"]
-            > self._runtime_attrs.amount_per_grid_plus_fee
+            > self._amount_per_grid_plus_fee
         ):
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
@@ -694,7 +782,12 @@ class IGridBaseStrategy(IStrategy):
         message += f"├ Not enough {self._config.quote_currency}"
         message += f"├ to buy {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
-        self._event_bus.publish("notification", {"message": message})
+        self._event_bus.publish(
+            Event(
+                type="notification",
+                data={"message": message}
+            )
+        )
         LOG.warning("Current balances: %s", current_balances)
 
     def handle_filled_order_event(self: Self, txid: str) -> None:
@@ -763,19 +856,20 @@ class IGridBaseStrategy(IStrategy):
         # Notify about the executed order
         ##
         self._event_bus.publish(
-            "notification",
-            {
-                "message": str(
-                    f"✅ {self._symbol}: "
-                    f"{order_details.side[0].upper()}{order_details.side[1:]} "
-                    "order executed"
-                    f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
-                    f"\n ├ Size » {order_details.vol_exec} {self._config.base_currency}"
-                    f"\n └ Size in {self._config.quote_currency} » "
-                    f"{round(order_details.price * order_details.vol_exec, self._runtime_attrs.cost_decimals)}",
-                ),
+            Event(
+                type="notification",
+                data={
+                    "message": str(
+                        f"✅ {self._symbol}: "
+                        f"{order_details.side[0].upper()}{order_details.side[1:]} "
+                        "order executed"
+                        f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
+                        f"\n ├ Size » {order_details.vol_exec} {self._config.base_currency}"
+                        f"\n └ Size in {self._config.quote_currency} » "
+                        f"{round(order_details.price * order_details.vol_exec, self._cost_decimals)}",
+                    ),
             },
-        )
+        ))
 
         # ======================================================================
         # Create a sell order for the executed buy order.
@@ -958,7 +1052,7 @@ class IGridBaseStrategy(IStrategy):
         """Returns a generator of the prices of open buy orders."""
         LOG.debug("Getting current buy prices...")
         for order in self._orderbook_table.get_orders(
-            filters={"side": self._exchange_domain.BUY}
+            filters={"side": self._exchange_domain.BUY},
         ):
             yield order["price"]
 
@@ -985,7 +1079,7 @@ class IGridBaseStrategy(IStrategy):
         """Returns True if the maximum investment is reached."""
         return (
             self._config.max_investment
-            <= self._investment + self._runtime_attrs.amount_per_grid_plus_fee
+            <= self._investment + self._amount_per_grid_plus_fee
         ) or (self._config.max_investment <= self._investment)
 
     def __check_pending_txids(self: Self) -> bool:
@@ -1022,6 +1116,81 @@ class IGridBaseStrategy(IStrategy):
             base_currency=self._config.base_currency,
             quote_currency=self._config.quote_currency,
         )
+
+    def send_status_update(self: Self) -> None:
+        """Send a message to the Notification channel with the current status."""
+        balances = self._rest_api.get_pair_balance(
+            base_currency=self._config.base_currency,
+            quote_currency=self._config.quote_currency,
+        )
+
+        message = f"👑 {self._config.name}\n"
+        message += f"└ Price » {self._ticker.last} {self._config.quote_currency}\n\n"
+
+        message += "⚜️ Account\n"
+        message += f"├ Total {self._config.base_currency} » {balances.base_balance}\n"
+        message += f"├ Total {self._config.quote_currency} » {balances.quote_balance}\n"
+        message += (
+            f"├ Available {self._config.quote_currency} » {balances.quote_available}\n"
+        )
+        message += f"├ Available {self._config.base_currency} » {balances.base_available - float(self._configuration_table.get()['vol_of_unfilled_remaining'])}\n"  # noqa: E501
+        message += f"├ Unfilled surplus of {self._config.base_currency} » {self._configuration_table.get()['vol_of_unfilled_remaining']}\n"  # noqa: E501
+        message += f"├ Wealth » {round(balances.base_balance * self._ticker.last + balances.quote_balance, self._cost_decimals)} {self._config.quote_currency}\n"  # noqa: E501
+        message += f"└ Investment » {round(self._config.investment, self._cost_decimals)} / {self._config.max_investment} {self._config.quote_currency}\n\n"  # noqa: E501
+
+        message += "💠 Orders\n"
+        message += f"├ Amount per Grid » {self._config.amount_per_grid} {self._config.quote_currency}\n"
+        message += f"└ Open orders » {self._orderbook_table.count()}\n"
+
+        message += "\n```\n"
+        message += f" 🏷️ Price in {self._config.quote_currency}\n"
+        max_orders_to_list: int = 5
+
+        next_sells = [
+            order["price"]
+            for order in self._orderbook_table.get_orders(
+                filters={"side": self._exchange_domain.SELL},
+                order_by=("price", "ASC"),
+                limit=max_orders_to_list,
+            )
+        ]
+        next_sells.reverse()
+
+        if (n_sells := len(next_sells)) == 0:
+            message += f"└───┬> {self._ticker.last}\n"
+        else:
+            for index, sell_price in enumerate(next_sells):
+                change = (sell_price / self._ticker.last - 1) * 100
+                if index == 0:
+                    message += f" │  ┌[ {sell_price} (+{change:.2f}%)\n"
+                elif index <= n_sells - 1 and index != max_orders_to_list:
+                    message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
+            message += f" └──┼> {self._ticker.last}\n"
+
+        next_buys = [
+            order["price"]
+            for order in self._orderbook_table.get_orders(
+                filters={"side": self._exchange_domain.BUY},
+                order_by=("price", "DESC"),
+                limit=max_orders_to_list,
+            )
+        ]
+        if (n_buys := len(next_buys)) != 0:
+            for index, buy_price in enumerate(next_buys):
+                change = (buy_price / self._ticker.last - 1) * 100
+                if index < n_buys - 1 and index != max_orders_to_list:
+                    message += f"    ├[ {buy_price} ({change:.2f}%)\n"
+                else:
+                    message += f"    └[ {buy_price} ({change:.2f}%)"
+        message += "\n```"
+
+        self._event_bus.publish(
+            Event(
+                type="notification",
+                data={"message": message}
+            )
+        )
+        self._configuration_table.update({"last_status_update": datetime.now()})
 
     # ==========================================================================
     # Abstract methods

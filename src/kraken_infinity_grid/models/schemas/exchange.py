@@ -37,6 +37,7 @@ class OrderInfoSchema(BaseModel):
     price: float  # primary price
     side: OrderSide
 
+
 class PairBalanceSchema(BaseModel):
     base_balance: float
     quote_balance: float
