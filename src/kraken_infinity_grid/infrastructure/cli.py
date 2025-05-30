@@ -323,7 +323,7 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
 
-    from kraken_infinity_grid.core.bot import Bot  # noqa: PLC0415
+    from kraken_infinity_grid.core.engine import BotEngine  # noqa: PLC0415
 
     # Handle in-memory database option
     if kwargs.pop("in_memory", False):
@@ -346,7 +346,7 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
     ctx.obj |= kwargs
 
     asyncio.run(
-        Bot(
+        BotEngine(
             bot_config=BotConfigDTO(**ctx.obj),
             db_config=db_config,
             notification_config=notification_config,

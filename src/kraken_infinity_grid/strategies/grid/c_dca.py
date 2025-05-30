@@ -9,7 +9,7 @@ from logging import getLogger
 from typing import Self
 
 from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
 LOG = getLogger(__name__)
@@ -31,7 +31,7 @@ class CDCAStrategy(IGridBaseStrategy):
 
         if side == "sell":  # New order is a sell
             self._state_machine.set_state(States.ERROR)
-            raise GridBotStateError(
+            raise BotStateError(
                 "cDCA strategy does not support sell orders! "
                 "Please use a different strategy for selling.",
             )

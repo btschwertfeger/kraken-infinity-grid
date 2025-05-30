@@ -19,7 +19,7 @@ from kraken.spot import Market, SpotWSClient, Trade, User
 
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
@@ -176,15 +176,12 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             sleep(wait_time)
 
         if exit_on_fail and order_details is None:
-            LOG.error(
-                "Failed to retrieve order info for '%s' after %d retries!",
-                txid,
-                max_tries,
+            message = (
+                f"Failed to retrieve order info for '{txid}' after {max_tries} retries!"
             )
-            # FIXME: self._state_machine.transition_to(States.ERROR)
-            raise GridBotStateError(
-                f"Failed to retrieve order info for '{txid}' after {max_tries} retries!",
-            )
+            LOG.error(message)
+            self.__state_machine.transition_to(States.ERROR)
+            raise BotStateError(message)
 
         return order_details  # type: ignore[no-any-return]
 

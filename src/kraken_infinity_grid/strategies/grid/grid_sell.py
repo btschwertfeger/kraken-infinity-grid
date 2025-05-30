@@ -11,7 +11,7 @@ from time import sleep
 from typing import Self
 
 from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
@@ -204,4 +204,4 @@ class GridSellStrategy(IGridBaseStrategy):
         # exchange, or manual trades have been made during processing.
         LOG.error(message)
         self._state_machine.transition_to(States.ERROR)
-        raise GridBotStateError(message)
+        raise BotStateError(message)

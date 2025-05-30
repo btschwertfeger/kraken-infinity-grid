@@ -14,7 +14,7 @@ import pytest
 
 from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.order_management import OrderManager
 
 
@@ -1119,7 +1119,7 @@ def test_get_orders_info_with_retry_failure(
     """Test failing to retrieve order info after maximum retries."""
     strategy.user.get_orders_info.return_value = {}
     with pytest.raises(
-        GridBotStateError,
+        BotStateError,
         match="Failed to retrieve order info for 'txid1' after 3 retries!",
     ):
         order_manager.get_orders_info_with_retry(txid="txid1", max_tries=3)

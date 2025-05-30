@@ -15,7 +15,7 @@ from typing import Any, Self
 
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     DBConnect,
@@ -33,7 +33,7 @@ from kraken_infinity_grid.services.notification_service import NotificationServi
 LOG = getLogger(__name__)
 
 
-class Bot:
+class BotEngine:
     """
     Orchestrates the trading bot's components but delegates specific
     responsibilities to specialized classes.
@@ -238,7 +238,7 @@ class Bot:
             await asyncio.sleep(5)
             await self.terminate(f"The algorithm was interrupted: {exc}")
         except (
-            GridBotStateError,
+            BotStateError,
             Exception,
         ) as exc:  # pylint: disable=broad-exception-caught
             self.__state_machine.transition_to(States.ERROR)

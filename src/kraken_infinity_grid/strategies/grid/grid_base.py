@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import GridBotStateError
+from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     Orderbook,
@@ -156,7 +156,7 @@ class IGridBaseStrategy(IStrategy):
             message = f"Exception while updating the orderbook: {exc}: {traceback.format_exc()}"
             LOG.error(message)
             self._state_machine.transition_to(States.ERROR)
-            raise GridBotStateError(message) from exc
+            raise BotStateError(message) from exc
 
         # Check if the configured amount per grid or the interval have changed,
         # requiring a cancellation of all open buy orders.
@@ -212,7 +212,7 @@ class IGridBaseStrategy(IStrategy):
                 open_orders.append(order)
         return open_orders
 
-    def __update_order_book_handle_closed_order(self: Self, closed_order: dict) -> None:
+    def __update_order_book_handle_closed_order(self: Self, closed_order: OrderInfoSchema) -> None:
         """
         Gets executed when an order of the local orderbook was closed in the
         upstream orderbook during the ``update_orderbook`` function in the init
@@ -223,34 +223,33 @@ class IGridBaseStrategy(IStrategy):
 
         FIXME: closed order must be a pydantic model, not a dict.
         """
-        LOG.info("Handling executed order: %s", closed_order["txid"])
-        closed_order["side"] = closed_order["descr"]["type"]
+        LOG.info("Handling executed order: %s", closed_order.txid)
 
         message = str(
-            f"✅ {self._config.symbol}: {closed_order['side'][0].upper()}{closed_order['side'][1:]} "
+            f"✅ {self._config.symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
             "order executed"
-            f"\n ├ Price » {closed_order['price']} {self._config.quote_currency}"
-            f"\n ├ Size » {closed_order['vol_exec']} {self._config.base_currency}"
+            f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
+            f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
             f"\n └ Size in {self._config.quote_currency} » "
-            f"{float(closed_order['price']) * float(closed_order['vol_exec'])}",
+            f"{float(closed_order.price) * float(closed_order.vol_exec)}",
         )
 
         self._event_bus.publish("notification", {"message": message})
         # ======================================================================
         # If a buy order was filled, the sell order needs to be placed.
-        if closed_order["side"] == OrderSide.BUY:
+        if closed_order.side == OrderSide.BUY:
             self._handle_arbitrage(
                 side=OrderSide.SELL,
                 order_price=self._get_order_price(
                     side=OrderSide.SELL,
-                    last_price=float(closed_order["price"]),
+                    last_price=closed_order.price,
                 ),
-                txid_to_delete=closed_order["txid"],
+                txid_to_delete=closed_order.txid,
             )
 
         # ======================================================================
         # If a sell order was filled, we may need to place a new buy order.
-        elif closed_order["side"] == OrderSide.SELL:
+        elif closed_order.side == OrderSide.SELL:
             # A new buy order will only be placed if there is another sell
             # order, because if the last sell order was filled, the price is so
             # high, that all buy orders will be canceled anyway and new buy
@@ -258,7 +257,7 @@ class IGridBaseStrategy(IStrategy):
             if (
                 self._orderbook_table.count(
                     filters={"side": OrderSide.SELL},
-                    exclude={"txid": closed_order["txid"]},
+                    exclude={"txid": closed_order.txid},
                 )
                 != 0
             ):
@@ -266,12 +265,12 @@ class IGridBaseStrategy(IStrategy):
                     side=OrderSide.BUY,
                     order_price=self._get_order_price(
                         side=OrderSide.BUY,
-                        last_price=float(closed_order["price"]),
+                        last_price=closed_order.price,
                     ),
-                    txid_to_delete=closed_order["txid"],
+                    txid_to_delete=closed_order.txid,
                 )
             else:
-                self._orderbook_table.remove(filters={"txid": closed_order["txid"]})
+                self._orderbook_table.remove(filters={"txid": closed_order.txid})
 
     def __update_order_book(self: Self) -> None:
         """
@@ -613,7 +612,7 @@ class IGridBaseStrategy(IStrategy):
         txid_to_delete: str | None = None,
     ) -> None:
         """Places a new buy order."""
-        if self._config["dry_run"]:
+        if self._config-dry_run:
             LOG.info("Dry run, not placing buy order.")
             return
 
@@ -628,7 +627,7 @@ class IGridBaseStrategy(IStrategy):
             return
 
         # Check if algorithm reached the max_investment value
-        if self._config["max_investment_reached"]:
+        if self._config["max_investment_reached"]: # FIXME: That doesnt work
             return
 
         # Compute the target price for the upcoming buy order.
