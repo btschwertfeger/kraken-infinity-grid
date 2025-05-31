@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from kraken_infinity_grid.telegram import Telegram
+from kraken_infinity_grid.infrastructure.telegram import Telegram
 
 
 @pytest.fixture

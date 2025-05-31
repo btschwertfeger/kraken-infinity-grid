@@ -5,8 +5,13 @@
 # https://github.com/btschwertfeger
 #
 
-"""State machine for the Kraken Infinity Grid trading bot."""
+"""
+State machine for the Kraken Infinity Grid trading bot.
 
+FIXME: This state machine may work for Kraken, but not for other exchanges.
+"""
+
+import asyncio
 from enum import Enum, auto
 from typing import Callable, Self
 
@@ -30,11 +35,8 @@ class StateMachine:
         self._state: States = initial_state
         self._transitions = self._define_transitions()
         self._callbacks: dict[States, list[Callable]] = {}
-        self._facts: dict = {
-            "ready_to_trade": False,
-            "ticker_channel_connected": False,
-            "executions_channel_connected": False,
-        }
+
+        self._facts: dict = {}  # FIXME
 
     def _define_transitions(self: Self) -> dict[States, list[States]]:
         return {
@@ -92,3 +94,26 @@ class StateMachine:
         if to_state not in self._callbacks:
             self._callbacks[to_state] = []
         self._callbacks[to_state].append(callback)
+
+    async def wait_for_shutdown(self: Self) -> None:
+        """
+        Wait until the state machine transitions to a shutdown state.
+        Returns when state becomes SHUTDOWN_REQUESTED or ERROR.
+        """
+        # Create an event if it doesn't exist yet
+        if not hasattr(self, "_shutdown_event"):
+            self._shutdown_event = asyncio.Event()
+
+            # Register callbacks to set the event when shutdown states are reached
+            def set_shutdown_event() -> None:
+                self._shutdown_event.set()
+
+            self.register_callback(States.SHUTDOWN_REQUESTED, set_shutdown_event)
+            self.register_callback(States.ERROR, set_shutdown_event)
+
+        # If already in a shutdown state, set the event immediately
+        if self.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:
+            self._shutdown_event.set()
+
+        # Wait for the shutdown event
+        await self._shutdown_event.wait()

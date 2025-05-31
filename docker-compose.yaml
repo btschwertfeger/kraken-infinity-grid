@@ -73,14 +73,10 @@ services:
       KRAKEN_RUN_DB_HOST: ${KRAKEN_RUN_DB_HOST}
       KRAKEN_RUN_DB_PORT: ${KRAKEN_RUN_DB_PORT}
     restart: on-failure
-    volumes:
-      - infinity-grid-cache:/root/.cache/gridbot:rw
     networks:
       - internal_network
 
 volumes:
-  infinity-grid-cache:
-    external: false
   postgres-data:
     external: false
 

@@ -10,140 +10,14 @@
 from datetime import datetime
 from importlib.metadata import version
 from logging import getLogger
-from typing import Any, Self
+from typing import Self
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Float,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    asc,
-    create_engine,
-    delete,
-    desc,
-    func,
-    select,
-    update,
-)
+from sqlalchemy import Column, DateTime, Float, Integer, String, Table, func, select
 from sqlalchemy.engine.result import MappingResult
-from sqlalchemy.orm import sessionmaker
+
+from kraken_infinity_grid.services.database import DBConnect
 
 LOG = getLogger(__name__)
-
-
-class DBConnect:
-    """Class handling the connection to the PostgreSQL or sqlite database."""
-
-    def __init__(  # pylint: disable=too-many-positional-arguments
-        self: Self,
-        db_user: str | None = None,
-        db_password: str | None = None,
-        db_host: str | None = None,
-        db_port: str | int | None = None,
-        db_name: str = "kraken_infinity_grid",
-        in_memory: bool = False,
-        sqlite_file: str | None = None,
-    ) -> None:
-        LOG.info("Connecting to the database...")
-        if in_memory:
-            engine = "sqlite:///:memory:"
-        elif sqlite_file:
-            engine = f"sqlite:///{sqlite_file}"
-        else:
-            engine = "postgresql://"
-            if db_user and db_password:
-                engine += f"{db_user}:{db_password}@"
-            if db_host and db_port:
-                engine += f"{db_host}:{db_port}"
-            engine += f"/{db_name}"
-
-        self.engine = create_engine(engine)
-        self.session = sessionmaker(bind=self.engine)()
-        self.metadata = MetaData()
-
-    def init_db(self: Self) -> None:
-        """Create tables if they do not exist and pre-fill with default rows."""
-        LOG.info("- Initializing tables...")
-        self.metadata.create_all(self.engine)
-        LOG.info("- Database initialized.")
-
-    def add_row(self: Self, table: Table, **kwargs: Any) -> None:
-        """Insert a row into the specified table."""
-        LOG.debug("Inserting a row into '%s': %s", table, kwargs)
-        self.session.execute(table.insert().values(**kwargs))
-        self.session.commit()
-
-    def get_rows(
-        self: Self,
-        table: Table,
-        filters: dict | None = None,
-        exclude: dict | None = None,
-        order_by: tuple[str, str] | None = None,  # (column_name, "asc" or "desc")
-        limit: int | None = None,
-    ) -> MappingResult:
-        """Fetch rows from the specified table with optional filters, ordering, and limit."""
-        LOG.debug(
-            "Querying rows from table '%s' with filters: %s, order_by: %s, limit: %s",
-            table,
-            filters,
-            order_by,
-            limit,
-        )
-        query = select(table)
-        if filters:
-            query = query.where(
-                *(table.c[column] == value for column, value in filters.items()),
-            )
-        if exclude:
-            query = query.where(
-                *(table.c[column] != value for column, value in exclude.items()),
-            )
-        if order_by:
-            column, direction = order_by
-            if direction.lower() == "asc":
-                query = query.order_by(asc(table.c[column]))
-            elif direction.lower() == "desc":
-                query = query.order_by(desc(table.c[column]))
-        if limit:
-            query = query.limit(limit)
-        return self.session.execute(query).mappings()
-
-    def update_row(
-        self: Self,
-        table: Table,
-        filters: dict,
-        updates: dict,
-    ) -> None:
-        """Update rows in the specified table matching filters."""
-        LOG.debug("Update rows from '%s': %s :: %s", table, filters, updates)
-        query = (
-            update(table)
-            .where(*(table.c[column] == value for column, value in filters.items()))
-            .values(**updates)
-        )
-        self.session.execute(query)
-        self.session.commit()
-
-    def delete_row(self: Self, table: Table, filters: dict) -> None:
-        """Delete rows from the specified table matching filters."""
-        LOG.debug("Deleting row(s) from '%s': %s", table, filters)
-        query = delete(table).where(
-            *(table.c[column] == value for column, value in filters.items()),
-        )
-        self.session.execute(query)
-        self.session.commit()
-
-    def close(self: Self) -> None:
-        """Close database connections properly to avoid resource leaks."""
-        LOG.info("Closing database connections...")
-        if hasattr(self, "session") and self.session:
-            self.session.close()
-        if hasattr(self, "engine") and self.engine:
-            self.engine.dispose()
-        LOG.info("Database connections closed.")
 
 
 class Orderbook:
@@ -286,7 +160,7 @@ class Configuration:
             Column("id", Integer, primary_key=True),
             Column("userref", Integer, nullable=False),
             Column(
-                "version",
+                "version",  # FIXME: This never gets updated
                 String,
                 nullable=False,
                 default=version("kraken-infinity-grid"),
@@ -302,7 +176,7 @@ class Configuration:
             Column("amount_per_grid", Float),
             Column("interval", Float),
             Column("last_price_time", DateTime, nullable=False),
-            Column("last_telegram_update", DateTime, nullable=False),
+            Column("last_status_update", DateTime, nullable=False),
             extend_existing=True,
         )
 
@@ -320,7 +194,7 @@ class Configuration:
                 self.__table,
                 userref=self.__userref,
                 last_price_time=datetime.now(),
-                last_telegram_update=datetime.now(),
+                last_status_update=datetime.now(),
             )
 
     def get(self: Self, filters: dict | None = None) -> dict:
@@ -434,7 +308,7 @@ class UnsoldBuyOrderTXIDs:
         return self.__db.session.execute(query).scalar()  # type: ignore[no-any-return]
 
 
-class PendingIXIDs:
+class PendingTXIDs:
     """
     Table containing pending TXIDs. TXIDs are pending for the time from being
     placed to processed by Kraken. Usually an order gets placed, the TXID is

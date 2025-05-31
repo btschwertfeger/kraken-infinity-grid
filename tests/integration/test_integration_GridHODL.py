@@ -12,7 +12,7 @@ from unittest import mock
 
 import pytest
 
-from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
+from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 
 
 @pytest.fixture

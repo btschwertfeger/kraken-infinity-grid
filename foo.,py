@@ -1,88 +1,6 @@
-# -*- mode: python; coding: utf-8 -*-
-#
-# Copyright (C) 2023 Benjamin Thomas Schwertfeger
-# All rights reserved.
-# https://github.com/btschwertfeger
-#
 
-from datetime import datetime
-from logging import getLogger
-from typing import TYPE_CHECKING, Self
-
-import requests
-
-if TYPE_CHECKING:
-
-    from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
-
-LOG = getLogger(__name__)
-
-
-class Telegram:
-    """Telegram class to send messages to a Telegram chat."""
-
-    def __init__(
-        self: Self,
-        strategy: "KrakenInfinityGridBot",
-        telegram_token: str,
-        telegram_chat_id: str,
-        exception_token: str,
-        exception_chat_id: str,
-    ) -> None:
-        self.__s = strategy
-        self.__telegram_token = telegram_token
-        self.__telegram_chat_id = telegram_chat_id
-        self.__exception_token = exception_token
-        self.__exception_chat_id = exception_chat_id
-
-    def send_to_telegram(
-        self: Self,
-        message: str,
-        exception: bool | None = False,
-        log: bool = True,
-    ) -> None:
-        """Send a message to a Telegram chat"""
-        if exception:
-            if log:
-                LOG.error(message)
-            if not (self.__exception_token and self.__exception_chat_id):
-                return
-            response = requests.post(
-                url=f"https://api.telegram.org/bot{self.__exception_token}/sendMessage",
-                params={
-                    "chat_id": self.__exception_chat_id,
-                    "text": f"```\n{message}\n```",
-                    "parse_mode": "markdown",
-                },
-                timeout=10,
-            )
-        else:
-            if log:
-                LOG.info(message)
-            if not (self.__telegram_token and self.__telegram_chat_id):
-                return
-            response = requests.post(
-                url=f"https://api.telegram.org/bot{self.__telegram_token}/sendMessage",
-                params={
-                    "chat_id": self.__telegram_chat_id,
-                    "text": message,
-                    "parse_mode": "markdown",
-                },
-                timeout=10,
-            )
-
-        if response.status_code != 200:
-            # Its not that important to send telegram messages... so we just log
-            # this here. The user will know that something is wrong when not
-            # receiving regular status updates.
-            LOG.error(
-                "Failed to send message to Telegram. Status code: %d, message: \n%s",
-                response.status_code,
-                message,
-            )
-
-    def send_telegram_update(self: Self) -> None:
-        """Send a message to the Telegram chat with the current status."""
+    def build_update_message() -> str:
+        """Build a message for updates."""
         balances = self.__s.get_balances()
 
         message = f"👑 {self.__s.symbol}\n"
@@ -110,7 +28,7 @@ class Telegram:
         next_sells = [
             order["price"]
             for order in self.__s.orderbook.get_orders(
-                filters={"side": "sell"},
+                filters={"side": OrderSide.SELL},
                 order_by=("price", "ASC"),
                 limit=max_orders_to_list,
             )
@@ -131,7 +49,7 @@ class Telegram:
         next_buys = [
             order["price"]
             for order in self.__s.orderbook.get_orders(
-                filters={"side": "buy"},
+                filters={"side": OrderSide.BUY},
                 order_by=("price", "DESC"),
                 limit=max_orders_to_list,
             )
@@ -145,5 +63,5 @@ class Telegram:
                     message += f"    └[ {buy_price} ({change:.2f}%)"
         message += "\n```"
 
-        self.send_to_telegram(message)
+        self._event_bus.publish("notification", {"message": message})
         self.__s.configuration.update({"last_telegram_update": datetime.now()})
