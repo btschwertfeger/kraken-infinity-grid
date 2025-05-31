@@ -13,17 +13,17 @@ FIXME: Add comprehensive examples and documentation for each method.
 
 from abc import ABC, abstractmethod
 from typing import Any, Self
+from decimal import Decimal
 
 from kraken_infinity_grid.models.domain import ExchangeDomain
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
-    OrderInfoSchema,
     OnMessageSchema,
+    OrderInfoSchema,
     PairBalanceSchema,
 )
-
 
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
@@ -48,7 +48,7 @@ class IExchangeRESTService(ABC):
     def get_open_orders(
         self,
         userref: int,
-        trades: bool = None,
+        trades: bool | None = None,
     ) -> list[OrderInfoSchema]:
         """Get all open orders for a userref."""
 
@@ -59,7 +59,7 @@ class IExchangeRESTService(ABC):
         tries: int = 0,
         max_tries: int = 5,
         exit_on_fail: bool = True,
-    ) -> dict | None:
+    ) -> OrderInfoSchema:
         """Get order information with retry logic.
 
         If exit_on_fail is True, the program will exit if the order cannot be retrieved.
@@ -91,18 +91,19 @@ class IExchangeRESTService(ABC):
 
     @abstractmethod
     @classmethod
-    def altname(base_currency: str, quote_currency: str) -> str:
+    def altname(cls, base_currency: str, quote_currency: str) -> str:
         """Returns the alternative name for the given base and quote currency."""
 
     @abstractmethod
     @classmethod
-    def symbol(base_currency: str, quote_currency: str) -> str:
+    def symbol(cls, base_currency: str, quote_currency: str) -> str:
         """Returns the symbol for the given base and quote currency."""
 
     # == Getters for exchange trade operations =================================
     @abstractmethod
-    def create_order(
+    def create_order(  # noqa: PLR0913,PLR0917
         self,
+        *,
         ordertype: str,
         side: str,
         volume: float,
@@ -122,7 +123,7 @@ class IExchangeRESTService(ABC):
     @abstractmethod
     def truncate(
         self,
-        amount: float,
+        amount: float|Decimal|str,
         amount_type: str,
         base_currency: str,
         quote_currency: str,
@@ -169,4 +170,3 @@ class IExchangeWebSocketService(ABC):
     @abstractmethod
     async def on_message(self, message: OnMessageSchema) -> None:
         """Function called on every received message."""
-

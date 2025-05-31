@@ -10,16 +10,7 @@
 from logging import getLogger
 from typing import Any, Self
 
-from sqlalchemy import (
-    MetaData,
-    Table,
-    asc,
-    create_engine,
-    delete,
-    desc,
-    select,
-    update,
-)
+from sqlalchemy import MetaData, Table, asc, create_engine, delete, desc, select, update
 from sqlalchemy.engine.result import MappingResult
 from sqlalchemy.orm import sessionmaker
 
@@ -136,4 +127,3 @@ class DBConnect:
         if hasattr(self, "engine") and self.engine:
             self.engine.dispose()
         LOG.info("Database connections closed.")
-

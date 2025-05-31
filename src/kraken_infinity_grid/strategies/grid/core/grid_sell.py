@@ -8,13 +8,15 @@
 from decimal import Decimal
 from logging import getLogger
 from time import sleep
-from typing import Self
+from typing import TYPE_CHECKING, Self
+
 from kraken_infinity_grid.core.event_bus import Event
 from kraken_infinity_grid.core.state_machine import States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
 
+if TYPE_CHECKING:
+    from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 LOG = getLogger(__name__)
 
 
@@ -23,7 +25,7 @@ class GridSellStrategy(IGridBaseStrategy):
         self: Self,
         side: str,
         last_price: float,
-        extra_sell: bool = False,
+        extra_sell: bool = False,  # noqa: ARG002
     ) -> float:
         """
         Returns the order price depending on the strategy and side. Also assigns
@@ -83,7 +85,7 @@ class GridSellStrategy(IGridBaseStrategy):
             # will be placed - even if placing now fails.
             if not self._unsold_buy_order_txids_table.get(
                 filters={"txid": txid_to_delete},
-            ).first():  # type: ignore[no-untyped-call]
+            ).first():
                 self._unsold_buy_order_txids_table.add(
                     txid=txid_to_delete,
                     price=order_price,

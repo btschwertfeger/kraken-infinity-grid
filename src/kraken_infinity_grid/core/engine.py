@@ -10,17 +10,18 @@ import signal
 import sys
 from importlib.metadata import version
 from logging import getLogger
-from typing import Any, Self
+from typing import Self
 
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.services.database import DBConnect
+from kraken_infinity_grid.interfaces.strategy import IStrategy
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
 )
+from kraken_infinity_grid.services.database import DBConnect
 from kraken_infinity_grid.services.notification_service import NotificationService
 
 LOG = getLogger(__name__)
@@ -62,8 +63,8 @@ class BotEngine:
         # Setup event subscriptions
         self.__setup_event_handlers()
 
-    def __strategy_factory(self: Self) -> Any:
-        from kraken_infinity_grid.strategies.grid.core import (  # pylint: disable=import-outside-toplevel
+    def __strategy_factory(self: Self) -> IStrategy:
+        from kraken_infinity_grid.strategies.grid.core import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             CDCAStrategy,
             GridHodlStrategy,
             GridSellStrategy,

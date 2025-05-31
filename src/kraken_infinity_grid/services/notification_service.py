@@ -6,6 +6,7 @@
 #
 
 from logging import getLogger
+from typing import Self
 
 from kraken_infinity_grid.core.event_bus import Event
 from kraken_infinity_grid.interfaces import INotificationChannel
@@ -17,12 +18,12 @@ LOG = getLogger(__name__)
 class NotificationService:
     """Service for sending notifications through configured channels."""
 
-    def __init__(self, config: NotificationConfigDTO):
+    def __init__(self: Self, config: NotificationConfigDTO) -> None:
         self.__channels: list[INotificationChannel] = []
         self.__config = config
         self._setup_channels_from_config()
 
-    def _setup_channels_from_config(self):
+    def _setup_channels_from_config(self: Self) -> None:
         """Set up notification channels from the loaded config."""
         if self.__config.telegram and self.__config.telegram.enabled:
             self.add_telegram_channel(
@@ -30,19 +31,19 @@ class NotificationService:
                 chat_id=self.__config.telegram.chat_id,
             )
 
-    def add_channel(self, channel: INotificationChannel):
+    def add_channel(self: Self, channel: INotificationChannel) -> None:
         """Add a notification channel to the service."""
         self.__channels.append(channel)
 
-    def add_telegram_channel(self, bot_token: str, chat_id: str):
+    def add_telegram_channel(self: Self, bot_token: str, chat_id: str) -> None:
         """Convenience method to add a Telegram notification channel."""
-        from kraken_infinity_grid.adapters.notification import (  # pylint: disable=import-outside-toplevel
+        from kraken_infinity_grid.adapters.notification import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             TelegramNotificationChannelAdapter,
         )
 
         self.add_channel(TelegramNotificationChannelAdapter(bot_token, chat_id))
 
-    def notify(self, message: str) -> bool:
+    def notify(self: Self, message: str) -> bool:
         """Send a notification through all configured channels.
 
         Args:
@@ -63,6 +64,6 @@ class NotificationService:
 
         return success
 
-    def on_notification(self, event: Event) -> None:
+    def on_notification(self: Self, event: Event) -> None:
         """Handle a notification event."""
         self.notify(event.data["message"])

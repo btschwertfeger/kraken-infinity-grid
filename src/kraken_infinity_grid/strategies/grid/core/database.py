@@ -11,18 +11,11 @@ from datetime import datetime
 from importlib.metadata import version
 from logging import getLogger
 from typing import Self
-from kraken_infinity_grid.services.database import DBConnect
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Float,
-    Integer,
-    String,
-    Table,
-    func,
-    select,
-)
+
+from sqlalchemy import Column, DateTime, Float, Integer, String, Table, func, select
 from sqlalchemy.engine.result import MappingResult
+
+from kraken_infinity_grid.services.database import DBConnect
 
 LOG = getLogger(__name__)
 

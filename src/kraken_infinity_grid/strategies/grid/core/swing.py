@@ -5,16 +5,16 @@
 # https://github.com/btschwertfeger
 #
 
-from logging import getLogger
-from typing import Self
-
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
-from kraken_infinity_grid.core.event_bus import Event
 from decimal import Decimal
-
+from logging import getLogger
 from time import sleep
+from typing import TYPE_CHECKING, Self
 
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+from kraken_infinity_grid.core.event_bus import Event
+from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
+
+if TYPE_CHECKING:
+    from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 LOG = getLogger(__name__)
 
 
@@ -61,15 +61,15 @@ class SwingStrategy(IGridBaseStrategy):
 
                 # Sell price 1x interval above buy price
                 order_price = last_price * (1 + self._config.interval)
-                if self._ticker.last > order_price:
-                    order_price = self._ticker.last * (1 + self._config.interval)
+                if self._ticker > order_price:
+                    order_price = self._ticker * (1 + self._config.interval)
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker.last:
+            if order_price > self._ticker:
                 order_price = (
-                    self._ticker.last * 100 / (100 + 100 * self._config.interval)
+                    self._ticker * 100 / (100 + 100 * self._config.interval)
                 )
             return order_price
 
@@ -91,24 +91,25 @@ class SwingStrategy(IGridBaseStrategy):
             )
 
             if (
-                fetched_balances.base_available * self._ticker.last
+                fetched_balances.base_available * self._ticker
                 > self._runtime_attrs.amount_per_grid_plus_fee
             ):
                 order_price = self._get_order_price(
                     side=self._exchange_domain.SELL,
-                    last_price=self._ticker.last,
+                    last_price=self._ticker,
                     extra_sell=True,
                 )
                 self._event_bus.publish(
-                   Event(
-                       type="notification",
-                       data={
-                           "message": f"ℹ️ {self._config.name}: Placing extra sell order",
-                       },
-                   )
+                    Event(
+                        type="notification",
+                        data={
+                            "message": f"ℹ️ {self._config.name}: Placing extra sell order",  # noqa: RUF001
+                        },
+                    ),
                 )
                 self._handle_arbitrage(
-                    side=self._exchange_domain.SELL, order_price=order_price
+                    side=self._exchange_domain.SELL,
+                    order_price=order_price,
                 )
 
     def _new_sell_order(
@@ -133,7 +134,7 @@ class SwingStrategy(IGridBaseStrategy):
             # will be placed - even if placing now fails.
             if not self._unsold_buy_order_txids_table.get(
                 filters={"txid": txid_to_delete},
-            ).first():  # type: ignore[no-untyped-call]
+            ).first():
                 self._unsold_buy_order_txids_table.add(
                     txid=txid_to_delete,
                     price=order_price,
@@ -233,7 +234,7 @@ class SwingStrategy(IGridBaseStrategy):
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
         self._event_bus.publish(
-            Event(type="notification", data={"message": message})
+            Event(type="notification", data={"message": message}),
         )
         LOG.warning("Current balances: %s", fetched_balances)
 

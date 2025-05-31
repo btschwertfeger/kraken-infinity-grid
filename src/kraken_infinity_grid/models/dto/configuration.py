@@ -39,7 +39,8 @@ class BotConfigDTO(BaseModel):
     n_open_buy_orders: int | None
 
     @field_validator("strategy")
-    def validate_strategy(value):
+    @classmethod
+    def validate_strategy(cls, value: str) -> str:
         """Validate the strategy value."""
         if value not in (valid_strategies := ("GridHODL", "GridSell", "SWING", "cDCA")):
             raise ValueError(f"Strategy must be one of: {', '.join(valid_strategies)}")

@@ -7,14 +7,17 @@
 
 from decimal import Decimal
 from logging import getLogger
-from typing import Self
-
-from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
-from kraken_infinity_grid.core.event_bus import Event
-LOG = getLogger(__name__)
-
 from time import sleep
+from typing import TYPE_CHECKING, Self
+
+from kraken_infinity_grid.core.event_bus import Event
+from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
+
+if TYPE_CHECKING:
+    from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+
+
+LOG = getLogger(__name__)
 
 
 class GridHodlStrategy(IGridBaseStrategy):
@@ -23,7 +26,7 @@ class GridHodlStrategy(IGridBaseStrategy):
         self: Self,
         side: str,
         last_price: float,
-        extra_sell: bool = False,
+        extra_sell: bool = False,  # noqa: ARG002
     ) -> float:
         """
         Returns the order price depending on the strategy and side. Also assigns
@@ -42,16 +45,14 @@ class GridHodlStrategy(IGridBaseStrategy):
 
             # Sell price 1x interval above buy price
             order_price = last_price * (1 + self._config.interval)
-            if self._ticker.last > order_price:
-                order_price = self._ticker.last * (1 + self._config.interval)
+            if self._ticker > order_price:
+                order_price = self._ticker * (1 + self._config.interval)
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker.last:
-                order_price = (
-                    self._ticker.last * 100 / (100 + 100 * self._config.interval)
-                )
+            if order_price > self._ticker:
+                order_price = self._ticker * 100 / (100 + 100 * self._config.interval)
             return order_price
 
         raise ValueError(f"Unknown side: {side}!")
@@ -81,7 +82,7 @@ class GridHodlStrategy(IGridBaseStrategy):
             # will be placed - even if placing now fails.
             if not self._unsold_buy_order_txids_table.get(
                 filters={"txid": txid_to_delete},
-            ).first():  # type: ignore[no-untyped-call]
+            ).first():
                 self._unsold_buy_order_txids_table.add(
                     txid=txid_to_delete,
                     price=order_price,
@@ -186,7 +187,7 @@ class GridHodlStrategy(IGridBaseStrategy):
         message += f"└ for {order_price} {self._config.quote_currency}"
 
         self._event_bus.publish(
-            Event(type="notification", data={"message": message})
+            Event(type="notification", data={"message": message}),
         )
         LOG.warning("Current balances: %s", fetched_balances)
 

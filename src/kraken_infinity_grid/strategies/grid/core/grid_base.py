@@ -8,23 +8,29 @@
 # FIXME: Address pylint issues with too many arguments, not applicable in this
 #        project context.
 
-from kraken_infinity_grid.core.event_bus import Event
-from datetime import datetime, timedelta
+import asyncio
 import traceback
 from abc import abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from functools import cached_property
 from logging import getLogger
 from time import sleep
 from types import SimpleNamespace
-from typing import Iterable, Self, Any
-import asyncio
+from typing import TYPE_CHECKING, Iterable, Self
+
 from kraken.exceptions import KrakenUnknownOrderError
 
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
+from kraken_infinity_grid.interfaces.strategy import IStrategy
+from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
+from kraken_infinity_grid.models.schemas.exchange import (
+    OnMessageSchema,
+    OrderInfoSchema,
+    TickerUpdateSchema,
+)
 from kraken_infinity_grid.services.database import DBConnect
 from kraken_infinity_grid.strategies.grid.core.database import (
     Configuration,
@@ -32,16 +38,14 @@ from kraken_infinity_grid.strategies.grid.core.database import (
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
-from kraken_infinity_grid.interfaces.strategy import IStrategy
-from kraken_infinity_grid.models.domain import ExchangeDomain
-from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
-from kraken_infinity_grid.models.schemas.exchange import (
-    AssetPairInfoSchema,
-    OrderInfoSchema,
-    TickerUpdateSchema,
-    OnMessageSchema,
-)
 
+if TYPE_CHECKING:
+    from kraken_infinity_grid.models.domain import ExchangeDomain
+    from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
+    from kraken_infinity_grid.interfaces.exchange import (
+        IExchangeRESTService,
+        IExchangeWebSocketService,
+    )
 LOG = getLogger(__name__)
 
 
@@ -58,16 +62,19 @@ class IGridBaseStrategy(IStrategy):
         self._config = config
         self._event_bus = event_bus
         self._state_machine = state_machine
-        self._ticker: SimpleNamespace = None
+        self._ticker: float|None = None
 
-        self._rest_api = self._get_exchange_adapter(self._config.exchange, "REST")(
+        self._rest_api: IExchangeRESTService = self._get_exchange_adapter(
+            self._config.exchange, "REST"
+        )(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
             state_machine=self._state_machine,
             callback=self.on_message,
         )
-        self.__ws_client = self._get_exchange_adapter(
-            self._config.exchange, "WebSocket"
+        self.__ws_client: IExchangeWebSocketService = self._get_exchange_adapter(
+            self._config.exchange,
+            "WebSocket",
         )(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
@@ -91,7 +98,7 @@ class IGridBaseStrategy(IStrategy):
         self._amount_per_grid_plus_fee: float
 
         # Store messages received before the algorithm is ready to trade.
-        self._missed_messages = []
+        self._missed_messages: list[OnMessageSchema] = []
         self._ticker_channel_connected = False
         self._executions_channel_connected = False
         self._ready_to_trade = False
@@ -134,7 +141,7 @@ class IGridBaseStrategy(IStrategy):
             ],
         }
         for subscription in subscriptions[self._config.exchange]:
-            self.__ws_client.subscribe(subscription)
+            await self.__ws_client.subscribe(subscription)
 
         while True:
             try:
@@ -155,7 +162,9 @@ class IGridBaseStrategy(IStrategy):
                     self._state_machine.transition_to(States.ERROR)
                     return
 
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except (
+                Exception  # noqa: BLE001
+            ) as exc:  # pylint: disable=broad-exception-caught
                 LOG.error("Exception in main.", exc_info=exc)
                 self._state_machine.transition_to(States.ERROR)
                 return
@@ -163,9 +172,9 @@ class IGridBaseStrategy(IStrategy):
             await asyncio.sleep(6)
 
     async def stop(self: Self) -> None:
-        self.__ws_client.close()
+        await self.__ws_client.close()
 
-    async def on_message(self: Self, message: OnMessageSchema) -> None:
+    async def on_message(self: Self, message: OnMessageSchema) -> None:  # noqa: C901
         """Handle incoming messages from the websocket."""
 
         try:
@@ -195,7 +204,9 @@ class IGridBaseStrategy(IStrategy):
                     # If there are any missed messages, process them now.
                     for msg in self._missed_messages:
                         await self.on_message(msg)
-                        self._missed_messages = [m for m in self._missed_messages if m != msg]
+                        self._missed_messages = [
+                            m for m in self._missed_messages if m != msg
+                        ]
 
                 if not self._ready_to_trade:
                     if message.channel == "executions":
@@ -248,7 +259,7 @@ class IGridBaseStrategy(IStrategy):
             # symbol.
             return
 
-        self._ticker = SimpleNamespace(last=float(ticker_info.last))
+        self._ticker = float(ticker_info.last)
         self._configuration_table.update({"last_price_time": datetime.now()})
 
         if self._state_machine.state == States.RUNNING:
@@ -275,7 +286,7 @@ class IGridBaseStrategy(IStrategy):
             Event(
                 type="notification",
                 data={"message": f"✅ {self._symbol} is starting!"},
-            )
+            ),
         )
 
         # ======================================================================
@@ -348,11 +359,11 @@ class IGridBaseStrategy(IStrategy):
         """Get the open orders and txid as lists."""
         LOG.info("  - Retrieving open orders from upstream...")
 
-        open_orders = []
-        for order in self._rest_api.get_open_orders(userref=self._config.userref):
-            if order.pair == self._altname:
-                open_orders.append(order)
-        return open_orders
+        return [
+            order
+            for order in self._rest_api.get_open_orders(userref=self._config.userref)
+            if order.pair == self._altname
+        ]
 
     def __update_order_book_handle_closed_order(
         self: Self,
@@ -383,7 +394,7 @@ class IGridBaseStrategy(IStrategy):
                         f"{float(closed_order.price) * float(closed_order.vol_exec)}",
                     ),
                 },
-            )
+            ),
         )
         # ======================================================================
         # If a buy order was filled, the sell order needs to be placed.
@@ -532,7 +543,7 @@ class IGridBaseStrategy(IStrategy):
         Checks if the orders prices match the conditions of the bot respecting
         the current price.
 
-        If the price (``self.ticker.last``) raises to high, the open buy orders
+        If the price (``self.ticker``) raises to high, the open buy orders
         will be canceled and new buy orders below the price respecting the
         interval will be placed.
         """
@@ -643,9 +654,7 @@ class IGridBaseStrategy(IStrategy):
                 order_price: float = self._get_order_price(
                     side=self._exchange_domain.BUY,
                     last_price=(
-                        self._ticker.last
-                        if n_active_buy_orders == 0
-                        else min(buy_prices)
+                        self._ticker if n_active_buy_orders == 0 else min(buy_prices)
                     ),
                 )
 
@@ -709,7 +718,7 @@ class IGridBaseStrategy(IStrategy):
                 limit=1,
             ).first()  # type: ignore[no-untyped-call]
         ) and (
-            self._ticker.last
+            self._ticker
             > max_buy_order["price"]
             * (1 + self._config.interval)
             * (1 + self._config.interval)
@@ -797,7 +806,7 @@ class IGridBaseStrategy(IStrategy):
         # NOTE: The fee is respected while placing the sell order
         volume = float(
             self._rest_api.truncate(
-                amount=Decimal(self._config["amount_per_grid"]) / Decimal(order_price),
+                amount=Decimal(self._config.amount_per_grid) / Decimal(order_price),
                 amount_type="volume",
                 base_currency=self._config.base_currency,
                 quote_currency=self._config.quote_currency,
@@ -880,7 +889,7 @@ class IGridBaseStrategy(IStrategy):
         ##
         tries = 1
         while order_details.status != self._exchange_domain.CLOSED and tries <= 3:
-            order_details: OrderInfoSchema = self._rest_api.get_order_with_retry(
+            order_details = self._rest_api.get_order_with_retry(
                 txid=txid,
                 exit_on_fail=False,
             )
@@ -925,7 +934,7 @@ class IGridBaseStrategy(IStrategy):
                         f"{round(order_details.price * order_details.vol_exec, self._cost_decimals)}",
                     ),
                 },
-            )
+            ),
         )
 
         # ======================================================================
@@ -1182,7 +1191,7 @@ class IGridBaseStrategy(IStrategy):
         )
 
         message = f"👑 {self._config.name}\n"
-        message += f"└ Price » {self._ticker.last} {self._config.quote_currency}\n\n"
+        message += f"└ Price » {self._ticker} {self._config.quote_currency}\n\n"
 
         message += "⚜️ Account\n"
         message += f"├ Total {self._config.base_currency} » {balances.base_balance}\n"
@@ -1192,7 +1201,7 @@ class IGridBaseStrategy(IStrategy):
         )
         message += f"├ Available {self._config.base_currency} » {balances.base_available - float(self._configuration_table.get()['vol_of_unfilled_remaining'])}\n"  # noqa: E501
         message += f"├ Unfilled surplus of {self._config.base_currency} » {self._configuration_table.get()['vol_of_unfilled_remaining']}\n"  # noqa: E501
-        message += f"├ Wealth » {round(balances.base_balance * self._ticker.last + balances.quote_balance, self._cost_decimals)} {self._config.quote_currency}\n"  # noqa: E501
+        message += f"├ Wealth » {round(balances.base_balance * self._ticker + balances.quote_balance, self._cost_decimals)} {self._config.quote_currency}\n"  # noqa: E501
         message += f"└ Investment » {round(self._config.investment, self._cost_decimals)} / {self._config.max_investment} {self._config.quote_currency}\n\n"  # noqa: E501
 
         message += "💠 Orders\n"
@@ -1214,15 +1223,15 @@ class IGridBaseStrategy(IStrategy):
         next_sells.reverse()
 
         if (n_sells := len(next_sells)) == 0:
-            message += f"└───┬> {self._ticker.last}\n"
+            message += f"└───┬> {self._ticker}\n"
         else:
             for index, sell_price in enumerate(next_sells):
-                change = (sell_price / self._ticker.last - 1) * 100
+                change = (sell_price / self._ticker - 1) * 100
                 if index == 0:
                     message += f" │  ┌[ {sell_price} (+{change:.2f}%)\n"
                 elif index <= n_sells - 1 and index != max_orders_to_list:
                     message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
-            message += f" └──┼> {self._ticker.last}\n"
+            message += f" └──┼> {self._ticker}\n"
 
         next_buys = [
             order["price"]
@@ -1234,7 +1243,7 @@ class IGridBaseStrategy(IStrategy):
         ]
         if (n_buys := len(next_buys)) != 0:
             for index, buy_price in enumerate(next_buys):
-                change = (buy_price / self._ticker.last - 1) * 100
+                change = (buy_price / self._ticker - 1) * 100
                 if index < n_buys - 1 and index != max_orders_to_list:
                     message += f"    ├[ {buy_price} ({change:.2f}%)\n"
                 else:

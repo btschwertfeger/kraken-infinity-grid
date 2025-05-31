@@ -9,7 +9,7 @@ from decimal import Decimal
 from functools import cache
 from logging import getLogger
 from time import sleep
-from typing import Any, Self, Callable
+from typing import Any, Self
 
 from kraken.exceptions import (
     KrakenAuthenticationError,
@@ -18,6 +18,7 @@ from kraken.exceptions import (
 )
 from kraken.spot import Market, SpotWSClient, Trade, User
 
+from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.interfaces.exchange import (
@@ -25,18 +26,16 @@ from kraken_infinity_grid.interfaces.exchange import (
     IExchangeWebSocketService,
 )
 from kraken_infinity_grid.models.domain import ExchangeDomain
-
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
+    ExecutionsUpdateSchema,
+    OnMessageSchema,
     OrderInfoSchema,
     PairBalanceSchema,
-    OnMessageSchema,
     TickerUpdateSchema,
-    ExecutionsUpdateSchema,
 )
-from kraken_infinity_grid.core.event_bus import Event, EventBus
 
 LOG = getLogger(__name__)
 
@@ -120,7 +119,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 return
             LOG.warning("- Kraken Exchange API Status: %s", status)
             raise ConnectionError("Kraken API is not online.")
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (
+            Exception  # noqa: BLE001
+        ) as exc:  # pylint: disable=broad-exception-caught
             LOG.debug(
                 "Exception while checking Kraken API status: %s",
                 exc,
@@ -130,7 +131,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             sleep(3)
             self.check_exchange_status(tries=tries + 1)
 
-    def get_orders_info(self: Self, txid: int = None) -> OrderInfoSchema | None:
+    def get_orders_info(self: Self, txid: str) -> OrderInfoSchema | None:
         """
         {
             "descr": {"pair": "XBTUSD", "price": "10000.0", "type": "buy"},
@@ -144,8 +145,8 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_open_orders(
         self: Self,
-        userref: int = None,
-        trades: bool = None,
+        userref: int | None = None,
+        trades: bool | None = None,
     ) -> list[OrderInfoSchema]:
         orders = []
         for txid, order in self.__user_service.get_open_orders(
@@ -161,7 +162,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         tries: int = 0,
         max_tries: int = 5,
         exit_on_fail: bool = True,
-    ) -> dict | None:
+    ) -> OrderInfoSchema:
         """
         Returns the order details for a given txid.
 
@@ -189,7 +190,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             self.__state_machine.transition_to(States.ERROR)
             raise BotStateError(message)
 
-        return order_details  # type: ignore[no-any-return]
+        return order_details
 
     def get_account_balance(self: Self) -> dict[str, float]:
         """
@@ -200,8 +201,8 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_closed_orders(
         self: Self,
-        userref: int = None,
-        trades: bool = None,
+        userref: int | None = None,
+        trades: bool | None = None,
     ) -> dict[str, Any]:
         """
         NOTE: Currently only used during initialization to check if permissions
@@ -217,7 +218,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return balances
 
     def get_pair_balance(
-        self: Self, base_currency: str, quote_currency: str
+        self: Self,
+        base_currency: str,
+        quote_currency: str,
     ) -> PairBalanceSchema:
         """
         Returns the available and overall balances of the quote and base
@@ -265,8 +268,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         """Returns the symbol for the given base and quote currency."""
         return f"{base_currency}/{quote_currency}".upper()
 
-    def create_order(
+    def create_order(  # noqa: PLR0913
         self: Self,
+        *,
         ordertype: str,
         side: str,
         volume: float,
@@ -284,7 +288,8 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 side=side,
                 volume=volume,
                 pair=self.symbol(
-                    base_currency=base_currency, quote_currency=quote_currency
+                    base_currency=base_currency,
+                    quote_currency=quote_currency,
                 ),
                 price=price,
                 userref=userref,
@@ -293,13 +298,13 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             )["txid"][0],
         )
 
-    def cancel_order(self: Self, txid: str, **kwargs) -> None:
+    def cancel_order(self: Self, txid: str, **kwargs: dict[str, Any]) -> None:
         """Cancel an order."""
         self.__trade_service.cancel_order(txid=txid, **kwargs)
 
     def truncate(
         self: Self,
-        amount: float,
+        amount: float|Decimal|str,
         amount_type: str,
         base_currency: str,
         quote_currency: str,
@@ -309,7 +314,8 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             amount=amount,
             amount_type=amount_type,
             pair=self.symbol(
-                base_currency=base_currency, quote_currency=quote_currency
+                base_currency=base_currency,
+                quote_currency=quote_currency,
             ),
         )
 
@@ -333,7 +339,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
         return AssetPairInfoSchema(**next(iter(pair_info)))
 
-    @cache
+    @cache  # noqa: B019
     def get_exchange_domain(self) -> ExchangeDomain:
         return ExchangeDomain(
             EXCHANGE="Kraken",
@@ -348,7 +354,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     # == Custom Kraken Methods for convenience =================================
 
-    @cache
+    @cache  # noqa: B019
     def __retrieve_custom_base_quote_names(
         self: Self,
         base_currency: str,
@@ -400,7 +406,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
 
     async def on_message(
         self: Self,
-        message: OnMessageSchema
+        message: OnMessageSchema,
     ) -> None:
         """Handle incoming messages from the WebSocket."""
 
@@ -419,8 +425,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
         if message["method"] is not None:
             if message["method"] == "subscribe" and not message["success"]:
                 LOG.error(
-                    "The algorithm was not able to subscribe to selected"
-                    " channels!",
+                    "The algorithm was not able to subscribe to selected channels!",
                 )
                 self.__state_machine.transition_to(States.ERROR)
                 return
@@ -429,7 +434,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
         new_message = OnMessageSchema(
             channel=channel,
             method=message.get("method"),
-            type=message.get("type")
+            type=message.get("type"),
         )
 
         if channel == "ticker":

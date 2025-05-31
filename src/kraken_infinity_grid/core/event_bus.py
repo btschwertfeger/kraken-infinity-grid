@@ -7,7 +7,7 @@
 
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Self
 
 
 @dataclass
@@ -21,16 +21,20 @@ class Event:
 class EventBus:
     """Central event bus for communication between components"""
 
-    def __init__(self):
+    def __init__(self: Self) -> None:
         self._subscribers: dict[str, list[Callable[[Event], None]]] = {}
 
-    def subscribe(self, event_type: str, callback: Callable[[Event], None]) -> None:
+    def subscribe(
+        self: Self,
+        event_type: str,
+        callback: Callable[[Event], None],
+    ) -> None:
         """Subscribe to an event type"""
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
         self._subscribers[event_type].append(callback)
 
-    def publish(self, event: Event) -> None:
+    def publish(self: Self, event: Event) -> None:
         """Publish an event to all subscribers"""
         if event.type not in self._subscribers:
             return

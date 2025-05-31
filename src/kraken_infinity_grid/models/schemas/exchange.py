@@ -67,13 +67,12 @@ class TickerUpdateSchema(BaseModel):
 class ExecutionsUpdateSchema(BaseModel):
     # This can be extended if needed
     order_id: str
-    exec_type: str # "new", "filled" or "cancelled"
-
+    exec_type: str  # "new", "filled" or "cancelled"
 
 
 class OnMessageSchema(BaseModel):
 
     channel: str  # "heartbeat", "status", "ticker", "executions", ...
-    type: str # "update" or "snapshot"
+    type: str  # "update" or "snapshot"
     ticker_data: TickerUpdateSchema | None = None
     executions: list[ExecutionsUpdateSchema] | None = None

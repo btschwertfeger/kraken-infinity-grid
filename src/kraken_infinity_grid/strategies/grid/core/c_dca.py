@@ -21,7 +21,7 @@ class CDCAStrategy(IGridBaseStrategy):
         self: Self,
         side: str,
         last_price: float,
-        extra_sell: bool = False,
+        extra_sell: bool = False,  # noqa: ARG002
     ) -> float:
         """
         Returns the order price depending on the strategy and side. Also assigns
@@ -37,11 +37,10 @@ class CDCAStrategy(IGridBaseStrategy):
             )
 
         if side == self._exchange_domain.BUY:  # New order is a buy
-            last_price = float(last_price)
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker.last:
+            if order_price > self._ticker:
                 order_price = (
-                    self._ticker.last * 100 / (100 + 100 * self._config.interval)
+                    self._ticker * 100 / (100 + 100 * self._config.interval)
                 )
             return order_price
 
@@ -52,7 +51,7 @@ class CDCAStrategy(IGridBaseStrategy):
 
     def _new_sell_order(
         self: Self,
-        order_price: float,
+        order_price: float,  # noqa: ARG002
         txid_to_delete: str | None = None,
     ) -> None:
         """Places a new sell order."""

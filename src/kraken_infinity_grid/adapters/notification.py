@@ -24,7 +24,7 @@ class TelegramNotificationChannelAdapter(INotificationChannel):
 
     def send(self: Self, message: str) -> bool:
         """Send a notification message through Telegram."""
-        LOG.debug(f"Sending Telegram notification: {message}")
+        LOG.debug("Sending Telegram notification: %s", message)
         try:
             url = f"{self.__base_url}/sendMessage"
             response = requests.post(
@@ -37,6 +37,6 @@ class TelegramNotificationChannelAdapter(INotificationChannel):
                 timeout=10,
             )
             return response.status_code == 200
-        except Exception as e:
-            LOG.error(f"Failed to send Telegram notification: {e}")
+        except Exception as exc:  # noqa: BLE001
+            LOG.error("Failed to send Telegram notification", exc_info=exc)
             return False
