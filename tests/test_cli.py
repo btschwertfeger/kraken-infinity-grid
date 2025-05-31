@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from kraken_infinity_grid.infrastructure.cli import cli
+from kraken_infinity_grid.core.cli import cli
 
 
 @pytest.fixture

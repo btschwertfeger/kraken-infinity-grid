@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from kraken_infinity_grid.infrastructure.database import (
+from kraken_infinity_grid.services.database import (
     Configuration,
     DBConnect,
     Orderbook,

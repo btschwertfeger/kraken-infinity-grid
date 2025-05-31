@@ -56,3 +56,24 @@ class CreateOrderResponseSchema(BaseModel):
     """Model for the response of a create order operation"""
 
     txid: str  # Transaction ID of the created order
+
+
+class TickerUpdateSchema(BaseModel):
+    # This can be extended if needed
+    symbol: str
+    last: float
+
+
+class ExecutionsUpdateSchema(BaseModel):
+    # This can be extended if needed
+    order_id: str
+    exec_type: str # "new", "filled" or "cancelled"
+
+
+
+class OnMessageSchema(BaseModel):
+
+    channel: str  # "heartbeat", "status", "ticker", "executions", ...
+    type: str # "update" or "snapshot"
+    ticker_data: TickerUpdateSchema | None = None
+    executions: list[ExecutionsUpdateSchema] | None = None

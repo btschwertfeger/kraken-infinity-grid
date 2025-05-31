@@ -20,6 +20,7 @@ from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
     OrderInfoSchema,
+    OnMessageSchema,
     PairBalanceSchema,
 )
 
@@ -166,9 +167,6 @@ class IExchangeWebSocketService(ABC):
         """Subscribe to a specific channel and pair."""
 
     @abstractmethod
-    async def on_message(
-        self,
-        message: dict[str, Any],
-        **kwargs: dict[str, Any],
-    ) -> None:
-        """Handle incoming messages from the websocket."""
+    async def on_message(self, message: OnMessageSchema) -> None:
+        """Function called on every received message."""
+

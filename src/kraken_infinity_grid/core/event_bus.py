@@ -15,7 +15,7 @@ class Event:
     """Base event class"""
 
     type: str
-    data: dict[str, Any]
+    data: Any
 
 
 class EventBus:
@@ -36,4 +36,4 @@ class EventBus:
             return
 
         for callback in self._subscribers[event.type]:
-            callback(event)
+            callback(event.data)

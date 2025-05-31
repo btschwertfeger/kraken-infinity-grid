@@ -16,7 +16,7 @@ from kraken.spot import Market, Trade, User
 
 from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.infrastructure.database import (
+from kraken_infinity_grid.services.database import (
     Configuration,
     Orderbook,
     UnsoldBuyOrderTXIDs,

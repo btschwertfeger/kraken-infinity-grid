@@ -36,12 +36,7 @@ class StateMachine:
         self._transitions = self._define_transitions()
         self._callbacks: dict[States, list[Callable]] = {}
 
-        # FIXME: do we need this ticker and execution channel at this point here?
-        self._facts: dict = {
-            "ready_to_trade": False,
-            "ticker_channel_connected": False,
-            "executions_channel_connected": False,
-        }
+        self._facts: dict = {} # FIXME
 
     def _define_transitions(self: Self) -> dict[States, list[States]]:
         return {

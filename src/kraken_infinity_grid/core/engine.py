@@ -15,7 +15,7 @@ from typing import Any, Self
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.infrastructure.database import DBConnect
+from kraken_infinity_grid.services.database import DBConnect
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
     DBConfigDTO,
@@ -89,20 +89,7 @@ class BotEngine:
 
     def __setup_event_handlers(self: Self) -> None:
         # Subscribe to events
-
-        # prepare_for_trading is called after the initial setup is done and the
-        # websocket connection is established.
-        self.__event_bus.subscribe(
-            "prepare_for_trading",
-            self.__strategy.on_prepare_for_trading,
-        )
-        self.__event_bus.subscribe("ticker_update", self.__strategy.on_ticker_update)
-        self.__event_bus.subscribe("order_placed", self.__strategy.on_order_placed)
-        self.__event_bus.subscribe("order_filled", self.__strategy.on_order_filled)
-        self.__event_bus.subscribe(
-            "order_cancelled",
-            self.__strategy.on_order_cancelled,
-        )
+        self.__event_bus.subscribe("on_message", self.__strategy.on_message)
         self.__event_bus.subscribe(
             "notification",
             self.__notification_service.on_notification,

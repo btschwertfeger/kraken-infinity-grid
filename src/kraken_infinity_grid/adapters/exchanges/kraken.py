@@ -9,7 +9,7 @@ from decimal import Decimal
 from functools import cache
 from logging import getLogger
 from time import sleep
-from typing import Any, Self
+from typing import Any, Self, Callable
 
 from kraken.exceptions import (
     KrakenAuthenticationError,
@@ -18,7 +18,6 @@ from kraken.exceptions import (
 )
 from kraken.spot import Market, SpotWSClient, Trade, User
 
-from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.interfaces.exchange import (
@@ -33,7 +32,11 @@ from kraken_infinity_grid.models.schemas.exchange import (
     CreateOrderResponseSchema,
     OrderInfoSchema,
     PairBalanceSchema,
+    OnMessageSchema,
+    TickerUpdateSchema,
+    ExecutionsUpdateSchema,
 )
+from kraken_infinity_grid.core.event_bus import Event, EventBus
 
 LOG = getLogger(__name__)
 
@@ -214,9 +217,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return balances
 
     def get_pair_balance(
-        self: Self,
-        base_currency: str,
-        quote_currency: str,
+        self: Self, base_currency: str, quote_currency: str
     ) -> PairBalanceSchema:
         """
         Returns the available and overall balances of the quote and base
@@ -282,7 +283,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 ordertype=ordertype,
                 side=side,
                 volume=volume,
-                pair=f"{base_currency}/{quote_currency}",
+                pair=self.symbol(
+                    base_currency=base_currency, quote_currency=quote_currency
+                ),
                 price=price,
                 userref=userref,
                 validate=validate,
@@ -305,7 +308,9 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         return self.__trade_service.truncate(
             amount=amount,
             amount_type=amount_type,
-            pair=f"{base_currency}/{quote_currency}",
+            pair=self.symbol(
+                base_currency=base_currency, quote_currency=quote_currency
+            ),
         )
 
     def get_system_status(self: Self) -> str:
@@ -319,7 +324,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     ) -> AssetPairInfoSchema:
         """Get available asset pair information from the exchange."""
         # FIXME: Proper error handling
-        pair = f"{base_currency}/{quote_currency}"
+        pair = self.symbol(base_currency=base_currency, quote_currency=quote_currency)
         if (pair_info := self.__market_service.get_asset_pairs(pair=pair)) != {}:
             raise ValueError(
                 f"Could not get asset pair info for {pair}. "
@@ -381,9 +386,6 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
         self.__state_machine: StateMachine = state_machine
         self.__event_bus: EventBus = event_bus
 
-        # Store messages received before the algorithm is ready to trade.
-        self.__missed_messages = []
-
     async def start(self: Self) -> None:
         """Start the websocket service."""
         await self.__websocket_service.start()
@@ -398,131 +400,44 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
 
     async def on_message(
         self: Self,
-        message: dict[str, Any],
-        **kwargs: dict[str, Any],
+        message: OnMessageSchema
     ) -> None:
-        """
-        Handle incoming messages from the websocket.
-
-        FIXME: This one is a bit messy and needs refactoring as it only works
-        with grid trading
-        """
+        """Handle incoming messages from the WebSocket."""
 
         if self.__state_machine.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:
             LOG.debug("Shutdown requested, not processing incoming messages.")
             return
 
-        try:
-            # ==================================================================
-            # Filtering out unwanted messages
-            if not isinstance(message, dict):
-                LOG.warning("Message is not a dict: %s", message)
-                return
-
-            if (channel := message.get("channel")) in {"heartbeat", "status"}:
-                return
-
-            if message.get("method"):
-                if message["method"] == "subscribe" and not message["success"]:
-                    LOG.error(
-                        "The algorithm was not able to subscribe to selected"
-                        " channels. Please check the logs.",
-                    )
-                    self.__state_machine.transition_to(States.ERROR)
-                    return
-                return
-
-            # ==================================================================
-            # Initial setup
-            if (
-                channel == "ticker"
-                and not self.__state_machine.facts["ticker_channel_connected"]
-            ):
-                self.__state_machine.facts["ticker_channel_connected"] = True
-                # Set ticker the first time to have the ticker set during setup.
-                self.__event_bus.publish(
-                    Event(
-                        type="ticker_update",
-                        data={"last": float(message["data"][0]["last"])},
-                    ),
-                )
-                LOG.info("- Subscribed to ticker channel successfully!")
-
-            elif (
-                channel == "executions"
-                and not self.__state_machine.facts["executions_channel_connected"]
-            ):
-                self.__state_machine.facts["executions_channel_connected"] = True
-                LOG.info("- Subscribed to execution channel successfully!")
-
-            if (
-                self.__state_machine.facts["ticker_channel_connected"]
-                and self.__state_machine.facts["executions_channel_connected"]
-                and not self.__state_machine.facts["ready_to_trade"]
-            ):
-                self.__event_bus.publish(
-                    Event(type="prepare_for_trading", data={}),
-                )
-
-                # If there are any missed messages, process them now.
-                for msg in self.__missed_messages:
-                    await self.on_message(msg)
-                self.__missed_messages = []
-
-            if not self.__state_machine.facts["ready_to_trade"]:
-                if channel == "executions":
-                    # If the algorithm is not ready to trade, store the
-                    # executions to process them later.
-                    self.__missed_messages.append(message)
-
-                # Return here, until the algorithm is ready to trade. It is
-                # ready when the init/setup is done and the orderbook is
-                # updated.
-                return
-
-            # =====================================================================
-            # Handle ticker and execution messages
-
-            if channel == "ticker" and (data := message.get("data")):
-                self.__event_bus.publish(
-                    Event(
-                        type="ticker_update",
-                        data={"symbol": data[0].get("symbol"), "last": data[0]["last"]},
-                    ),
-                )
-
-            elif channel == "executions" and (data := message.get("data", [])):
-                if message.get("type") == "snapshot":
-                    # Snapshot data is not interesting, as this is handled
-                    # during sync with upstream.
-                    return
-
-                for execution in data:
-                    LOG.debug("Got execution: %s", execution)
-                    match execution["exec_type"]:
-                        case "new":
-                            self.__event_bus.publish(
-                                Event(
-                                    type="on_order_placed",
-                                    data={"order_id": execution["order_id"]},
-                                ),
-                            )
-                        case "filled":
-                            self.__event_bus.publish(
-                                Event(
-                                    type="on_order_filled",
-                                    data={"order_id": execution["order_id"]},
-                                ),
-                            )
-                        case "canceled" | "expired":
-                            self.__event_bus.publish(
-                                Event(
-                                    type="on_order_cancelled",
-                                    data={"order_id": execution["order_id"]},
-                                ),
-                            )
-
-        except Exception as exc:  # noqa: BLE001
-            LOG.error(msg="Exception while processing message.", exc_info=exc)
-            self.__state_machine.transition_to(States.ERROR)
+        # Filtering out unwanted messages
+        if not isinstance(message, dict):
+            LOG.warning("Message is not a dict: %s", message)
             return
+
+        if (channel := message.get("channel")) in {"heartbeat", "status"}:
+            return
+
+        if message["method"] is not None:
+            if message["method"] == "subscribe" and not message["success"]:
+                LOG.error(
+                    "The algorithm was not able to subscribe to selected"
+                    " channels!",
+                )
+                self.__state_machine.transition_to(States.ERROR)
+                return
+            return
+
+        new_message = OnMessageSchema(
+            channel=channel,
+            method=message.get("method"),
+            type=message.get("type")
+        )
+
+        if channel == "ticker":
+            new_message.ticker_data = TickerUpdateSchema(**message["data"][0])
+        elif channel == "executions":
+            new_message.executions = [
+                ExecutionsUpdateSchema(**message["data"][execution])
+                for execution in message["data"]
+            ]
+
+        self.__event_bus.publish(Event(type="on_message", data=new_message))

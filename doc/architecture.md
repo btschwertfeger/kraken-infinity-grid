@@ -104,11 +104,12 @@ graph TD
     GRIDSELL[GridSell Flavor]
     GRIDHODL[GridHODL Flavor]
 
-    subgraph Exchanges
-      EXIF[Exchange Interface]
-      KRA[Kraken Adapter]
-      BIN["Binance Adapter (TBD)"]
-    end
+  end
+
+  subgraph Exchanges
+    EXIF[Exchange Interface]
+    KRA[Kraken Adapter]
+    BIN["Binance Adapter (TBD)"]
   end
 
 

@@ -7,7 +7,7 @@
 
 # FIXME: Address pylint issues with too many arguments, not applicable in this
 #        project context.
-# FIXME: The configuration table of the database is not dynamic enough
+
 from kraken_infinity_grid.core.event_bus import Event
 from datetime import datetime, timedelta
 import traceback
@@ -18,16 +18,16 @@ from functools import cached_property
 from logging import getLogger
 from time import sleep
 from types import SimpleNamespace
-from typing import Iterable, Self
+from typing import Iterable, Self, Any
 import asyncio
 from kraken.exceptions import KrakenUnknownOrderError
 
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.infrastructure.database import (
+from kraken_infinity_grid.services.database import DBConnect
+from kraken_infinity_grid.strategies.grid.core.database import (
     Configuration,
-    DBConnect,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
@@ -38,6 +38,8 @@ from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetPairInfoSchema,
     OrderInfoSchema,
+    TickerUpdateSchema,
+    OnMessageSchema,
 )
 
 LOG = getLogger(__name__)
@@ -58,17 +60,17 @@ class IGridBaseStrategy(IStrategy):
         self._state_machine = state_machine
         self._ticker: SimpleNamespace = None
 
-        self._rest_api = self._get_exchange_adapter(self._config.exchange, "rest")(
+        self._rest_api = self._get_exchange_adapter(self._config.exchange, "REST")(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
             state_machine=self._state_machine,
+            callback=self.on_message,
         )
         self.__ws_client = self._get_exchange_adapter(
-            self._config.exchange, "websocket"
+            self._config.exchange, "WebSocket"
         )(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
-            state_machine=self._state_machine,
             event_bus=self._event_bus,
         )
 
@@ -87,6 +89,12 @@ class IGridBaseStrategy(IStrategy):
 
         self._cost_decimals: int
         self._amount_per_grid_plus_fee: float
+
+        # Store messages received before the algorithm is ready to trade.
+        self._missed_messages = []
+        self._ticker_channel_connected = False
+        self._executions_channel_connected = False
+        self._ready_to_trade = False
 
     async def run(self: Self) -> None:
         # ======================================================================
@@ -157,38 +165,99 @@ class IGridBaseStrategy(IStrategy):
     async def stop(self: Self) -> None:
         self.__ws_client.close()
 
+    async def on_message(self: Self, message: OnMessageSchema) -> None:
+        """Handle incoming messages from the websocket."""
+
+        try:
+            # ==================================================================
+            # Initial setup
+            if self._state_machine.state != States.RUNNING:
+                if message.channel == "ticker" and not self._ticker_channel_connected:
+                    self._ticker_channel_connected = True
+                    # Set ticker the first time to have the ticker set during setup.
+                    self.__on_ticker_update(message.ticker_data)
+                    LOG.info("- Subscribed to ticker channel successfully!")
+
+                elif (
+                    message.channel == "executions"
+                    and not self._executions_channel_connected
+                ):
+                    self._executions_channel_connected = True
+                    LOG.info("- Subscribed to execution channel successfully!")
+
+                if (
+                    self._ticker_channel_connected
+                    and self._executions_channel_connected
+                    and not self._ready_to_trade
+                ):
+                    self.__prepare_for_trading()
+
+                    # If there are any missed messages, process them now.
+                    for msg in self._missed_messages:
+                        await self.on_message(msg)
+                        self._missed_messages = [m for m in self._missed_messages if m != msg]
+
+                if not self._ready_to_trade:
+                    if message.channel == "executions":
+                        # If the algorithm is not ready to trade, store the
+                        # executions to process them later.
+                        self._missed_messages.append(message)
+
+                    # Return here, until the algorithm is ready to trade. It is
+                    # ready when the init/setup is done and the orderbook is
+                    # updated.
+                    return
+
+            # ==================================================================
+            # Handle ticker and execution messages
+
+            if message.channel == "ticker":
+                self.__on_ticker_update(message.ticker_data)
+
+            elif message.channel == "executions":
+                if message.type != "update":
+                    # Snapshot data is not interesting, as this is handled
+                    # during sync with upstream.
+                    return
+
+                for execution in message.executions:
+                    LOG.debug("Got execution: %s", execution)
+
+                    if execution.exec_type == "new":
+                        LOG.debug("Processing new order: '%s'", execution.oder_id)
+                        self._assign_order_by_txid(execution.oder_id)
+
+                    elif execution.exec_type == "filled":
+                        LOG.debug("Processing filled order: '%s'", execution.oder_id)
+                        self.handle_filled_order_event(execution.oder_id)
+
+                    elif execution.exec_type in {"canceled", "expired"}:
+                        LOG.debug("Processing cancelled order: '%s'", execution.oder_id)
+                        self._handle_cancel_order(execution.oder_id)
+
+        except Exception as exc:  # noqa: BLE001
+            LOG.error(msg="Exception while processing message.", exc_info=exc)
+            self._state_machine.transition_to(States.ERROR)
+            return
+
     # ==========================================================================
     # Event handlers
-    # FIXME: events should have basemodel class with data attribute
-    def on_ticker_update(self, event: Event) -> None:
-        if event.data["symbol"] != self._symbol:
+    def __on_ticker_update(self, ticker_info: TickerUpdateSchema) -> None:
+        if ticker_info.symbol != self._symbol:
             # The grid strategy is only interested in ticker updates for its
             # symbol.
             return
 
-        self._ticker = SimpleNamespace(last=event.data["last"])
+        self._ticker = SimpleNamespace(last=float(ticker_info.last))
         self._configuration_table.update({"last_price_time": datetime.now()})
 
-        # FIXME: only if init done
         if self._state_machine.state == States.RUNNING:
             if self._unsold_buy_order_txids_table.count() != 0:
                 self.__add_missed_sell_orders()
 
             self.__check_price_range()
 
-    def on_order_placed(self, event: Event) -> None:
-        LOG.debug("Got order_placed event: %s", event.data)
-        self._assign_order_by_txid(event.data["order_id"])
-
-    def on_order_filled(self, event: Event) -> None:
-        LOG.debug("Got order_filled event: %s", event.data)
-        self.handle_filled_order_event(event.data["order_id"])
-
-    def on_order_cancelled(self, event: Event) -> None:
-        LOG.debug("Got order_cancelled event: %s", event.data)
-        self._handle_cancel_order(event.data["order_id"])
-
-    def on_prepare_for_trading(self, event: Event) -> None:
+    def __prepare_for_trading(self: Self) -> None:
         """
         This function gets triggered once during the setup of the algorithm. It
         prepares the algorithm for live trading by checking the asset pair
@@ -243,7 +312,7 @@ class IGridBaseStrategy(IStrategy):
 
         # Everything is done, the bot is ready to trade live.
         ##
-        self._state_machine.facts["ready_to_trade"] = True
+        self._ready_to_trade = True
         LOG.info("Algorithm is ready to trade!")
 
         # Checks if the open orders match the range and cancel if necessary. It
@@ -499,8 +568,6 @@ class IGridBaseStrategy(IStrategy):
         self._check_extra_sell_order()
 
     # ==========================================================================
-    #           C R E A T E / C A N C E L - O R D E R S
-    # ==========================================================================
     def __add_missed_sell_orders(self: Self) -> None:
         """
         This functions can create sell orders in case there is at least one
@@ -572,10 +639,7 @@ class IGridBaseStrategy(IStrategy):
                 self._config.base_currency,
                 self._config.quote_currency,
             )
-            if (
-                fetched_balances.quote_available
-                > self._amount_per_grid_plus_fee
-            ):
+            if fetched_balances.quote_available > self._amount_per_grid_plus_fee:
                 order_price: float = self._get_order_price(
                     side=self._exchange_domain.BUY,
                     last_price=(
@@ -677,7 +741,7 @@ class IGridBaseStrategy(IStrategy):
             txid_to_delete,
         )
 
-        if self._config["dry_run"]:
+        if self._config.dry_run:
             LOG.info("Dry run, not placing %s order.", side)
             return
 
@@ -746,10 +810,7 @@ class IGridBaseStrategy(IStrategy):
             self._config.base_currency,
             self._config.quote_currency,
         )
-        if (
-            current_balances["quote_available"]
-            > self._amount_per_grid_plus_fee
-        ):
+        if current_balances["quote_available"] > self._amount_per_grid_plus_fee:
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
                 volume,
@@ -782,12 +843,7 @@ class IGridBaseStrategy(IStrategy):
         message += f"├ Not enough {self._config.quote_currency}"
         message += f"├ to buy {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
-        self._event_bus.publish(
-            Event(
-                type="notification",
-                data={"message": message}
-            )
-        )
+        self._event_bus.publish(Event(type="notification", data={"message": message}))
         LOG.warning("Current balances: %s", current_balances)
 
     def handle_filled_order_event(self: Self, txid: str) -> None:
@@ -868,8 +924,9 @@ class IGridBaseStrategy(IStrategy):
                         f"\n └ Size in {self._config.quote_currency} » "
                         f"{round(order_details.price * order_details.vol_exec, self._cost_decimals)}",
                     ),
-            },
-        ))
+                },
+            )
+        )
 
         # ======================================================================
         # Create a sell order for the executed buy order.
@@ -1184,12 +1241,7 @@ class IGridBaseStrategy(IStrategy):
                     message += f"    └[ {buy_price} ({change:.2f}%)"
         message += "\n```"
 
-        self._event_bus.publish(
-            Event(
-                type="notification",
-                data={"message": message}
-            )
-        )
+        self._event_bus.publish(Event(type="notification", data={"message": message}))
         self._configuration_table.update({"last_status_update": datetime.now()})
 
     # ==========================================================================
