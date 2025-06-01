@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0 # IMPORTANT: otherwise the current tag does not get fetched and the build version gets worse
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6.16.0
+        uses: docker/build-push-action@v6.18.0
         with:
           context: .
           file: Dockerfile
