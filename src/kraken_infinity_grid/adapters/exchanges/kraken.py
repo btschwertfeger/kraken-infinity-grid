@@ -304,7 +304,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def truncate(
         self: Self,
-        amount: float|Decimal|str,
+        amount: float | Decimal | str,
         amount_type: str,
         base_currency: str,
         quote_currency: str,

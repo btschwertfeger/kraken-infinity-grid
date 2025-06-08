@@ -327,7 +327,7 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
 
     # Handle in-memory database option
     if kwargs.pop("in_memory", False):
-        kwargs["sqlite_file"] = ":memory:"
+        kwargs["sqlite_file"] = ":memory:"  # type: ignore[assignment]
 
     db_config = DBConfigDTO(
         sqlite_file=kwargs.pop("sqlite_file", None),

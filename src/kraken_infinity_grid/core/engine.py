@@ -86,11 +86,14 @@ class BotEngine:
             state_machine=self.__state_machine,
             event_bus=self.__event_bus,
             db=self.__db,
-        )
+        )  # type: ignore[no-any-return]
 
     def __setup_event_handlers(self: Self) -> None:
         # Subscribe to events
-        self.__event_bus.subscribe("on_message", self.__strategy.on_message)
+        self.__event_bus.subscribe(
+            "on_message",
+            self.__strategy.on_message,
+        )  # FIXME: that does not work for async
         self.__event_bus.subscribe(
             "notification",
             self.__notification_service.on_notification,

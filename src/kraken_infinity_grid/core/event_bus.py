@@ -7,7 +7,7 @@
 
 
 from dataclasses import dataclass
-from typing import Any, Callable, Self
+from typing import Any, Callable, Coroutine, Self
 
 
 @dataclass
@@ -27,17 +27,17 @@ class EventBus:
     def subscribe(
         self: Self,
         event_type: str,
-        callback: Callable[[Event], None],
+        callback: Callable[[Event], Coroutine[Any, Any, None]],
     ) -> None:
         """Subscribe to an event type"""
         if event_type not in self._subscribers:
             self._subscribers[event_type] = []
         self._subscribers[event_type].append(callback)
 
-    def publish(self: Self, event: Event) -> None:
+    async def publish(self: Self, event: Event) -> None:
         """Publish an event to all subscribers"""
         if event.type not in self._subscribers:
             return
 
         for callback in self._subscribers[event.type]:
-            callback(event.data)
+            await callback(event.data)

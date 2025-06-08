@@ -12,8 +12,8 @@ FIXME: Add comprehensive examples and documentation for each method.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Self
 from decimal import Decimal
+from typing import Any, Self
 
 from kraken_infinity_grid.models.domain import ExchangeDomain
 from kraken_infinity_grid.models.schemas.exchange import (
@@ -24,6 +24,7 @@ from kraken_infinity_grid.models.schemas.exchange import (
     OrderInfoSchema,
     PairBalanceSchema,
 )
+
 
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
@@ -101,7 +102,7 @@ class IExchangeRESTService(ABC):
 
     # == Getters for exchange trade operations =================================
     @abstractmethod
-    def create_order(  # noqa: PLR0913,PLR0917
+    def create_order(  # noqa: PLR0913
         self,
         *,
         ordertype: str,
@@ -123,7 +124,7 @@ class IExchangeRESTService(ABC):
     @abstractmethod
     def truncate(
         self,
-        amount: float|Decimal|str,
+        amount: float | Decimal | str,
         amount_type: str,
         base_currency: str,
         quote_currency: str,

@@ -16,7 +16,6 @@ from decimal import Decimal
 from functools import cached_property
 from logging import getLogger
 from time import sleep
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Iterable, Self
 
 from kraken.exceptions import KrakenUnknownOrderError
@@ -40,12 +39,12 @@ from kraken_infinity_grid.strategies.grid.core.database import (
 )
 
 if TYPE_CHECKING:
-    from kraken_infinity_grid.models.domain import ExchangeDomain
-    from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
     from kraken_infinity_grid.interfaces.exchange import (
         IExchangeRESTService,
         IExchangeWebSocketService,
     )
+    from kraken_infinity_grid.models.domain import ExchangeDomain
+    from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
 LOG = getLogger(__name__)
 
 
@@ -62,10 +61,11 @@ class IGridBaseStrategy(IStrategy):
         self._config = config
         self._event_bus = event_bus
         self._state_machine = state_machine
-        self._ticker: float|None = None
+        self._ticker: float | None = None
 
         self._rest_api: IExchangeRESTService = self._get_exchange_adapter(
-            self._config.exchange, "REST"
+            self._config.exchange,
+            "REST",
         )(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
@@ -128,7 +128,7 @@ class IGridBaseStrategy(IStrategy):
         ##
         LOG.info("Subscribing to channels...")
         # FIXME: improve this to be more generic and not hardcoded at this place
-        subscriptions = {
+        for subscription in {
             "Kraken": [
                 {"channel": "ticker", "symbol": [self._symbol]},
                 {
@@ -139,8 +139,7 @@ class IGridBaseStrategy(IStrategy):
                     "snap_trades": True,
                 },
             ],
-        }
-        for subscription in subscriptions[self._config.exchange]:
+        }[self._config.exchange]:
             await self.__ws_client.subscribe(subscription)
 
         while True:
