@@ -10,7 +10,6 @@
 
 import asyncio
 import traceback
-from abc import abstractmethod
 from datetime import datetime, timedelta
 from decimal import Decimal
 from functools import cached_property
@@ -19,26 +18,27 @@ from time import sleep
 from typing import TYPE_CHECKING, Iterable, Self
 
 from kraken.exceptions import KrakenUnknownOrderError
-from kraken_infinity_grid.interfaces.exchange import (
-    IExchangeRESTService,
-    IExchangeWebSocketService,
-)
-from kraken_infinity_grid.models.dto import BotConfigDTO
-from kraken_infinity_grid.services.database import DBConnect
+
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.models.schemas.exchange import (
-    OnMessageSchema,
-    OrderInfoSchema,
-    TickerUpdateSchema,
-)
 from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
+from kraken_infinity_grid.interfaces.exchange import (
+    IExchangeRESTService,
+    IExchangeWebSocketService,
+)
+from kraken_infinity_grid.models.dto import BotConfigDTO
+from kraken_infinity_grid.models.schemas.exchange import (
+    OnMessageSchema,
+    OrderInfoSchema,
+    TickerUpdateSchema,
+)
+from kraken_infinity_grid.services.database import DBConnect
 
 if TYPE_CHECKING:
 
@@ -62,21 +62,20 @@ class GridBaseStrategy:
         self._state_machine = state_machine
         self._ticker: float | None = None
 
-        self._rest_api: IExchangeRESTService = self._get_exchange_adapter(
+        self._rest_api: IExchangeRESTService = self.get_rest_adapter(
             self._config.exchange,
-            "REST",
         )(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
             state_machine=self._state_machine,
         )
-        self.__ws_client: IExchangeWebSocketService = self._get_exchange_adapter(
+        self.__ws_client: IExchangeWebSocketService = self.get_websocket_adapter(
             self._config.exchange,
-            "WebSocket",
         )(
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
             event_bus=self._event_bus,
+            state_machine=self._state_machine,
         )
 
         self._orderbook_table = Orderbook(self._config.userref, db)
@@ -138,7 +137,7 @@ class GridBaseStrategy:
                 },
             ],
         }[self._config.exchange]:
-            await self.__ws_client.subscribe(subscription)
+            await self.__ws_client.subscribe(subscription)  # type: ignore[arg-type]
 
         while True:
             try:
@@ -248,25 +247,34 @@ class GridBaseStrategy:
             self._state_machine.transition_to(States.ERROR)
             return
 
-    def _get_exchange_adapter(
-        self: Self,
-        exchange: str,
-        adapter_type: str,
-    ) -> IExchangeRESTService | IExchangeWebSocketService:
-        """Get the exchange adapter for the specified exchange and adapter type."""
+    @classmethod
+    def get_rest_adapter(cls, exchange: str) -> type[IExchangeRESTService]:
+        """Get the exchange REST adapter."""
         if exchange == "Kraken":
             from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
                 KrakenExchangeRESTServiceAdapter,
+            )
+
+            return KrakenExchangeRESTServiceAdapter
+
+        raise ValueError(
+            f"Unsupported exchange for REST adapter: {exchange}",
+        )
+
+    @classmethod
+    def get_websocket_adapter(
+        cls,
+        exchange: str,
+    ) -> type[IExchangeWebSocketService]:
+        if exchange == "Kraken":
+            from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
                 KrakenExchangeWebsocketServiceAdapter,
             )
 
-            if adapter_type == "REST":
-                return KrakenExchangeRESTServiceAdapter
-            if adapter_type == "WebSocket":
-                return KrakenExchangeWebsocketServiceAdapter
+            return KrakenExchangeWebsocketServiceAdapter
 
         raise ValueError(
-            f"Unsupported exchange or adapter type: {exchange}, {adapter_type}",
+            f"Unsupported exchange for Websocket adapter: {exchange}",
         )
 
     # ==========================================================================

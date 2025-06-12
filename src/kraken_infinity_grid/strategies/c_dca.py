@@ -40,7 +40,7 @@ class CDCAStrategy(IGridBaseStrategy):
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
             if order_price > self._ticker:
                 order_price = self._ticker * 100 / (100 + 100 * self._config.interval)
-            return order_price
+            return order_price  # type: ignore[no-any-return]
 
         raise ValueError(f"Unknown side: {side}!")
 

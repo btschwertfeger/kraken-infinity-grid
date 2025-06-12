@@ -15,6 +15,8 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import Any, Self
 
+from kraken_infinity_grid.core.event_bus import EventBus
+from kraken_infinity_grid.core.state_machine import StateMachine
 from kraken_infinity_grid.models.domain import ExchangeDomain
 from kraken_infinity_grid.models.schemas.exchange import (
     AssetBalanceSchema,
@@ -28,6 +30,15 @@ from kraken_infinity_grid.models.schemas.exchange import (
 
 class IExchangeRESTService(ABC):
     """Interface for exchange operations."""
+
+    @abstractmethod
+    def __init__(
+        self: Self,
+        api_key: str,
+        api_secret: str,
+        state_machine: StateMachine,
+    ) -> None:
+        """Initialize the REST service"""
 
     @abstractmethod
     def check_api_key_permissions(self) -> None:
@@ -155,6 +166,16 @@ class IExchangeRESTService(ABC):
 
 class IExchangeWebSocketService(ABC):
     """Interface for exchange websocket operations."""
+
+    @abstractmethod
+    def __init__(
+        self: Self,
+        api_key: str,
+        api_secret: str,
+        event_bus: EventBus,
+        state_machine: StateMachine,
+    ) -> None:
+        """Initialize the Websocket service"""
 
     @abstractmethod
     async def start(self) -> None:

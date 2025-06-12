@@ -197,7 +197,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         NOTE: Currently only used during initialization to check if permissions
         are set.
         """
-        return self.__user_service.get_account_balance()
+        return self.__user_service.get_account_balance()  # type: ignore[no-any-return]
 
     def get_closed_orders(
         self: Self,
@@ -208,7 +208,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         NOTE: Currently only used during initialization to check if permissions
         are set.
         """
-        return self.__user_service.get_closed_orders(userref=userref, trades=trades)
+        return self.__user_service.get_closed_orders(userref=userref, trades=trades)  # type: ignore[no-any-return]
 
     def get_balances(self: Self) -> list[AssetBalanceSchema]:
         LOG.debug("Retrieving the user's balances...")
@@ -310,7 +310,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         quote_currency: str,
     ) -> str:
         """Truncate amount according to exchange precision."""
-        return self.__trade_service.truncate(
+        return self.__trade_service.truncate(  # type: ignore[no-any-return]
             amount=amount,
             amount_type=amount_type,
             pair=self.symbol(
@@ -321,7 +321,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_system_status(self: Self) -> str:
         """Get the current system status of the exchange."""
-        return self.__market_service.get_system_status()["status"]
+        return self.__market_service.get_system_status()["status"]  # type: ignore[no-any-return]
 
     def get_asset_pair_info(
         self: Self,

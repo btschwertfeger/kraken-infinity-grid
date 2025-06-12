@@ -86,7 +86,7 @@ class BotEngine:
             state_machine=self.__state_machine,
             event_bus=self.__event_bus,
             db=self.__db,
-        )  # type: ignore[no-any-return]
+        )
 
     def __setup_event_handlers(self: Self) -> None:
         # Subscribe to events
