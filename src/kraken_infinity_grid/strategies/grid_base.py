@@ -19,19 +19,21 @@ from time import sleep
 from typing import TYPE_CHECKING, Iterable, Self
 
 from kraken.exceptions import KrakenUnknownOrderError
-
+from kraken_infinity_grid.interfaces.exchange import (
+    IExchangeRESTService,
+    IExchangeWebSocketService,
+)
+from kraken_infinity_grid.models.dto import BotConfigDTO
+from kraken_infinity_grid.services.database import DBConnect
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.interfaces.strategy import IStrategy
-from kraken_infinity_grid.models.dto.configuration import BotConfigDTO
 from kraken_infinity_grid.models.schemas.exchange import (
     OnMessageSchema,
     OrderInfoSchema,
     TickerUpdateSchema,
 )
-from kraken_infinity_grid.services.database import DBConnect
-from kraken_infinity_grid.strategies.grid.core.database import (
+from kraken_infinity_grid.infrastructure.database import (
     Configuration,
     Orderbook,
     PendingTXIDs,
@@ -39,16 +41,13 @@ from kraken_infinity_grid.strategies.grid.core.database import (
 )
 
 if TYPE_CHECKING:
-    from kraken_infinity_grid.interfaces.exchange import (
-        IExchangeRESTService,
-        IExchangeWebSocketService,
-    )
+
     from kraken_infinity_grid.models.domain import ExchangeDomain
     from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
 LOG = getLogger(__name__)
 
 
-class IGridBaseStrategy(IStrategy):
+class GridBaseStrategy:
     """Base interface for grid-based trading strategies."""
 
     def __init__(
@@ -70,7 +69,6 @@ class IGridBaseStrategy(IStrategy):
             api_key=self._config.api_key,
             api_secret=self._config.api_secret,
             state_machine=self._state_machine,
-            callback=self.on_message,
         )
         self.__ws_client: IExchangeWebSocketService = self._get_exchange_adapter(
             self._config.exchange,
@@ -173,7 +171,7 @@ class IGridBaseStrategy(IStrategy):
     async def stop(self: Self) -> None:
         await self.__ws_client.close()
 
-    async def on_message(self: Self, message: OnMessageSchema) -> None:  # noqa: C901
+    def on_message(self: Self, message: OnMessageSchema) -> None:  # noqa: C901
         """Handle incoming messages from the websocket."""
 
         try:
@@ -202,7 +200,7 @@ class IGridBaseStrategy(IStrategy):
 
                     # If there are any missed messages, process them now.
                     for msg in self._missed_messages:
-                        await self.on_message(msg)
+                        self.on_message(msg)
                         self._missed_messages = [
                             m for m in self._missed_messages if m != msg
                         ]
@@ -249,6 +247,27 @@ class IGridBaseStrategy(IStrategy):
             LOG.error(msg="Exception while processing message.", exc_info=exc)
             self._state_machine.transition_to(States.ERROR)
             return
+
+    def _get_exchange_adapter(
+        self: Self,
+        exchange: str,
+        adapter_type: str,
+    ) -> IExchangeRESTService | IExchangeWebSocketService:
+        """Get the exchange adapter for the specified exchange and adapter type."""
+        if exchange == "Kraken":
+            from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
+                KrakenExchangeRESTServiceAdapter,
+                KrakenExchangeWebsocketServiceAdapter,
+            )
+
+            if adapter_type == "REST":
+                return KrakenExchangeRESTServiceAdapter
+            if adapter_type == "WebSocket":
+                return KrakenExchangeWebsocketServiceAdapter
+
+        raise ValueError(
+            f"Unsupported exchange or adapter type: {exchange}, {adapter_type}",
+        )
 
     # ==========================================================================
     # Event handlers
@@ -1253,8 +1272,6 @@ class IGridBaseStrategy(IStrategy):
         self._configuration_table.update({"last_status_update": datetime.now()})
 
     # ==========================================================================
-    # Abstract methods
-    @abstractmethod
     def _get_order_price(
         self,
         side: str,
@@ -1268,7 +1285,6 @@ class IGridBaseStrategy(IStrategy):
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    @abstractmethod
     def _check_extra_sell_order(self: Self) -> None:
         """
         Checks if an extra sell order can be placed. This only applies for the
@@ -1276,7 +1292,6 @@ class IGridBaseStrategy(IStrategy):
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    @abstractmethod
     def _new_sell_order(
         self: Self,
         order_price: float,
