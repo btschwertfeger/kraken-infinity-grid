@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, Self
 from kraken_infinity_grid.core.event_bus import Event
 from kraken_infinity_grid.core.state_machine import States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
+from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 if TYPE_CHECKING:
     from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 LOG = getLogger(__name__)
 
 
-class GridSellStrategy(IGridBaseStrategy):
+class GridSellStrategy(GridStrategyBase):
     def _get_order_price(
         self: Self,
         side: str,

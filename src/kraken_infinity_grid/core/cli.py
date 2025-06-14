@@ -77,13 +77,13 @@ def ensure_larger_equal_zero(
     is_eager=True,
 )
 @option(
-    "--api-key",
+    "--api-public-key",
     required=True,
     help="The Kraken Spot API key",
     type=STRING,
 )
 @option(
-    "--secret-key",
+    "--api-secret-key",
     required=True,
     type=STRING,
     help="The Kraken Spot API secret key",
@@ -344,6 +344,8 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
         ),
     )
     ctx.obj |= kwargs
+
+    print(ctx.obj)
 
     asyncio.run(
         BotEngine(

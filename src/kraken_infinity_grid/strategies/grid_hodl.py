@@ -11,7 +11,7 @@ from time import sleep
 from typing import TYPE_CHECKING, Self
 
 from kraken_infinity_grid.core.event_bus import Event
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
+from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 if TYPE_CHECKING:
     from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
-class GridHodlStrategy(IGridBaseStrategy):
+class GridHodlStrategy(GridStrategyBase):
 
     def _get_order_price(
         self: Self,

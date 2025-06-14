@@ -14,6 +14,8 @@ from sqlalchemy import MetaData, Table, asc, create_engine, delete, desc, select
 from sqlalchemy.engine.result import MappingResult
 from sqlalchemy.orm import sessionmaker
 
+from kraken_infinity_grid.models.dto import DBConfigDTO
+
 LOG = getLogger(__name__)
 
 
@@ -22,26 +24,28 @@ class DBConnect:
 
     def __init__(  # pylint: disable=too-many-positional-arguments
         self: Self,
-        db_user: str | None = None,
-        db_password: str | None = None,
-        db_host: str | None = None,
-        db_port: str | int | None = None,
-        db_name: str = "kraken_infinity_grid",
-        in_memory: bool = False,
-        sqlite_file: str | None = None,
+        config: DBConfigDTO,
     ) -> None:
+        # db_user: str | None = None,
+        # db_password: str | None = None,
+        # db_host: str | None = None,
+        # db_port: str | int | None = None,
+        # db_name: str = "kraken_infinity_grid",
+        # in_memory: bool = False,
+        # sqlite_file: str | None = None,
+
         LOG.info("Connecting to the database...")
-        if in_memory:
-            engine = "sqlite:///:memory:"
-        elif sqlite_file:
-            engine = f"sqlite:///{sqlite_file}"
+        # if in_memory:
+        #     engine = "sqlite:///:memory:"
+        if config.sqlite_file:
+            engine = f"sqlite:///{config.sqlite_file}"
         else:
             engine = "postgresql://"
-            if db_user and db_password:
-                engine += f"{db_user}:{db_password}@"
-            if db_host and db_port:
-                engine += f"{db_host}:{db_port}"
-            engine += f"/{db_name}"
+            if config.db_user and config.db_password:
+                engine += f"{config.db_user}:{config.db_password}@"
+            if config.db_host and config.db_port:
+                engine += f"{config.db_host}:{config.db_port}"
+            engine += f"/{config.db_name}"
 
         self.engine = create_engine(engine)
         self.session = sessionmaker(bind=self.engine)()

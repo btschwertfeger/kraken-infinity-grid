@@ -10,11 +10,9 @@ from kraken_infinity_grid.interfaces.exchange import (
     IExchangeWebSocketService,
 )
 from kraken_infinity_grid.interfaces.notification import INotificationChannel
-from kraken_infinity_grid.interfaces.strategy import IStrategy
 
 __all__ = [
     "IExchangeRESTService",
     "IExchangeWebSocketService",
     "INotificationChannel",
-    "IStrategy",
 ]

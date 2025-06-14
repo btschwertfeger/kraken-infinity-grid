@@ -20,8 +20,8 @@ class BotConfigDTO(BaseModel):
     # General attributes
     strategy: str
     exchange: str
-    api_key: str
-    secret_key: str
+    api_public_key: str
+    api_secret_key: str
     name: str
     userref: int
     base_currency: str
@@ -30,8 +30,6 @@ class BotConfigDTO(BaseModel):
     dry_run: bool = False
     max_investment: float
 
-    # ==========================================================================
-    # Grid-specific attributes
     # We expect these values to be set by the user via CLI or environment
     # variables. Cloup is handling the validation of these values.
     amount_per_grid: float | None
@@ -59,8 +57,17 @@ class DBConfigDTO(BaseModel):
 class TelegramConfigDTO(BaseModel):
     """Pydantic model for Telegram notification configuration."""
 
-    token: str | None
-    chat_id: str | None
+    token: str | None = None
+    chat_id: str | None = None
+    enabled: bool = False
+
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def set_enabled(cls, v: bool, values: dict) -> bool:
+        """Set enabled to True if both token and chat_id are provided."""
+        token = values.data.get("token")
+        chat_id = values.data.get("chat_id")
+        return bool(token and chat_id)
 
 
 class NotificationConfigDTO(BaseModel):

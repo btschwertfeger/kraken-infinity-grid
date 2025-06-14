@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
-class GridBaseStrategy:
+class GridStrategyBase:
     """Base interface for grid-based trading strategies."""
 
     def __init__(
@@ -62,21 +62,9 @@ class GridBaseStrategy:
         self._state_machine = state_machine
         self._ticker: float | None = None
 
-        self._rest_api: IExchangeRESTService = self.get_rest_adapter(
-            self._config.exchange,
-        )(
-            api_key=self._config.api_key,
-            api_secret=self._config.api_secret,
-            state_machine=self._state_machine,
-        )
-        self.__ws_client: IExchangeWebSocketService = self.get_websocket_adapter(
-            self._config.exchange,
-        )(
-            api_key=self._config.api_key,
-            api_secret=self._config.api_secret,
-            event_bus=self._event_bus,
-            state_machine=self._state_machine,
-        )
+        self._rest_api: IExchangeRESTService
+        self.__ws_client: IExchangeWebSocketService
+        self._exchange_domain: ExchangeDomain
 
         self._orderbook_table = Orderbook(self._config.userref, db)
         self._configuration_table = Configuration(self._config.userref, db)
@@ -89,7 +77,6 @@ class GridBaseStrategy:
 
         # Set this initially in case the DB contains a value that is too old.
         self._configuration_table.update({"last_price_time": datetime.now()})
-        self._exchange_domain: ExchangeDomain = self._rest_api.get_exchange_domain()
 
         self._cost_decimals: int
         self._amount_per_grid_plus_fee: float
@@ -105,6 +92,24 @@ class GridBaseStrategy:
         # Try to connect to the API, validate credentials and API key
         # permissions.
         ##
+        self._rest_api: IExchangeRESTService = self.get_rest_adapter(
+            self._config.exchange,
+        )(
+            api_public_key=self._config.api_public_key,
+            api_secret_key=self._config.api_secret_key,
+            state_machine=self._state_machine,
+        )
+        self._exchange_domain: ExchangeDomain = self._rest_api.get_exchange_domain()
+
+        self.__ws_client: IExchangeWebSocketService = self.get_websocket_adapter(
+            self._config.exchange,
+        )(
+            api_public_key=self._config.api_public_key,
+            api_secret_key=self._config.api_secret_key,
+            event_bus=self._event_bus,
+            state_machine=self._state_machine,
+        )
+
         self._rest_api.check_exchange_status()
         self._rest_api.check_api_key_permissions()
 

@@ -10,12 +10,12 @@ from typing import Self
 
 from kraken_infinity_grid.core.state_machine import States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.strategies.grid.grid_base import IGridBaseStrategy
+from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 LOG = getLogger(__name__)
 
 
-class CDCAStrategy(IGridBaseStrategy):
+class CDCAStrategy(GridStrategyBase):
 
     def _get_order_price(
         self: Self,

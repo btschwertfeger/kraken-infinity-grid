@@ -10,12 +10,11 @@ import signal
 import sys
 from importlib.metadata import version
 from logging import getLogger
-from typing import Self
+from typing import Self, Type
 
 from kraken_infinity_grid.core.event_bus import Event, EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.interfaces.strategy import IStrategy
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
     DBConfigDTO,
@@ -23,6 +22,7 @@ from kraken_infinity_grid.models.dto.configuration import (
 )
 from kraken_infinity_grid.services.database import DBConnect
 from kraken_infinity_grid.services.notification_service import NotificationService
+from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 LOG = getLogger(__name__)
 
@@ -51,7 +51,7 @@ class BotEngine:
 
         # == Infrastructure components =========================================
         ##
-        self.__db = DBConnect(**db_config)
+        self.__db = DBConnect(db_config)
 
         # == Application services ==============================================
         ##
@@ -63,8 +63,8 @@ class BotEngine:
         # Setup event subscriptions
         self.__setup_event_handlers()
 
-    def __strategy_factory(self: Self) -> IStrategy:
-        from kraken_infinity_grid.strategies.grid.core import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
+    def __strategy_factory(self: Self) -> Type[GridStrategyBase]:
+        from kraken_infinity_grid.strategies import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             CDCAStrategy,
             GridHodlStrategy,
             GridSellStrategy,
@@ -98,7 +98,7 @@ class BotEngine:
 
     async def run(self: Self) -> None:
         """Start the bot"""
-        LOG.info("Starting the Kraken Infinity Grid Algorithm...")
+        LOG.info("Starting the Infinity Grid Algorithm...")
 
         # ======================================================================
         # Handle the shutdown signals
@@ -123,8 +123,8 @@ class BotEngine:
             # Wait for shutdown
             await asyncio.wait(
                 [
-                    asyncio.create_task(self.__strategy.run()),
                     asyncio.create_task(self.__state_machine.wait_for_shutdown()),
+                    asyncio.create_task(self.__strategy.run()),
                 ],
                 return_when=asyncio.FIRST_COMPLETED,
             )

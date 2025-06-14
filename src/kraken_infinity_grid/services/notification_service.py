@@ -8,7 +8,6 @@
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.core.event_bus import Event
 from kraken_infinity_grid.interfaces import INotificationChannel
 from kraken_infinity_grid.models.dto.configuration import NotificationConfigDTO
 
@@ -64,6 +63,6 @@ class NotificationService:
 
         return success
 
-    def on_notification(self: Self, event: Event) -> None:
+    def on_notification(self: Self, data: dict) -> None:
         """Handle a notification event."""
-        self.notify(event.data["message"])
+        self.notify(data["message"])

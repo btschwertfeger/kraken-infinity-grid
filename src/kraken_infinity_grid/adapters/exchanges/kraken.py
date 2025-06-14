@@ -45,12 +45,12 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def __init__(
         self: Self,
-        api_key: str,
-        api_secret: str,
+        api_public_key: str,
+        api_secret_key: str,
         state_machine: StateMachine,
     ) -> None:
-        self.__user_service: User = User(key=api_key, secret=api_secret)
-        self.__trade_service: Trade = Trade(key=api_key, secret=api_secret)
+        self.__user_service: User = User(key=api_public_key, secret=api_secret_key)
+        self.__trade_service: Trade = Trade(key=api_public_key, secret=api_secret_key)
         self.__market_service: Market = Market()
         self.__state_machine: StateMachine = state_machine
 
@@ -98,22 +98,26 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             LOG.info(" - Passed API keys and permissions are valid!")
         except (KrakenAuthenticationError, KrakenPermissionDeniedError) as exc:
             self.__state_machine.transition_to(States.ERROR)
-            LOG.error(
-                (
-                    "Passed API keys are invalid!"
-                    if isinstance(exc, KrakenAuthenticationError)
-                    else "Passed API keys are missing permissions!"
-                ),
+            message = (
+                "Passed API keys are invalid!"
+                if isinstance(exc, KrakenAuthenticationError)
+                else "Passed API keys are missing permissions!"
             )
+            raise BotStateError(message)  # from exc
 
     def check_exchange_status(self: Self, tries: int = 0) -> None:
         """Checks whether the Kraken API is available."""
         if tries == 3:
             LOG.error("- Could not connect to the Kraken Exchange API.")
             self.__state_machine.transition_to(States.ERROR)
+            raise BotStateError(
+                "Could not connect to the Kraken Exchange API after 3 tries.",
+            )
         try:
             if (
-                status := self.__market_service.get_system_status().lower()
+                status := self.__market_service.get_system_status()
+                .get("status", "")
+                .lower()
             ) == "online":
                 LOG.info("- Kraken Exchange API Status: Online")
                 return
@@ -379,14 +383,14 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
 
     def __init__(
         self: Self,
-        api_key: str,
-        api_secret: str,
+        api_public_key: str,
+        api_secret_key: str,
         state_machine: StateMachine,
         event_bus: EventBus,
     ) -> None:
         self.__websocket_service: SpotWSClient = SpotWSClient(
-            key=api_key,
-            secret=api_secret,
+            key=api_public_key,
+            secret=api_secret_key,
             callback=self.on_message,
         )
         self.__state_machine: StateMachine = state_machine

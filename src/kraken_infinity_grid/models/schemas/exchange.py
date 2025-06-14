@@ -13,8 +13,6 @@ All schemas can be extended with additional fields as needed.
 
 from pydantic import BaseModel
 
-from kraken_infinity_grid.models.schemas.domain import OrderSide
-
 
 class AssetPairInfoSchema(BaseModel):
     """Model for required asset pair information"""
@@ -35,7 +33,7 @@ class OrderInfoSchema(BaseModel):
     userref: int  # User reference number
     txid: str  # transaction ID
     price: float  # primary price
-    side: OrderSide
+    side: str
 
 
 class PairBalanceSchema(BaseModel):

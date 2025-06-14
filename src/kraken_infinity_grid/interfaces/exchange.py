@@ -34,8 +34,8 @@ class IExchangeRESTService(ABC):
     @abstractmethod
     def __init__(
         self: Self,
-        api_key: str,
-        api_secret: str,
+        api_public_key: str,
+        api_secret_key: str,
         state_machine: StateMachine,
     ) -> None:
         """Initialize the REST service"""
@@ -101,13 +101,13 @@ class IExchangeRESTService(ABC):
     ) -> PairBalanceSchema:
         """Get the balance for a specific currency pair."""
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def altname(cls, base_currency: str, quote_currency: str) -> str:
         """Returns the alternative name for the given base and quote currency."""
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def symbol(cls, base_currency: str, quote_currency: str) -> str:
         """Returns the symbol for the given base and quote currency."""
 
@@ -170,8 +170,8 @@ class IExchangeWebSocketService(ABC):
     @abstractmethod
     def __init__(
         self: Self,
-        api_key: str,
-        api_secret: str,
+        api_public_key: str,
+        api_secret_key: str,
         event_bus: EventBus,
         state_machine: StateMachine,
     ) -> None:

@@ -13,7 +13,10 @@ FIXME: This state machine may work for Kraken, but not for other exchanges.
 
 import asyncio
 from enum import Enum, auto
+from logging import getLogger
 from typing import Callable, Self
+
+LOG = getLogger(__name__)
 
 
 class States(Enum):
@@ -46,12 +49,13 @@ class StateMachine:
                 States.ERROR,
             ],
             States.RUNNING: [States.ERROR, States.SHUTDOWN_REQUESTED],
-            States.ERROR: [States.RUNNING, States.SHUTDOWN_REQUESTED],
+            States.ERROR: [States.RUNNING, States.SHUTDOWN_REQUESTED, States.ERROR],
             States.SHUTDOWN_REQUESTED: [],
         }
 
     def transition_to(self: Self, new_state: States) -> None:
         """Attempt to transition to a new state"""
+        LOG.debug("Transitioning from %s to %s", self._state, new_state)
         if new_state == self._state:
             return
 
@@ -91,6 +95,11 @@ class StateMachine:
         callback: Callable,
     ) -> None:
         """Register a callback to be executed on specific state transitions"""
+        LOG.debug(
+            "Registering callback for state transition to %s: %s",
+            to_state,
+            callback,
+        )
         if to_state not in self._callbacks:
             self._callbacks[to_state] = []
         self._callbacks[to_state].append(callback)
@@ -106,6 +115,7 @@ class StateMachine:
 
             # Register callbacks to set the event when shutdown states are reached
             def set_shutdown_event() -> None:
+                print("Setting shutdown event")
                 self._shutdown_event.set()
 
             self.register_callback(States.SHUTDOWN_REQUESTED, set_shutdown_event)
