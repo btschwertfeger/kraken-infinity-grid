@@ -11,7 +11,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from kraken_infinity_grid.state_machine import StateMachine, States
+from kraken_infinity_grid.core.state_machine import StateMachine, States
 
 
 @pytest.fixture
