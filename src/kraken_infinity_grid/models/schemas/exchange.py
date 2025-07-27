@@ -70,7 +70,7 @@ class ExecutionsUpdateSchema(BaseModel):
 
 class OnMessageSchema(BaseModel):
 
-    channel: str  # "heartbeat", "status", "ticker", "executions", ...
-    type: str  # "update" or "snapshot"
+    channel: str  # "ticker", "executions", ...
+    type: str | None  # "update" or "snapshot"
     ticker_data: TickerUpdateSchema | None = None
     executions: list[ExecutionsUpdateSchema] | None = None

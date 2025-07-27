@@ -29,7 +29,7 @@ LOG = getLogger(__name__)
 
 class BotEngine:
     """
-    Orchestrates the trading bot's components but delegates specific
+    Orchestrates the trading bot's components and delegates specific
     responsibilities to specialized classes.
     """
 

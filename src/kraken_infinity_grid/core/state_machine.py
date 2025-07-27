@@ -115,7 +115,7 @@ class StateMachine:
 
             # Register callbacks to set the event when shutdown states are reached
             def set_shutdown_event() -> None:
-                print("Setting shutdown event")
+                # print("Setting shutdown event")
                 self._shutdown_event.set()
 
             self.register_callback(States.SHUTDOWN_REQUESTED, set_shutdown_event)

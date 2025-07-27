@@ -267,10 +267,7 @@ class GridStrategyBase:
         )
 
     @classmethod
-    def get_websocket_adapter(
-        cls,
-        exchange: str,
-    ) -> type[IExchangeWebSocketService]:
+    def get_websocket_adapter(cls, exchange: str) -> type[IExchangeWebSocketService]:
         if exchange == "Kraken":
             from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
                 KrakenExchangeWebsocketServiceAdapter,

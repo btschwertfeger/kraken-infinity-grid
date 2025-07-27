@@ -101,14 +101,12 @@ class IExchangeRESTService(ABC):
     ) -> PairBalanceSchema:
         """Get the balance for a specific currency pair."""
 
-    @classmethod
     @abstractmethod
-    def altname(cls, base_currency: str, quote_currency: str) -> str:
+    def altname(self, base_currency: str, quote_currency: str) -> str:
         """Returns the alternative name for the given base and quote currency."""
 
-    @classmethod
     @abstractmethod
-    def symbol(cls, base_currency: str, quote_currency: str) -> str:
+    def symbol(self, base_currency: str, quote_currency: str) -> str:
         """Returns the symbol for the given base and quote currency."""
 
     # == Getters for exchange trade operations =================================

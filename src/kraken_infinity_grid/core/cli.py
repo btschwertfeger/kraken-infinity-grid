@@ -228,9 +228,9 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     option(
         "--interval",
         type=FLOAT,
-        default=0.04,
+        default=0.02,
         callback=ensure_larger_than_zero,
-        help="The interval between orders.",
+        help="The interval between orders (e.g. 0.02 equals 2%).",
     ),
     option(
         "--n-open-buy-orders",
@@ -344,8 +344,6 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
         ),
     )
     ctx.obj |= kwargs
-
-    print(ctx.obj)
 
     asyncio.run(
         BotEngine(

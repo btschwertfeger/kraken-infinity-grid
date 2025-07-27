@@ -103,7 +103,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 if isinstance(exc, KrakenAuthenticationError)
                 else "Passed API keys are missing permissions!"
             )
-            raise BotStateError(message)  # from exc
+            raise BotStateError(message) from exc
 
     def check_exchange_status(self: Self, tries: int = 0) -> None:
         """Checks whether the Kraken API is available."""
@@ -149,8 +149,8 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_open_orders(
         self: Self,
-        userref: int | None = None,
-        trades: bool | None = None,
+        userref: int,
+        trades: bool = False,
     ) -> list[OrderInfoSchema]:
         orders = []
         for txid, order in self.__user_service.get_open_orders(
@@ -261,16 +261,25 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         )
         return balances
 
-    @cache
-    @staticmethod
-    def altname(base_currency: str, quote_currency: str) -> str:
-        return f"{base_currency}{quote_currency}".upper()
-
-    @cache
-    @staticmethod
-    def symbol(base_currency: str, quote_currency: str) -> str:
+    @cache  # noqa: B019
+    def symbol(self: Self, base_currency: str, quote_currency: str) -> str:
         """Returns the symbol for the given base and quote currency."""
+        # base_currency_response = self.__market_service.get_assets(assets=base_currency)
+        # base_key = next(iter(base_currency_response))
+        # base_currency = base_currency_response[base_key]["altname"]
+
+        # quote_currency_response = self.__market_service.get_assets(
+        #     assets=quote_currency
+        # )
+        # quote_key = next(iter(quote_currency_response))
+        # quote_currency = quote_currency_response[quote_key]["altname"]
         return f"{base_currency}/{quote_currency}".upper()
+
+    @cache  # noqa: B019
+    def altname(self: Self, base_currency: str, quote_currency: str) -> str:
+        symbol = self.symbol(base_currency, quote_currency)
+        base_currency, quote_currency = symbol.split("/")
+        return f"{base_currency}{quote_currency}"
 
     def create_order(  # noqa: PLR0913
         self: Self,
@@ -334,14 +343,16 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     ) -> AssetPairInfoSchema:
         """Get available asset pair information from the exchange."""
         # FIXME: Proper error handling
-        pair = self.symbol(base_currency=base_currency, quote_currency=quote_currency)
-        if (pair_info := self.__market_service.get_asset_pairs(pair=pair)) != {}:
+        pair = self.symbol(
+            base_currency=base_currency,
+            quote_currency=quote_currency,
+        )
+        if (pair_info := self.__market_service.get_asset_pairs(pair=pair)) == {}:
             raise ValueError(
                 f"Could not get asset pair info for {pair}. "
                 "Please check the pair name and try again.",
             )
-
-        return AssetPairInfoSchema(**next(iter(pair_info)))
+        return AssetPairInfoSchema(**pair_info[next(iter(pair_info))])
 
     @cache  # noqa: B019
     def get_exchange_domain(self) -> ExchangeDomain:
@@ -423,11 +434,11 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
             LOG.warning("Message is not a dict: %s", message)
             return
 
-        if (channel := message.get("channel")) in {"heartbeat", "status"}:
+        if (channel := message.get("channel")) in {"heartbeat", "status", "pong"}:
             return
 
-        if message["method"] is not None:
-            if message["method"] == "subscribe" and not message["success"]:
+        if method := message.get("method"):
+            if method == "subscribe" and not message["success"]:
                 LOG.error(
                     "The algorithm was not able to subscribe to selected channels!",
                 )
@@ -435,17 +446,23 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                 return
             return
 
+        if not channel:
+            LOG.warning("Message has no channel: %s", message)
+            return
+
         new_message = OnMessageSchema(
             channel=channel,
-            method=message.get("method"),
-            type=message.get("type"),
+            type=message.get("type"),  # "update", "snapshot" or None
         )
 
         if channel == "ticker":
             new_message.ticker_data = TickerUpdateSchema(**message["data"][0])
         elif channel == "executions":
             new_message.executions = [
-                ExecutionsUpdateSchema(**message["data"][execution])
+                ExecutionsUpdateSchema(
+                    order_id=execution["order_id"],
+                    exec_type=execution["exec_type"],
+                )
                 for execution in message["data"]
             ]
 
