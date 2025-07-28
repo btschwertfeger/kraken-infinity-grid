@@ -29,6 +29,7 @@ class OrderInfoSchema(BaseModel):
 
     status: str  # e.g. "open", "closed", "canceled"
     vol_exec: float  # Volume executed
+    vol: float  # Total volume of the order
     pair: str  # altname / Asset Pair Name
     userref: int  # User reference number
     txid: str  # transaction ID

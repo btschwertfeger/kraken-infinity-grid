@@ -145,6 +145,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         """
         if not (order_info := self.__user_service.get_orders_info(txid=txid).get(txid)):
             return None
+        order_info["descr"]["side"] = order_info["descr"].pop("type")
         return OrderInfoSchema(**order_info, **order_info["descr"], txid=txid)
 
     def get_open_orders(
@@ -243,10 +244,10 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         quote_available = Decimal(0)
 
         for balance in self.get_balances():
-            if balance.symbol == custom_base:
+            if balance.asset == custom_base:
                 base_balance = Decimal(balance.balance)
                 base_available = base_balance - Decimal(balance.hold_trade)
-            elif balance.symbol == custom_quote:
+            elif balance.asset == custom_quote:
                 quote_balance = Decimal(balance.balance)
                 quote_available = quote_balance - Decimal(balance.hold_trade)
 
@@ -419,10 +420,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
         """Subscribe to the websocket service."""
         await self.__websocket_service.subscribe(params=params)
 
-    async def on_message(
-        self: Self,
-        message: OnMessageSchema,
-    ) -> None:
+    async def on_message(self: Self, message: dict) -> None:
         """Handle incoming messages from the WebSocket."""
 
         if self.__state_machine.state in {States.SHUTDOWN_REQUESTED, States.ERROR}:

@@ -66,7 +66,7 @@ class BotEngine:
     def __strategy_factory(self: Self) -> Type[GridStrategyBase]:
         from kraken_infinity_grid.strategies import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             CDCAStrategy,
-            GridHodlStrategy,
+            GridHODLStrategy,
             GridSellStrategy,
             SwingStrategy,
         )
@@ -74,7 +74,7 @@ class BotEngine:
         if self.__config.strategy not in (
             strategies := {
                 "SWING": SwingStrategy,
-                "GridHODL": GridHodlStrategy,
+                "GridHODL": GridHODLStrategy,
                 "GridSell": GridSellStrategy,
                 "cDCA": CDCAStrategy,
             }

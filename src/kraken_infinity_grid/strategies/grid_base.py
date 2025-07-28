@@ -177,7 +177,8 @@ class GridStrategyBase:
 
     def on_message(self: Self, message: OnMessageSchema) -> None:  # noqa: C901
         """Handle incoming messages from the websocket."""
-
+        print(self._state_machine.state)
+        print(message)
         try:
             # ==================================================================
             # Initial setup
@@ -187,7 +188,6 @@ class GridStrategyBase:
                     # Set ticker the first time to have the ticker set during setup.
                     self.__on_ticker_update(message.ticker_data)
                     LOG.info("- Subscribed to ticker channel successfully!")
-
                 elif (
                     message.channel == "executions"
                     and not self._executions_channel_connected
@@ -847,7 +847,7 @@ class GridStrategyBase:
             self._config.base_currency,
             self._config.quote_currency,
         )
-        if current_balances["quote_available"] > self._amount_per_grid_plus_fee:
+        if current_balances.quote_available > self._amount_per_grid_plus_fee:
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
                 volume,
@@ -870,8 +870,8 @@ class GridStrategyBase:
                 oflags="post",  # post-only buy orders
             )
 
-            self._pending_txids_table.add(placed_order["txid"][0])
-            self._assign_order_by_txid(placed_order["txid"][0])
+            self._pending_txids_table.add(placed_order.txid)
+            self._assign_order_by_txid(placed_order.txid)
             return
 
         # ======================================================================

@@ -11,7 +11,7 @@
 import uuid
 from typing import Any, Callable, Self
 
-from kraken.spot import Market, Trade, User
+from kraken.spot import Trade, User, Market
 
 
 class KrakenAPI(Trade, User, Market):

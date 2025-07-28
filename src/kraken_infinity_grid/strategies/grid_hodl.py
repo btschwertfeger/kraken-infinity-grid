@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 LOG = getLogger(__name__)
 
 
-class GridHodlStrategy(GridStrategyBase):
+class GridHODLStrategy(GridStrategyBase):
 
     def _get_order_price(
         self: Self,

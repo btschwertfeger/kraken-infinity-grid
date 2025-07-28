@@ -15,6 +15,7 @@ from typing import Self
 from sqlalchemy import Column, DateTime, Float, Integer, String, Table, func, select
 from sqlalchemy.engine.result import MappingResult
 
+from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
 from kraken_infinity_grid.services.database import DBConnect
 
 LOG = getLogger(__name__)
@@ -39,17 +40,17 @@ class Orderbook:
             Column("volume", Float, nullable=False),
         )
 
-    def add(self: Self, order: dict) -> None:
+    def add(self: Self, order: OrderInfoSchema) -> None:
         """Add an order to the orderbook."""
         LOG.debug("Adding order to the orderbook: %s", order)
         self.__db.add_row(
             self.__table,
             userref=self.__userref,
-            txid=order["txid"],
-            symbol=order["descr"]["pair"],
-            side=order["descr"]["type"],
-            price=order["descr"]["price"],
-            volume=order["vol"],
+            txid=order.txid,
+            symbol=order.pair,
+            side=order.side,
+            price=order.price,
+            volume=order.vol,
         )
 
     def get_orders(
