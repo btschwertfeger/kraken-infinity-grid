@@ -145,7 +145,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         """
         if not (order_info := self.__user_service.get_orders_info(txid=txid).get(txid)):
             return None
-        order_info["descr"]["side"] = order_info["descr"].pop("type")
+        order_info["descr"]["side"] = order_info["descr"]["type"]
         return OrderInfoSchema(**order_info, **order_info["descr"], txid=txid)
 
     def get_open_orders(

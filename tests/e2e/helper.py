@@ -144,7 +144,7 @@ class KrakenAPI(Trade, User, Market):
                 },
             )
 
-        for order in self.get_open_orders()["open"].values():
+        for txid, order in self.get_open_orders()["open"].items():
             if (
                 order["descr"]["type"] == "buy"
                 and float(order["descr"]["price"]) >= last
@@ -152,7 +152,7 @@ class KrakenAPI(Trade, User, Market):
                 order["descr"]["type"] == "sell"
                 and float(order["descr"]["price"]) <= last
             ):
-                await fill_order(order["txid"])
+                await fill_order(txid=txid)
 
     def cancel_order(self: Self, txid: str) -> None:
         """Cancel an order and update balances if needed."""

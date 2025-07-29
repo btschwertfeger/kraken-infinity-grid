@@ -236,16 +236,16 @@ class GridStrategyBase:
                     LOG.debug("Got execution: %s", execution)
 
                     if execution.exec_type == "new":
-                        LOG.debug("Processing new order: '%s'", execution.oder_id)
-                        self._assign_order_by_txid(execution.oder_id)
+                        LOG.debug("Processing new order: '%s'", execution.order_id)
+                        self._assign_order_by_txid(execution.order_id)
 
                     elif execution.exec_type == "filled":
-                        LOG.debug("Processing filled order: '%s'", execution.oder_id)
-                        self.handle_filled_order_event(execution.oder_id)
+                        LOG.debug("Processing filled order: '%s'", execution.order_id)
+                        self.handle_filled_order_event(execution.order_id)
 
                     elif execution.exec_type in {"canceled", "expired"}:
-                        LOG.debug("Processing cancelled order: '%s'", execution.oder_id)
-                        self._handle_cancel_order(execution.oder_id)
+                        LOG.debug("Processing cancelled order: '%s'", execution.order_id)
+                        self._handle_cancel_order(execution.order_id)
 
         except Exception as exc:  # noqa: BLE001
             LOG.error(msg="Exception while processing message.", exc_info=exc)
