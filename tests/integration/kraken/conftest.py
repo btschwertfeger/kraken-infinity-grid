@@ -6,11 +6,13 @@
 #
 
 import pytest
+
 from kraken_infinity_grid.models.dto.configuration import (
     DBConfigDTO,
     NotificationConfigDTO,
     TelegramConfigDTO,
 )
+
 
 @pytest.fixture(scope="session")
 def db_config() -> DBConfigDTO:
@@ -27,4 +29,3 @@ def db_config() -> DBConfigDTO:
 @pytest.fixture(scope="session")
 def notification_config():
     return NotificationConfigDTO(telegram=TelegramConfigDTO(token=None, chat_id=None))
-

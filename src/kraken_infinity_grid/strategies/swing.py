@@ -90,7 +90,7 @@ class SwingStrategy(GridStrategyBase):
 
             if (
                 fetched_balances.base_available * self._ticker
-                > self._runtime_attrs.amount_per_grid_plus_fee
+                > self._amount_per_grid_plus_fee
             ):
                 order_price = self._get_order_price(
                     side=self._exchange_domain.SELL,

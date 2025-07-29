@@ -177,8 +177,6 @@ class GridStrategyBase:
 
     def on_message(self: Self, message: OnMessageSchema) -> None:  # noqa: C901
         """Handle incoming messages from the websocket."""
-        print(self._state_machine.state)
-        print(message)
         try:
             # ==================================================================
             # Initial setup
@@ -245,7 +243,8 @@ class GridStrategyBase:
 
                     elif execution.exec_type in {"canceled", "expired"}:
                         LOG.debug(
-                            "Processing cancelled order: '%s'", execution.order_id
+                            "Processing cancelled order: '%s'",
+                            execution.order_id,
                         )
                         self._handle_cancel_order(execution.order_id)
 

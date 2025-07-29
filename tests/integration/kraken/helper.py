@@ -11,7 +11,7 @@
 import uuid
 from typing import Any, Callable, Self
 
-from kraken.spot import Trade, User, Market
+from kraken.spot import Market, Trade, User
 
 
 class KrakenAPI(Trade, User, Market):
@@ -210,9 +210,14 @@ class KrakenAPI(Trade, User, Market):
         """Get the user's current balances."""
         return self.__balances
 
+
 from kraken_infinity_grid.core.engine import BotEngine
+
+
 async def get_kraken_instance(
-    bot_config, db_config, notification_config
+    bot_config,
+    db_config,
+    notification_config,
 ) -> BotEngine:
     """
     Initialize the Bot Engine using the passed config strategy and Kraken backend
@@ -230,10 +235,11 @@ async def get_kraken_instance(
         KrakenExchangeRESTServiceAdapter,
         KrakenExchangeWebsocketServiceAdapter,
     )
+
     from .helper import KrakenAPI
 
     # ==========================================================================
-    ## Initialize the mocked REST API client
+    # Initialize the mocked REST API client
     engine._BotEngine__strategy._rest_api = KrakenExchangeRESTServiceAdapter(
         api_public_key=bot_config.api_public_key,
         api_secret_key=bot_config.api_secret_key,
@@ -252,7 +258,7 @@ async def get_kraken_instance(
     )
 
     # ==========================================================================
-    ## Initialize the websocket client
+    # Initialize the websocket client
     engine._BotEngine__strategy._GridHODLStrategy__ws_client = (
         KrakenExchangeWebsocketServiceAdapter(
             api_public_key=bot_config.api_public_key,
@@ -267,7 +273,7 @@ async def get_kraken_instance(
     engine._BotEngine__strategy._GridHODLStrategy__ws_client.__websocket_service = api
 
     # ==========================================================================
-    ## Misc
+    # Misc
     engine._BotEngine__strategy._exchange_domain = (
         engine._BotEngine__strategy._rest_api.get_exchange_domain()
     )

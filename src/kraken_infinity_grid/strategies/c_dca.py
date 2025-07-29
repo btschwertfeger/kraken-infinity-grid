@@ -8,8 +8,6 @@
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 LOG = getLogger(__name__)
@@ -30,11 +28,9 @@ class CDCAStrategy(GridStrategyBase):
         LOG.debug("Computing the order price...")
 
         if side == self._exchange_domain.SELL:  # New order is a sell
-            self._state_machine.set_state(States.ERROR)
-            raise BotStateError(
-                "cDCA strategy does not support sell orders! "
-                "Please use a different strategy for selling.",
-            )
+            # There is no order price for sell orders in cDCA strategy, since no
+            # sell orders are placed.
+            return None
 
         if side == self._exchange_domain.BUY:  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
@@ -60,4 +56,3 @@ class CDCAStrategy(GridStrategyBase):
         LOG.debug("cDCA strategy, not placing sell order.")
         if txid_to_delete is not None:
             self._orderbook_table.remove(filters={"txid": txid_to_delete})
-        return

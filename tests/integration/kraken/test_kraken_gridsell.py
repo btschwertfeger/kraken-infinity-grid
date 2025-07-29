@@ -1,22 +1,23 @@
 # -*- mode: python; coding: utf-8 -*-
 #
-# Copyright (C) 2023 Benjamin Thomas Schwertfeger
+# Copyright (C) 2025 Benjamin Thomas Schwertfeger
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
 
-import pytest
-from .helper import get_kraken_instance
+import logging
+from unittest import mock
 
+import pytest
+
+from kraken_infinity_grid.core.state_machine import States
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
-    NotificationConfigDTO,
     DBConfigDTO,
+    NotificationConfigDTO,
 )
-import logging
-from kraken_infinity_grid.core.state_machine import States
 
-from unittest import mock
+from .helper import get_kraken_instance
 
 
 @pytest.fixture(scope="function")
@@ -319,13 +320,13 @@ async def test_kraken_grid_sell(
 
     assert state_machine.state != States.ERROR
 
-@pytest.mark.wip
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_sell.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
-async def test_integration_GridSell_unfilled_surplus(
+async def test_kraken_grid_sell_unfilled_surplus(
     mock_sleep1: mock.MagicMock,  # noqa: ARG001
     mock_sleep2: mock.Mock,  # noqa: ARG001
     mock_sleep3: mock.Mock,  # noqa: ARG001
@@ -433,7 +434,7 @@ async def test_integration_GridSell_unfilled_surplus(
                 o
                 for o in rest_api.get_open_orders(userref=strategy._config.userref)
                 if o.status == "open"
-            ]
+            ],
         )
         == 5
     )
@@ -448,7 +449,7 @@ async def test_integration_GridSell_unfilled_surplus(
                 o
                 for o in rest_api.get_open_orders(userref=strategy._config.userref)
                 if o.status == "open"
-            ]
+            ],
         )
         == 5
     )
