@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Iterable, Self
 
 from kraken.exceptions import KrakenUnknownOrderError
 
-from kraken_infinity_grid.core.event_bus import Event, EventBus
+from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.infrastructure.database import (
@@ -57,19 +57,22 @@ class GridStrategyBase:
         state_machine: StateMachine,
         db: DBConnect,
     ) -> None:
-        self._config = config
-        self._event_bus = event_bus
-        self._state_machine = state_machine
+        self._config: BotConfigDTO = config
+        self._event_bus: EventBus = event_bus
+        self._state_machine: StateMachine = state_machine
         self._ticker: float | None = None
 
         self._rest_api: IExchangeRESTService
         self.__ws_client: IExchangeWebSocketService
         self._exchange_domain: ExchangeDomain
 
-        self._orderbook_table = Orderbook(self._config.userref, db)
-        self._configuration_table = Configuration(self._config.userref, db)
-        self._pending_txids_table = PendingTXIDs(self._config.userref, db)
-        self._unsold_buy_order_txids_table = UnsoldBuyOrderTXIDs(
+        self._orderbook_table: Orderbook = Orderbook(self._config.userref, db)
+        self._configuration_table: Configuration = Configuration(
+            self._config.userref,
+            db,
+        )
+        self._pending_txids_table: PendingTXIDs = PendingTXIDs(self._config.userref, db)
+        self._unsold_buy_order_txids_table: UnsoldBuyOrderTXIDs = UnsoldBuyOrderTXIDs(
             self._config.userref,
             db,
         )
@@ -92,16 +95,16 @@ class GridStrategyBase:
         # Try to connect to the API, validate credentials and API key
         # permissions.
         ##
-        self._rest_api: IExchangeRESTService = self.get_rest_adapter(
+        self._rest_api = self.get_rest_adapter(
             self._config.exchange,
         )(
             api_public_key=self._config.api_public_key,
             api_secret_key=self._config.api_secret_key,
             state_machine=self._state_machine,
         )
-        self._exchange_domain: ExchangeDomain = self._rest_api.get_exchange_domain()
+        self._exchange_domain = self._rest_api.get_exchange_domain()
 
-        self.__ws_client: IExchangeWebSocketService = self.get_websocket_adapter(
+        self.__ws_client = self.get_websocket_adapter(
             self._config.exchange,
         )(
             api_public_key=self._config.api_public_key,
@@ -312,10 +315,8 @@ class GridStrategyBase:
         )
 
         self._event_bus.publish(
-            Event(
-                type="notification",
-                data={"message": f"✅ {self._symbol} is starting!"},
-            ),
+            "notification",
+            data={"message": f"✅ {self._symbol} is starting!"},
         )
 
         # ======================================================================
@@ -411,19 +412,17 @@ class GridStrategyBase:
         LOG.info("Handling executed order: %s", closed_order.txid)
 
         self._event_bus.publish(
-            Event(
-                type="notification",
-                data={
-                    "message": str(
-                        f"✅ {self._symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
-                        "order executed"
-                        f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
-                        f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
-                        f"\n └ Size in {self._config.quote_currency} » "
-                        f"{float(closed_order.price) * float(closed_order.vol_exec)}",
-                    ),
-                },
-            ),
+            "notification",
+            data={
+                "message": str(
+                    f"✅ {self._symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
+                    "order executed"
+                    f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
+                    f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
+                    f"\n └ Size in {self._config.quote_currency} » "
+                    f"{float(closed_order.price) * float(closed_order.vol_exec)}",
+                ),
+            },
         )
         # ======================================================================
         # If a buy order was filled, the sell order needs to be placed.
@@ -881,7 +880,7 @@ class GridStrategyBase:
         message += f"├ Not enough {self._config.quote_currency}"
         message += f"├ to buy {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
-        self._event_bus.publish(Event(type="notification", data={"message": message}))
+        self._event_bus.publish("notification", data={"message": message})
         LOG.warning("Current balances: %s", current_balances)
 
     def handle_filled_order_event(self: Self, txid: str) -> None:
@@ -950,20 +949,18 @@ class GridStrategyBase:
         # Notify about the executed order
         ##
         self._event_bus.publish(
-            Event(
-                type="notification",
-                data={
-                    "message": str(
-                        f"✅ {self._symbol}: "
-                        f"{order_details.side[0].upper()}{order_details.side[1:]} "
-                        "order executed"
-                        f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
-                        f"\n ├ Size » {order_details.vol_exec} {self._config.base_currency}"
-                        f"\n └ Size in {self._config.quote_currency} » "
-                        f"{round(order_details.price * order_details.vol_exec, self._cost_decimals)}",
-                    ),
-                },
-            ),
+            "notification",
+            data={
+                "message": str(
+                    f"✅ {self._symbol}: "
+                    f"{order_details.side[0].upper()}{order_details.side[1:]} "
+                    "order executed"
+                    f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
+                    f"\n ├ Size » {order_details.vol_exec} {self._config.base_currency}"
+                    f"\n └ Size in {self._config.quote_currency} » "
+                    f"{round(order_details.price * order_details.vol_exec, self._cost_decimals)}",
+                ),
+            },
         )
 
         # ======================================================================
@@ -1279,7 +1276,7 @@ class GridStrategyBase:
                     message += f"    └[ {buy_price} ({change:.2f}%)"
         message += "\n```"
 
-        self._event_bus.publish(Event(type="notification", data={"message": message}))
+        self._event_bus.publish("notification", data={"message": message})
         self._configuration_table.update({"last_status_update": datetime.now()})
 
     # ==========================================================================

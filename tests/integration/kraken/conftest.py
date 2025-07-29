@@ -27,5 +27,5 @@ def db_config() -> DBConfigDTO:
 
 
 @pytest.fixture(scope="session")
-def notification_config():
+def notification_config() -> NotificationConfigDTO:
     return NotificationConfigDTO(telegram=TelegramConfigDTO(token=None, chat_id=None))

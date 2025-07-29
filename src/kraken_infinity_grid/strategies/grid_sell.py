@@ -10,7 +10,6 @@ from logging import getLogger
 from time import sleep
 from typing import TYPE_CHECKING, Self
 
-from kraken_infinity_grid.core.event_bus import Event
 from kraken_infinity_grid.core.state_machine import States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
@@ -81,7 +80,7 @@ class GridSellStrategy(GridStrategyBase):
             # Add the txid of the corresponding buy order to the unsold buy
             # order txids in order to ensure that the corresponding sell order
             # will be placed - even if placing now fails.
-            if not self._unsold_buy_order_txids_table.get(
+            if not self._unsold_buy_order_txids_table.get(  # type: ignore[no-untyped-call]
                 filters={"txid": txid_to_delete},
             ).first():
                 self._unsold_buy_order_txids_table.add(
@@ -199,7 +198,7 @@ class GridSellStrategy(GridStrategyBase):
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
 
-        self._event_bus.publish(Event(type="notification", data={"message": message}))
+        self._event_bus.publish("notification", data={"message": message})
         LOG.warning("Current balances: %s", fetched_balances)
 
         # Restart the algorithm if there is not enough base currency to

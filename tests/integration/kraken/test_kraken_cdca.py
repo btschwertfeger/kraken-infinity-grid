@@ -5,21 +5,22 @@
 # https://github.com/btschwertfeger
 #
 
-import pytest
-from .helper import get_kraken_instance
-
-from kraken_infinity_grid.models.dto.configuration import (
-    BotConfigDTO,
-    NotificationConfigDTO,
-    DBConfigDTO,
-)
 import logging
-from kraken_infinity_grid.core.state_machine import States
-
 from unittest import mock
 
+import pytest
 
-@pytest.fixture(scope="function")
+from kraken_infinity_grid.core.state_machine import States
+from kraken_infinity_grid.models.dto.configuration import (
+    BotConfigDTO,
+    DBConfigDTO,
+    NotificationConfigDTO,
+)
+
+from .helper import get_kraken_instance
+
+
+@pytest.fixture
 def kraken_cdca_bot_config() -> BotConfigDTO:
     return BotConfigDTO(
         strategy="cDCA",
@@ -36,13 +37,14 @@ def kraken_cdca_bot_config() -> BotConfigDTO:
         n_open_buy_orders=5,
     )
 
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
 async def test_kraken_cdca(
-    mock_sleep1: mock.MagicMock,
-    mock_sleep2: mock.MagicMock,
+    mock_sleep1: mock.MagicMock,  # noqa: ARG001
+    mock_sleep2: mock.MagicMock,  # noqa: ARG001
     caplog: pytest.LogCaptureFixture,
     kraken_cdca_bot_config: BotConfigDTO,
     notification_config: NotificationConfigDTO,
@@ -187,7 +189,6 @@ async def test_kraken_cdca(
         assert order.side == "buy"
         assert order.symbol == "BTCUSD"
         assert order.userref == strategy._config.userref
-
 
     # ==========================================================================
     # 5. RAPID PRICE DROP - FILLING ALL BUY ORDERS

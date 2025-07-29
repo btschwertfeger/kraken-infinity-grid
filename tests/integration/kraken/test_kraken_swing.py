@@ -5,21 +5,22 @@
 # https://github.com/btschwertfeger
 #
 
-import pytest
-from .helper import get_kraken_instance
-
-from kraken_infinity_grid.models.dto.configuration import (
-    BotConfigDTO,
-    NotificationConfigDTO,
-    DBConfigDTO,
-)
 import logging
-from kraken_infinity_grid.core.state_machine import States
-
 from unittest import mock
 
+import pytest
 
-@pytest.fixture(scope="function")
+from kraken_infinity_grid.core.state_machine import States
+from kraken_infinity_grid.models.dto.configuration import (
+    BotConfigDTO,
+    DBConfigDTO,
+    NotificationConfigDTO,
+)
+
+from .helper import get_kraken_instance
+
+
+@pytest.fixture
 def kraken_swing_bot_config() -> BotConfigDTO:
     return BotConfigDTO(
         strategy="SWING",
@@ -43,9 +44,9 @@ def kraken_swing_bot_config() -> BotConfigDTO:
 @mock.patch("kraken_infinity_grid.strategies.swing.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
 async def test_kraken_swing(
-    mock_sleep1: mock.MagicMock,
-    mock_sleep2: mock.MagicMock,
-    mock_sleep3: mock.MagicMock,
+    mock_sleep1: mock.MagicMock,  # noqa: ARG001
+    mock_sleep2: mock.MagicMock,  # noqa: ARG001
+    mock_sleep3: mock.MagicMock,  # noqa: ARG001
     caplog: pytest.LogCaptureFixture,
     kraken_swing_bot_config: BotConfigDTO,
     notification_config: NotificationConfigDTO,
@@ -182,8 +183,9 @@ async def test_kraken_swing(
         assert order.userref == strategy._config.userref
 
     # Ensure that profit has been made
-    assert float(api.get_balances()["ZUSD" ]["balance"]) > quote_balance_before
+    assert float(api.get_balances()["ZUSD"]["balance"]) > quote_balance_before
     assert float(api.get_balances()["XXBT"]["balance"]) < base_balance_before
+
 
 @pytest.mark.wip
 @pytest.mark.integration
@@ -310,7 +312,7 @@ async def test_kraken_swing_unfilled_surplus(
                 o
                 for o in rest_api.get_open_orders(userref=strategy._config.userref)
                 if o.status == "open"
-            ]
+            ],
         )
         == 6
     )
@@ -325,7 +327,7 @@ async def test_kraken_swing_unfilled_surplus(
                 o
                 for o in rest_api.get_open_orders(userref=strategy._config.userref)
                 if o.status == "open"
-            ]
+            ],
         )
         == 6
     )
@@ -334,7 +336,9 @@ async def test_kraken_swing_unfilled_surplus(
         == 0.0
     )
 
-    sell_orders = strategy._orderbook_table.get_orders(filters={"side": "sell", "id": 7}).all()
+    sell_orders = strategy._orderbook_table.get_orders(
+        filters={"side": "sell", "id": 7},
+    ).all()
     assert sell_orders[0].price == 50500.0
     assert sell_orders[0].volume == pytest.approx(0.00199014)
 
@@ -344,9 +348,9 @@ async def test_kraken_swing_unfilled_surplus(
     # First ensure that new buy orders can be placed...
     assert not strategy._max_investment_reached
     strategy._GridStrategyBase__cancel_all_open_buy_orders()
-    assert strategy._orderbook_table.count() == 2 # two sell orders
+    assert strategy._orderbook_table.count() == 2  # two sell orders
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
-    assert strategy._orderbook_table.count() == 7 # 5 buy orders + 2 sell orders
+    assert strategy._orderbook_table.count() == 7  # 5 buy orders + 2 sell orders
 
     # Now with a different max investment, the max investment should be reached
     # and no further orders be placed.

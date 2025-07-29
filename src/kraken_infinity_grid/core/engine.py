@@ -10,9 +10,9 @@ import signal
 import sys
 from importlib.metadata import version
 from logging import getLogger
-from typing import Self, Type
+from typing import Self
 
-from kraken_infinity_grid.core.event_bus import Event, EventBus
+from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.models.dto.configuration import (
@@ -63,7 +63,7 @@ class BotEngine:
         # Setup event subscriptions
         self.__setup_event_handlers()
 
-    def __strategy_factory(self: Self) -> Type[GridStrategyBase]:
+    def __strategy_factory(self: Self) -> GridStrategyBase:
         from kraken_infinity_grid.strategies import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             CDCAStrategy,
             GridHODLStrategy,
@@ -172,9 +172,7 @@ class BotEngine:
         self.__db.close()
 
         self.__event_bus.publish(
-            Event(
-                type="notification",
-                data={"message": f"{self.__config.name} terminated.\nReason: {reason}"},
-            ),
+            "notification",
+            data={"message": f"{self.__config.name} terminated.\nReason: {reason}"},
         )
         sys.exit(exception)

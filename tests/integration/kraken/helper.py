@@ -13,6 +13,13 @@ from typing import Any, Callable, Self
 
 from kraken.spot import Market, Trade, User
 
+from kraken_infinity_grid.core.engine import BotEngine
+from kraken_infinity_grid.models.dto.configuration import (
+    BotConfigDTO,
+    DBConfigDTO,
+    NotificationConfigDTO,
+)
+
 
 class KrakenAPI(Trade, User, Market):
     """
@@ -211,13 +218,10 @@ class KrakenAPI(Trade, User, Market):
         return self.__balances
 
 
-from kraken_infinity_grid.core.engine import BotEngine
-
-
 async def get_kraken_instance(
-    bot_config,
-    db_config,
-    notification_config,
+    bot_config: BotConfigDTO,
+    db_config: DBConfigDTO,
+    notification_config: NotificationConfigDTO,
 ) -> BotEngine:
     """
     Initialize the Bot Engine using the passed config strategy and Kraken backend

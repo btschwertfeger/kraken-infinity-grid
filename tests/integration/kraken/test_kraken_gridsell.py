@@ -20,7 +20,7 @@ from kraken_infinity_grid.models.dto.configuration import (
 from .helper import get_kraken_instance
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def kraken_gridsell_bot_config() -> BotConfigDTO:
     return BotConfigDTO(
         strategy="GridSell",
@@ -44,9 +44,9 @@ def kraken_gridsell_bot_config() -> BotConfigDTO:
 @mock.patch("kraken_infinity_grid.strategies.grid_sell.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
 async def test_kraken_grid_sell(
-    mock_sleep1: mock.MagicMock,
-    mock_sleep2: mock.MagicMock,
-    mock_sleep3: mock.MagicMock,
+    mock_sleep1: mock.MagicMock,  # noqa: ARG001
+    mock_sleep2: mock.MagicMock,  # noqa: ARG001
+    mock_sleep3: mock.MagicMock,  # noqa: ARG001
     caplog: pytest.LogCaptureFixture,
     kraken_gridsell_bot_config: BotConfigDTO,
     notification_config: NotificationConfigDTO,

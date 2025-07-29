@@ -246,6 +246,8 @@ task-tags = ["todo", "TODO", "fixme", "FIXME"]
   "SLF001", # private member access
   "TID252", # ban relative imports
   "N999",   # Invalid module name
+  "PLR0915", # Too many statements
+  "PLC0415", # Import outside top-level
 ]
 "tools/*.py" = [
   "T201", # `print` found

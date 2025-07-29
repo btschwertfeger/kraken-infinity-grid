@@ -43,14 +43,7 @@ class NotificationService:
         self.add_channel(TelegramNotificationChannelAdapter(bot_token, chat_id))
 
     def notify(self: Self, message: str) -> bool:
-        """Send a notification through all configured channels.
-
-        Args:
-            message: The message to send
-
-        Returns:
-            bool: True if the message was sent through at least one channel
-        """
+        """Send a notification through all configured channels."""
         LOG.info("Sending notification: %s", message)
         if not self.__channels:
             LOG.warning("No notification channels configured.")

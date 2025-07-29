@@ -7,7 +7,7 @@
 
 # FIXME: add validators
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, computed_field, field_validator
 
 
 class BotConfigDTO(BaseModel):
@@ -59,15 +59,11 @@ class TelegramConfigDTO(BaseModel):
 
     token: str | None = None
     chat_id: str | None = None
-    enabled: bool = False
 
-    @field_validator("enabled", mode="before")
-    @classmethod
-    def set_enabled(cls, v: bool, values: dict) -> bool:
-        """Set enabled to True if both token and chat_id are provided."""
-        token = values.data.get("token")
-        chat_id = values.data.get("chat_id")
-        return bool(token and chat_id)
+    @computed_field
+    def enabled(self) -> bool:
+        """Return True if both token and chat_id are truthy values."""
+        return bool(self.token and self.chat_id)
 
 
 class NotificationConfigDTO(BaseModel):

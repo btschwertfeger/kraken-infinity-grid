@@ -26,9 +26,8 @@ class TelegramNotificationChannelAdapter(INotificationChannel):
         """Send a notification message through Telegram."""
         LOG.debug("Sending Telegram notification: %s", message)
         try:
-            url = f"{self.__base_url}/sendMessage"
             response = requests.post(
-                url,
+                f"{self.__base_url}/sendMessage",
                 data={
                     "chat_id": self.__chat_id,
                     "text": message,

@@ -18,7 +18,7 @@ from kraken.exceptions import (
 )
 from kraken.spot import Market, SpotWSClient, Trade, User
 
-from kraken_infinity_grid.core.event_bus import Event, EventBus
+from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine, States
 from kraken_infinity_grid.exceptions import BotStateError
 from kraken_infinity_grid.interfaces.exchange import (
@@ -429,7 +429,7 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
 
         # Filtering out unwanted messages
         if not isinstance(message, dict):
-            LOG.warning("Message is not a dict: %s", message)
+            LOG.warning("Message is not a dict: %s", message)  # type: ignore[unreachable]
             return
 
         if (channel := message.get("channel")) in {"heartbeat", "status", "pong"}:
@@ -464,4 +464,4 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
                 for execution in message["data"]
             ]
 
-        self.__event_bus.publish(Event(type="on_message", data=new_message))
+        self.__event_bus.publish("on_message", data=new_message)
