@@ -26,17 +26,7 @@ class DBConnect:
         self: Self,
         config: DBConfigDTO,
     ) -> None:
-        # db_user: str | None = None,
-        # db_password: str | None = None,
-        # db_host: str | None = None,
-        # db_port: str | int | None = None,
-        # db_name: str = "kraken_infinity_grid",
-        # in_memory: bool = False,
-        # sqlite_file: str | None = None,
-
         LOG.info("Connecting to the database...")
-        # if in_memory:
-        #     engine = "sqlite:///:memory:"
         if config.sqlite_file:
             engine = f"sqlite:///{config.sqlite_file}"
         else:

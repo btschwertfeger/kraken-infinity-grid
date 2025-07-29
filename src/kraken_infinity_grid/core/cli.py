@@ -187,8 +187,8 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         callback=ensure_larger_than_zero,
         help="""
         A reference number to identify the algorithm's orders. This can be a
-        timestamp or any integer number. Use different userref's for different
-        instances!
+        timestamp or any positive integer number. Use different userref's for
+        different instances!
         """,
     ),
     option(
@@ -198,8 +198,8 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         callback=ensure_larger_equal_zero,
         help="""
         The fee percentage to respect, e.g. '0.0026' for 0.26 %. This value does not
-        change the actual paid fee, instead it used to estimate order sizes. If not
-        passed, the highest maker fee will be used.
+        change the actual paid fee! It is used to estimate order sizes. If not
+        passed, the highest maker fee will be assumed.
         """,
     ),
 )
@@ -286,7 +286,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         "--in-memory",
         is_flag=True,
         default=False,
-        help="Use an in-memory database (SQLite :memory:).",
+        help='Use an in-memory database (similar to --sqlite-file=":memory:").',
     ),
 )
 @option_group(
