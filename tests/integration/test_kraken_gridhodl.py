@@ -9,17 +9,16 @@ import pytest, pytest_asyncio
 
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
-    DBConfigDTO,
-    NotificationConfigDTO,
-    TelegramConfigDTO,
 )
 from kraken_infinity_grid.core.engine import BotEngine
 import logging
 from kraken_infinity_grid.core.state_machine import States
 
+from unittest import mock
 
-@pytest.fixture(scope="session")
-def gridhodl_kraken_bot_config() -> BotConfigDTO:
+
+@pytest.fixture(scope="module")
+def kraken_gridhodl_bot_config() -> BotConfigDTO:
     return BotConfigDTO(
         strategy="GridHODL",
         exchange="Kraken",
@@ -35,27 +34,9 @@ def gridhodl_kraken_bot_config() -> BotConfigDTO:
         n_open_buy_orders=5,
     )
 
-
-@pytest.fixture(scope="session")
-def db_config() -> DBConfigDTO:
-    return DBConfigDTO(
-        user="test_user",
-        password="test_pass",
-        host="localhost",
-        port=5432,
-        database="test_db",
-        sqlite_file=":memory:",
-    )
-
-
-@pytest.fixture(scope="session")
-def notification_config():
-    return NotificationConfigDTO(telegram=TelegramConfigDTO(token=None, chat_id=None))
-
-
 @pytest_asyncio.fixture
 async def kraken_gridhodl_instance(
-    gridhodl_kraken_bot_config, db_config, notification_config
+    kraken_gridhodl_bot_config, db_config, notification_config
 ) -> BotEngine:
     """
     Initialize the Bot Engine using the GridHODL strategy and Kraken backend
@@ -63,8 +44,9 @@ async def kraken_gridhodl_instance(
     The Kraken API is mocked to avoid creating, modifying, or canceling real
     orders.
     """
+    bot_config = kraken_gridhodl_bot_config
     engine = BotEngine(
-        bot_config=gridhodl_kraken_bot_config,
+        bot_config=bot_config,
         db_config=db_config,
         notification_config=notification_config,
     )
@@ -78,8 +60,8 @@ async def kraken_gridhodl_instance(
     # ==========================================================================
     ## Initialize the mocked REST API client
     engine._BotEngine__strategy._rest_api = KrakenExchangeRESTServiceAdapter(
-        api_public_key=gridhodl_kraken_bot_config.api_public_key,
-        api_secret_key=gridhodl_kraken_bot_config.api_secret_key,
+        api_public_key=bot_config.api_public_key,
+        api_secret_key=bot_config.api_secret_key,
         state_machine=engine._BotEngine__state_machine,
     )
 
@@ -98,8 +80,8 @@ async def kraken_gridhodl_instance(
     ## Initialize the websocket client
     engine._BotEngine__strategy._GridHODLStrategy__ws_client = (
         KrakenExchangeWebsocketServiceAdapter(
-            api_public_key=gridhodl_kraken_bot_config.api_public_key,
-            api_secret_key=gridhodl_kraken_bot_config.api_secret_key,
+            api_public_key=kraken_gridhodl_bot_config.api_public_key,
+            api_secret_key=kraken_gridhodl_bot_config.api_secret_key,
             state_machine=engine._BotEngine__state_machine,
             event_bus=engine._BotEngine__event_bus,
         )
@@ -118,9 +100,15 @@ async def kraken_gridhodl_instance(
     yield engine
 
 
-@pytest.mark.e2e
+@pytest.mark.integration
 @pytest.mark.asyncio
+@mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.strategies.grid_hodl.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
 async def test_kraken_grid_hodl(
+    mock_sleep1: mock.MagicMock,
+    mock_sleep2: mock.MagicMock,
+    mock_sleep3: mock.MagicMock,
     kraken_gridhodl_instance: BotEngine,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -129,12 +117,9 @@ async def test_kraken_grid_hodl(
 
     This one is very similar to GridSell, the main difference is the volume of
     sell orders.
-
-    FIXME: Mock the time.sleep statements
-    @mock.patch("kraken_infinity_grid.order_management.sleep", return_value=None)
-    @mock.patch("kraken_infinity_grid.gridbot.sleep", return_value=None)
     """
     caplog.set_level(logging.INFO)
+
     # Create engine using mocked Kraken API
     engine = kraken_gridhodl_instance
     state_machine = engine._BotEngine__state_machine
@@ -265,7 +250,6 @@ async def test_kraken_grid_hodl(
         assert order.symbol == "BTCUSD"
         assert order.userref == strategy._config.userref
 
-
     # ==========================================================================
     # 5. FILLING A SELL ORDER
     # Now let's see if the sell order gets triggered.
@@ -365,3 +349,141 @@ async def test_kraken_grid_hodl(
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._orderbook_table.count() == 2
     assert strategy._max_investment_reached
+
+    assert state_machine.state != States.ERROR
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.strategies.grid_hodl.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
+async def test_integration_GridHODL_unfilled_surplus(
+    mock_sleep1: mock.MagicMock,  # noqa: ARG001
+    mock_sleep2: mock.Mock,  # noqa: ARG001
+    mock_sleep3: mock.Mock,  # noqa: ARG001
+    kraken_gridhodl_instance: BotEngine,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """
+    Integration test for the GridHODL strategy using pre-generated websocket
+    messages.
+
+    This test checks if the unfilled surplus is handled correctly.
+
+    unfilled surplus: The base currency volume that was partly filled by an buy
+    order, before the order was cancelled.
+    """
+    caplog.set_level(logging.INFO)
+
+    # Create engine using mocked Kraken API
+    engine = kraken_gridhodl_instance
+    state_machine = engine._BotEngine__state_machine
+    strategy = engine._BotEngine__strategy
+    ws_client = strategy._GridHODLStrategy__ws_client
+    rest_api = strategy._rest_api
+    api = engine._BotEngine__strategy._GridHODLStrategy__ws_client.__websocket_service
+
+    # ==========================================================================
+    # During the following processing, the following steps are done:
+    # 1. The algorithm prepares for trading (see setup)
+    # 2. The order manager checks the price range
+    # 3. The order manager checks for n open buy orders
+    # 4. The order manager places new orders
+    await ws_client.on_message(
+        {
+            "channel": "executions",
+            "type": "snapshot",
+            "data": [{"exec_type": "canceled", "order_id": "txid0"}],
+        },
+    )
+    assert state_machine.state != States.ERROR
+    assert strategy._ready_to_trade is False
+
+    await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
+    assert strategy._ticker == 50000.0
+    assert state_machine.state != States.ERROR
+    assert strategy._ready_to_trade is True
+
+    # ==========================================================================
+    # 1. PLACEMENT OF INITIAL N BUY ORDERS
+    # After both fake-websocket channels are connected, the algorithm went
+    # through its full setup and placed orders against the fake Kraken API and
+    # finally saved those results into the local orderbook table.
+
+    # Check if the five initial buy orders are placed with the expected price
+    # and volume. Note that the interval is not exactly 0.01 due to the fee
+    # which is taken into account.
+    for order, price, volume in zip(
+        strategy._orderbook_table.get_orders().all(),
+        (49504.9, 49014.7, 48529.4, 48048.9, 47573.1),
+        (0.00202, 0.0020402, 0.0020606, 0.00208121, 0.00210202),
+        strict=True,
+    ):
+        assert order.price == price
+        assert order.volume == volume
+        assert order.side == "buy"
+        assert order.symbol == "BTCUSD"
+        assert order.userref == strategy._config.userref
+
+    # ==========================================================================
+    # 2. BUYING PARTLY FILLED and ensure that the unfilled surplus is handled
+
+    api.fill_order(strategy._orderbook_table.get_orders().first().txid, 0.002)
+    assert strategy._orderbook_table.count() == 5
+
+    balances = api.get_balances()
+    assert balances["XXBT"]["balance"] == "100.002"
+    assert float(balances["ZUSD"]["balance"]) == pytest.approx(999400.99)
+
+    strategy._handle_cancel_order(
+        strategy._orderbook_table.get_orders().first().txid,
+    )
+
+    assert strategy._configuration_table.get()["vol_of_unfilled_remaining"] == 0.002
+    assert (
+        strategy._configuration_table.get()["vol_of_unfilled_remaining_max_price"]
+        == 49504.9
+    )
+
+    # ==========================================================================
+    # 3. SELLING THE UNFILLED SURPLUS
+    #    The sell-check is done only during cancelling orders, as this is the
+    #    only time where this amount is touched. So we need to create another
+    #    partly filled order.
+
+    strategy.new_buy_order(order_price=49504.9)
+    assert strategy._orderbook_table.count() == 5
+    assert (
+        len(
+            [
+                o
+                for o in rest_api.get_open_orders(userref=strategy._config.userref)
+                if o.status == "open"
+            ]
+        )
+        == 5
+    )
+
+    order = strategy._orderbook_table.get_orders(filters={"price": 49504.9}).all()[0]
+    api.fill_order(order["txid"], 0.002)
+    strategy._handle_cancel_order(order["txid"])
+
+    assert (
+        len(
+            [
+                o
+                for o in rest_api.get_open_orders(userref=strategy._config.userref)
+                if o.status == "open"
+            ]
+        )
+        == 5
+    )
+    assert (
+        strategy._configuration_table.get()["vol_of_unfilled_remaining_max_price"]
+        == 0.0
+    )
+
+    sell_orders = strategy._orderbook_table.get_orders(filters={"side": "sell"}).all()
+    assert sell_orders[0].price == 50500.0
+    assert sell_orders[0].volume == pytest.approx(0.00199014)
