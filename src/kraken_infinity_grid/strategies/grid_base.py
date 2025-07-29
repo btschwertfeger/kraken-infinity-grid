@@ -244,7 +244,9 @@ class GridStrategyBase:
                         self.handle_filled_order_event(execution.order_id)
 
                     elif execution.exec_type in {"canceled", "expired"}:
-                        LOG.debug("Processing cancelled order: '%s'", execution.order_id)
+                        LOG.debug(
+                            "Processing cancelled order: '%s'", execution.order_id
+                        )
                         self._handle_cancel_order(execution.order_id)
 
         except Exception as exc:  # noqa: BLE001

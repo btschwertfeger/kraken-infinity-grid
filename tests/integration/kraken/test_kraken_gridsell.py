@@ -5,19 +5,21 @@
 # https://github.com/btschwertfeger
 #
 
-import pytest, pytest_asyncio
+import pytest
+from .helper import get_kraken_instance
 
 from kraken_infinity_grid.models.dto.configuration import (
     BotConfigDTO,
+    NotificationConfigDTO,
+    DBConfigDTO,
 )
-from kraken_infinity_grid.core.engine import BotEngine
 import logging
 from kraken_infinity_grid.core.state_machine import States
 
 from unittest import mock
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def kraken_gridsell_bot_config() -> BotConfigDTO:
     return BotConfigDTO(
         strategy="GridSell",
@@ -34,94 +36,57 @@ def kraken_gridsell_bot_config() -> BotConfigDTO:
         n_open_buy_orders=5,
     )
 
-@pytest_asyncio.fixture
-async def kraken_gridsell_instance(
-    kraken_gridsell_bot_config, db_config, notification_config
-) -> BotEngine:
-    """
-    Initialize the Bot Engine using the GridSell strategy and Kraken backend
-
-    The Kraken API is mocked to avoid creating, modifying, or canceling real
-    orders.
-    """
-    bot_config = kraken_gridsell_bot_config
-    engine = BotEngine(
-        bot_config=bot_config,
-        db_config=db_config,
-        notification_config=notification_config,
-    )
-
-    from kraken_infinity_grid.adapters.exchanges.kraken import (
-        KrakenExchangeRESTServiceAdapter,
-        KrakenExchangeWebsocketServiceAdapter,
-    )
-    from .helper import KrakenAPI
-
-    # ==========================================================================
-    ## Initialize the mocked REST API client
-    engine._BotEngine__strategy._rest_api = KrakenExchangeRESTServiceAdapter(
-        api_public_key=bot_config.api_public_key,
-        api_secret_key=bot_config.api_secret_key,
-        state_machine=engine._BotEngine__state_machine,
-    )
-
-    api = KrakenAPI()
-    engine._BotEngine__strategy._rest_api._KrakenExchangeRESTServiceAdapter__user_service = (
-        api
-    )
-    engine._BotEngine__strategy._rest_api._KrakenExchangeRESTServiceAdapter__trade_service = (
-        api
-    )
-    engine._BotEngine__strategy._rest_api._KrakenExchangeRESTServiceAdapter__market_service = (
-        api
-    )
-
-    # ==========================================================================
-    ## Initialize the websocket client
-    engine._BotEngine__strategy._GridHODLStrategy__ws_client = (
-        KrakenExchangeWebsocketServiceAdapter(
-            api_public_key=gridhodl_kraken_bot_config.api_public_key,
-            api_secret_key=gridhodl_kraken_bot_config.api_secret_key,
-            state_machine=engine._BotEngine__state_machine,
-            event_bus=engine._BotEngine__event_bus,
-        )
-    )
-    # Stop the connection directly
-    await engine._BotEngine__strategy._GridHODLStrategy__ws_client.close()
-    # Use the mocked API client
-    engine._BotEngine__strategy._GridHODLStrategy__ws_client.__websocket_service = api
-
-    # ==========================================================================
-    ## Misc
-    engine._BotEngine__strategy._exchange_domain = (
-        engine._BotEngine__strategy._rest_api.get_exchange_domain()
-    )
-
-    yield engine
-
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
-@mock.patch("kraken_infinity_grid.strategies.grid_hodl.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.strategies.grid_sell.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
-async def test_kraken_grid_hodl(
+async def test_kraken_grid_sell(
     mock_sleep1: mock.MagicMock,
     mock_sleep2: mock.MagicMock,
     mock_sleep3: mock.MagicMock,
-    kraken_gridhodl_instance: BotEngine,
     caplog: pytest.LogCaptureFixture,
+    kraken_gridsell_bot_config: BotConfigDTO,
+    notification_config: NotificationConfigDTO,
+    db_config: DBConfigDTO,
 ) -> None:
     """
-    Test the GridHODL strategy using pre-generated websocket messages.
+    Integration test for the GridSell strategy using pre-generated websocket
+    messages.
 
-    This one is very similar to GridSell, the main difference is the volume of
-    sell orders.
+    This test simulates the full trading process of the trading algorithm, by
+    leveraging a mocked Kraken API in order to verify interactions between the
+    API, the algorithm and database. The test tries to cover almost all cases
+    that could happen during the trading process.
+
+    It tests:
+
+    * Handling of ticker updates
+    * Handling of execution updates
+    * Initialization after the ticker and execution channels are connected
+    * Placing of buy orders and shifting them up
+    * Execution of buy orders and placement of corresponding sell orders
+    * Execution of sell orders
+    * Full database interactions using SQLite
+
+    It does not cover the following cases:
+
+    * Interactions related to telegram notifications
+    * Initialization of the algorithm
+    * Command-line interface / user-like interactions
+
+    This one contains a lot of copy-paste, but hopefully doesn't need to get
+    touched anymore.
     """
     caplog.set_level(logging.INFO)
 
     # Create engine using mocked Kraken API
-    engine = kraken_gridhodl_instance
+    engine = await get_kraken_instance(
+        bot_config=kraken_gridsell_bot_config,
+        notification_config=notification_config,
+        db_config=db_config,
+    )
     state_machine = engine._BotEngine__state_machine
     strategy = engine._BotEngine__strategy
     ws_client = strategy._GridHODLStrategy__ws_client
@@ -211,6 +176,8 @@ async def test_kraken_grid_hodl(
         assert order.symbol == "BTCUSD"
         assert order.userref == strategy._config.userref
 
+    assert strategy._orderbook_table.count() == 5
+
     # Now trigger the execution of the first buy order
     await api.on_ticker_update(callback=ws_client.on_message, last=59000.0)
     assert state_machine.state != States.ERROR
@@ -220,7 +187,7 @@ async def test_kraken_grid_hodl(
     for order, price, volume, side in zip(
         strategy._orderbook_table.get_orders().all(),
         (58817.7, 58235.3, 57658.7, 57087.8, 59999.9),
-        (0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.00167504),
+        (0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.00168333),
         ["buy"] * 4 + ["sell"],
         strict=True,
     ):
@@ -240,7 +207,7 @@ async def test_kraken_grid_hodl(
     for order, price, volume, side in zip(
         strategy._orderbook_table.get_orders().all(),
         (58817.7, 58235.3, 57658.7, 57087.8, 59999.9, 56522.5),
-        (0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.00167504, 0.0017692),
+        (0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.00168333, 0.0017692),
         ["buy"] * 4 + ["sell"] + ["buy"],
         strict=True,
     ):
@@ -285,7 +252,7 @@ async def test_kraken_grid_hodl(
     for order, price, volume in zip(
         strategy._orderbook_table.get_orders().all(),
         (59405.8, 58817.6, 58235.2, 57658.6, 57087.7),
-        (0.00169179, 0.00170871, 0.0017258, 0.00174306, 0.00176049),
+        (0.00170016, 0.00171717, 0.00173434, 0.00175168, 0.0017692),
         strict=True,
     ):
         assert order.price == price
@@ -307,9 +274,9 @@ async def test_kraken_grid_hodl(
     assert len(current_orders) == 6
 
     for order, price, volume in zip(
-        (o for o in current_orders if o.side == "sell"),
+        strategy._orderbook_table.get_orders(filters={"side": "sell"}).all(),
         (59405.8,),
-        (0.00169179,),
+        (0.00170016,),
         strict=True,
     ):
         assert order.price == price
@@ -352,21 +319,23 @@ async def test_kraken_grid_hodl(
 
     assert state_machine.state != States.ERROR
 
-
+@pytest.mark.wip
 @pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
-@mock.patch("kraken_infinity_grid.strategies.grid_hodl.sleep", return_value=None)
+@mock.patch("kraken_infinity_grid.strategies.grid_sell.sleep", return_value=None)
 @mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
-async def test_integration_GridHODL_unfilled_surplus(
+async def test_integration_GridSell_unfilled_surplus(
     mock_sleep1: mock.MagicMock,  # noqa: ARG001
     mock_sleep2: mock.Mock,  # noqa: ARG001
     mock_sleep3: mock.Mock,  # noqa: ARG001
-    kraken_gridhodl_instance: BotEngine,
     caplog: pytest.LogCaptureFixture,
+    kraken_gridsell_bot_config: BotConfigDTO,
+    notification_config: NotificationConfigDTO,
+    db_config: DBConfigDTO,
 ) -> None:
     """
-    Integration test for the GridHODL strategy using pre-generated websocket
+    Integration test for the GridSell strategy using pre-generated websocket
     messages.
 
     This test checks if the unfilled surplus is handled correctly.
@@ -377,7 +346,11 @@ async def test_integration_GridHODL_unfilled_surplus(
     caplog.set_level(logging.INFO)
 
     # Create engine using mocked Kraken API
-    engine = kraken_gridhodl_instance
+    engine = await get_kraken_instance(
+        bot_config=kraken_gridsell_bot_config,
+        notification_config=notification_config,
+        db_config=db_config,
+    )
     state_machine = engine._BotEngine__state_machine
     strategy = engine._BotEngine__strategy
     ws_client = strategy._GridHODLStrategy__ws_client

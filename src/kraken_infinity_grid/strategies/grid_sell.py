@@ -46,15 +46,15 @@ class GridSellStrategy(GridStrategyBase):
 
             # Sell price 1x interval above buy price
             order_price = last_price * (1 + self._config.interval)
-            if self._ticker.last > order_price:
-                order_price = self._ticker.last * (1 + self._config.interval)
+            if self._ticker > order_price:
+                order_price = self._ticker * (1 + self._config.interval)
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
             order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker.last:
+            if order_price > self._ticker:
                 order_price = (
-                    self._ticker.last * 100 / (100 + 100 * self._config.interval)
+                    self._ticker * 100 / (100 + 100 * self._config.interval)
                 )
             return order_price
 

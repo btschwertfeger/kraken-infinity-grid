@@ -209,3 +209,67 @@ class KrakenAPI(Trade, User, Market):
     def get_balances(self: Self, **kwargs: Any) -> dict:  # noqa: ARG002
         """Get the user's current balances."""
         return self.__balances
+
+from kraken_infinity_grid.core.engine import BotEngine
+async def get_kraken_instance(
+    bot_config, db_config, notification_config
+) -> BotEngine:
+    """
+    Initialize the Bot Engine using the passed config strategy and Kraken backend
+
+    The Kraken API is mocked to avoid creating, modifying, or canceling real
+    orders.
+    """
+    engine = BotEngine(
+        bot_config=bot_config,
+        db_config=db_config,
+        notification_config=notification_config,
+    )
+
+    from kraken_infinity_grid.adapters.exchanges.kraken import (
+        KrakenExchangeRESTServiceAdapter,
+        KrakenExchangeWebsocketServiceAdapter,
+    )
+    from .helper import KrakenAPI
+
+    # ==========================================================================
+    ## Initialize the mocked REST API client
+    engine._BotEngine__strategy._rest_api = KrakenExchangeRESTServiceAdapter(
+        api_public_key=bot_config.api_public_key,
+        api_secret_key=bot_config.api_secret_key,
+        state_machine=engine._BotEngine__state_machine,
+    )
+
+    api = KrakenAPI()
+    engine._BotEngine__strategy._rest_api._KrakenExchangeRESTServiceAdapter__user_service = (
+        api
+    )
+    engine._BotEngine__strategy._rest_api._KrakenExchangeRESTServiceAdapter__trade_service = (
+        api
+    )
+    engine._BotEngine__strategy._rest_api._KrakenExchangeRESTServiceAdapter__market_service = (
+        api
+    )
+
+    # ==========================================================================
+    ## Initialize the websocket client
+    engine._BotEngine__strategy._GridHODLStrategy__ws_client = (
+        KrakenExchangeWebsocketServiceAdapter(
+            api_public_key=bot_config.api_public_key,
+            api_secret_key=bot_config.api_secret_key,
+            state_machine=engine._BotEngine__state_machine,
+            event_bus=engine._BotEngine__event_bus,
+        )
+    )
+    # Stop the connection directly
+    await engine._BotEngine__strategy._GridHODLStrategy__ws_client.close()
+    # Use the mocked API client
+    engine._BotEngine__strategy._GridHODLStrategy__ws_client.__websocket_service = api
+
+    # ==========================================================================
+    ## Misc
+    engine._BotEngine__strategy._exchange_domain = (
+        engine._BotEngine__strategy._rest_api.get_exchange_domain()
+    )
+
+    return engine

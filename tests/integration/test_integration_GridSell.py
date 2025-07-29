@@ -109,8 +109,8 @@ async def test_integration_GridSell(  # noqa: PLR0915
     # which is taken into account.
     for order, price, volume in zip(
         instance.orderbook.get_orders().all(),
-        [49504.9, 49014.7, 48529.4, 48048.9, 47573.1],
-        [0.00202, 0.0020402, 0.0020606, 0.00208121, 0.00210202],
+        (49504.9, 49014.7, 48529.4, 48048.9, 47573.1),
+        (0.00202, 0.0020402, 0.0020606, 0.00208121, 0.00210202),
         strict=True,
     ):
         assert order.price == price
