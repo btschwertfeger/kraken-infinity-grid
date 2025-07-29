@@ -7,7 +7,7 @@
 
 import pytest
 
-from kraken_infinity_grid.models.dto.configuration import (
+from kraken_infinity_grid.models.configuration import (
     DBConfigDTO,
     NotificationConfigDTO,
     TelegramConfigDTO,

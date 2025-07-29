@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 
 from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.models.dto.configuration import (
+from kraken_infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,

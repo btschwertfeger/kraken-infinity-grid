@@ -5,9 +5,6 @@
 # https://github.com/btschwertfeger
 #
 
-# FIXME: Address pylint issues with too many arguments, not applicable in this
-#        project context.
-
 import asyncio
 import traceback
 from datetime import datetime, timedelta
@@ -32,8 +29,8 @@ from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
-from kraken_infinity_grid.models.dto import BotConfigDTO
-from kraken_infinity_grid.models.schemas.exchange import (
+from kraken_infinity_grid.models.configuration import BotConfigDTO
+from kraken_infinity_grid.models.exchange import (
     OnMessageSchema,
     OrderInfoSchema,
     TickerUpdateSchema,
@@ -42,8 +39,8 @@ from kraken_infinity_grid.services.database import DBConnect
 
 if TYPE_CHECKING:
 
-    from kraken_infinity_grid.models.domain import ExchangeDomain
-    from kraken_infinity_grid.models.schemas.exchange import AssetPairInfoSchema
+    from kraken_infinity_grid.models.exchange import AssetPairInfoSchema, ExchangeDomain
+
 LOG = getLogger(__name__)
 
 
@@ -316,7 +313,7 @@ class GridStrategyBase:
 
         self._event_bus.publish(
             "notification",
-            data={"message": f"✅ {self._symbol} is starting!"},
+            data={"message": f"✅ {self._config.name} is starting!"},
         )
 
         # ======================================================================

@@ -4,4 +4,3 @@
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
-# Request/response validation schemas

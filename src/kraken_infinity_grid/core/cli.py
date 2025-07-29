@@ -12,7 +12,7 @@ from click import FLOAT, INT, STRING, Context, echo, pass_context
 from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option, option_group
 from cloup.constraints import Equal, If, IsSet, accept_none, require_all
 
-from kraken_infinity_grid.models.dto import (
+from kraken_infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,

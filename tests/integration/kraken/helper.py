@@ -14,7 +14,7 @@ from typing import Any, Callable, Self
 from kraken.spot import Market, Trade, User
 
 from kraken_infinity_grid.core.engine import BotEngine
-from kraken_infinity_grid.models.dto.configuration import (
+from kraken_infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,

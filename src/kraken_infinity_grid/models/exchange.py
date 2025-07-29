@@ -14,6 +14,23 @@ All schemas can be extended with additional fields as needed.
 from pydantic import BaseModel
 
 
+class ExchangeDomain(BaseModel):
+
+    # General
+    EXCHANGE: str
+
+    # Order sides
+    BUY: str
+    SELL: str
+
+    # Order states
+    OPEN: str
+    CLOSED: str
+    CANCELED: str
+    EXPIRED: str
+    PENDING: str
+
+
 class AssetPairInfoSchema(BaseModel):
     """Model for required asset pair information"""
 

@@ -17,11 +17,11 @@ from typing import Any, Self
 
 from kraken_infinity_grid.core.event_bus import EventBus
 from kraken_infinity_grid.core.state_machine import StateMachine
-from kraken_infinity_grid.models.domain import ExchangeDomain
-from kraken_infinity_grid.models.schemas.exchange import (
+from kraken_infinity_grid.models.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
+    ExchangeDomain,
     OnMessageSchema,
     OrderInfoSchema,
     PairBalanceSchema,

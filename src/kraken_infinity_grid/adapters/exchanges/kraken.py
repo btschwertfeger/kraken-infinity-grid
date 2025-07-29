@@ -4,6 +4,7 @@
 # All rights reserved.
 # https://github.com/btschwertfeger
 #
+
 from contextlib import suppress
 from decimal import Decimal
 from functools import cache
@@ -25,11 +26,11 @@ from kraken_infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
-from kraken_infinity_grid.models.domain import ExchangeDomain
-from kraken_infinity_grid.models.schemas.exchange import (
+from kraken_infinity_grid.models.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,
+    ExchangeDomain,
     ExecutionsUpdateSchema,
     OnMessageSchema,
     OrderInfoSchema,

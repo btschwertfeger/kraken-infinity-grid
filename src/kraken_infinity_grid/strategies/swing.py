@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Self
 from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 if TYPE_CHECKING:
-    from kraken_infinity_grid.models.schemas.exchange import OrderInfoSchema
+    from kraken_infinity_grid.models.exchange import OrderInfoSchema
 LOG = getLogger(__name__)
 
 

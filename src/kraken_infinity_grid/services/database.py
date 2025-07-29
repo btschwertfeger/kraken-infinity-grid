@@ -14,7 +14,7 @@ from sqlalchemy import MetaData, Table, asc, create_engine, delete, desc, select
 from sqlalchemy.engine.result import MappingResult
 from sqlalchemy.orm import sessionmaker
 
-from kraken_infinity_grid.models.dto import DBConfigDTO
+from kraken_infinity_grid.models.configuration import DBConfigDTO
 
 LOG = getLogger(__name__)
 
