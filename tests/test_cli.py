@@ -64,6 +64,8 @@ def test_cli_run(mock_bot: MagicMock, runner: CliRunner) -> None:
         "--in-memory",
         "--strategy",
         "cDCA",
+        "--exchange",
+        "Kraken",
     ]
     mock_bot.return_value.run = AsyncMock()
     result = runner.invoke(cli, command)
