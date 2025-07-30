@@ -6,7 +6,10 @@
 #
 
 
+from logging import getLogger
 from typing import Any, Callable, Self
+
+LOG = getLogger(__name__)
 
 
 class EventBus:
@@ -28,6 +31,7 @@ class EventBus:
     def publish(self: Self, event_type: str, data: dict[Any, Any]) -> None:
         """Publish an event to all subscribers"""
         if event_type not in self._subscribers:
+            LOG.warning("No subscribers for published event type: %s", event_type)
             return
 
         for callback in self._subscribers[event_type]:
