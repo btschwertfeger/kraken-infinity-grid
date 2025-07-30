@@ -49,12 +49,12 @@ class NotificationService:
 
         LOG.info("Sending notification: %s", message)
 
-        success = False
+        message_sent = False
         for channel in self.__channels:
             if channel.send(message):
-                success = True
+                message_sent = True
 
-        return success
+        return message_sent
 
     def on_notification(self: Self, data: dict) -> None:
         """Handle a notification event."""

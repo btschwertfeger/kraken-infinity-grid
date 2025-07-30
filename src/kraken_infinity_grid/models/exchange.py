@@ -6,12 +6,16 @@
 #
 
 """
-FIXME: docstring
+Exchange models and schemas for the Kraken Infinity Grid trading bot.
 
-All schemas can be extended with additional fields as needed.
+This module contains Pydantic models that define the structure and validation
+rules for exchange-related data such as orders, balances, and market updates.
+All schemas include appropriate validators to ensure data integrity.
 """
 
-from pydantic import BaseModel
+from typing import Self
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class ExchangeDomain(BaseModel):
@@ -38,57 +42,109 @@ class AssetPairInfoSchema(BaseModel):
     quote: str  # "ZUSD"
     cost_decimals: int  # Number of decimals for cost, e.g. 5
     # Fees for maker orders, e.g. [[0, 0.25], [10000, 0.2], ...]
-    fees_maker: list[list[float]]
+    fees_maker: list[list[float]] = Field(..., description="Maker fees structure")
 
 
 class OrderInfoSchema(BaseModel):
     """Model for order information"""
 
-    status: str  # e.g. "open", "closed", "canceled"
-    vol_exec: float  # Volume executed
-    vol: float  # Total volume of the order
-    pair: str  # altname / Asset Pair Name
-    userref: int  # User reference number
-    txid: str  # transaction ID
-    price: float  # primary price
-    side: str
+    status: str = Field(
+        ...,
+        description="Order status",
+    )  # e.g. "open", "closed", "canceled"
+    vol_exec: float = Field(..., ge=0, description="Volume executed")
+    vol: float = Field(..., gt=0, description="Total volume of the order")
+    pair: str = Field(..., min_length=1, description="Asset pair name")  # altname
+    userref: int = Field(..., ge=0, description="User reference number")
+    txid: str = Field(..., min_length=1, description="Transaction ID")
+    price: float = Field(..., gt=0, description="Order price")
+    side: str = Field(..., description="Order side (buy/sell)")
+
+    @model_validator(mode="after")
+    def validate_volume_relationship(self) -> Self:
+        """Validate that executed volume doesn't exceed total volume"""
+        if self.vol_exec > self.vol:
+            raise ValueError(
+                f"Executed volume ({self.vol_exec}) cannot exceed total volume ({self.vol})",
+            )
+        return self
 
 
 class PairBalanceSchema(BaseModel):
-    base_balance: float
-    quote_balance: float
-    base_available: float
-    quote_available: float
+    base_balance: float = Field(..., ge=0, description="Base asset balance")
+    quote_balance: float = Field(..., ge=0, description="Quote asset balance")
+    base_available: float = Field(..., ge=0, description="Available base asset balance")
+    quote_available: float = Field(
+        ...,
+        ge=0,
+        description="Available quote asset balance",
+    )
+
+    @model_validator(mode="after")
+    def validate_available_balances(self) -> Self:
+        """Validate that available balances don't exceed total balances"""
+        if self.base_available > self.base_balance:
+            raise ValueError(
+                f"Available base balance ({self.base_available}) cannot exceed total base balance ({self.base_balance})",
+            )
+        if self.quote_available > self.quote_balance:
+            raise ValueError(
+                f"Available quote balance ({self.quote_available}) cannot exceed total quote balance ({self.quote_balance})",
+            )
+        return self
 
 
 class AssetBalanceSchema(BaseModel):
 
-    asset: str  # Asset name, e.g. "XXBT"
-    balance: float  # Current balance of the asset
-    hold_trade: float  # Balance held in trades
+    asset: str = Field(..., min_length=1, description="Asset name")  # e.g. "XXBT"
+    balance: float = Field(..., ge=0, description="Current balance of the asset")
+    hold_trade: float = Field(..., ge=0, description="Balance held in trades")
+
+    @model_validator(mode="after")
+    def validate_hold_trade(self) -> Self:
+        """Validate that held balance doesn't exceed total balance"""
+        if self.hold_trade > self.balance:
+            raise ValueError(
+                f"Held balance ({self.hold_trade}) cannot exceed total balance ({self.balance})",
+            )
+        return self
 
 
 class CreateOrderResponseSchema(BaseModel):
     """Model for the response of a create order operation"""
 
-    txid: str  # Transaction ID of the created order
+    txid: str = Field(
+        ...,
+        min_length=1,
+        description="Transaction ID of the created order",
+    )
 
 
 class TickerUpdateSchema(BaseModel):
-    # This can be extended if needed
-    symbol: str
-    last: float
+    """Model for ticker update data"""
+
+    symbol: str = Field(..., min_length=1, description="Trading pair symbol")
+    last: float = Field(..., gt=0, description="Last traded price")
 
 
 class ExecutionsUpdateSchema(BaseModel):
-    # This can be extended if needed
-    order_id: str
-    exec_type: str  # "new", "filled" or "cancelled"
+    """Model for execution update data"""
+
+    order_id: str = Field(..., min_length=1, description="Order ID")
+    exec_type: str = Field(
+        ...,
+        description="Execution type",
+    )  # e.g. "new", "filled", "cancelled"
 
 
 class OnMessageSchema(BaseModel):
+    """Model for WebSocket message data"""
 
-    channel: str  # "ticker", "executions", ...
-    type: str | None  # "update" or "snapshot"
+    channel: str = Field(
+        ...,
+        min_length=1,
+        description="Message channel",
+    )  # "ticker" or "executions"
+    type: str | None = Field(None, description="Message type")  # "update" or "snapshot"
     ticker_data: TickerUpdateSchema | None = None
     executions: list[ExecutionsUpdateSchema] | None = None
