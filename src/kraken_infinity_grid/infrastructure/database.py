@@ -88,35 +88,24 @@ class Orderbook:
             filters=filters | {"userref": self.__userref},
         )
 
-    def update(self: Self, updates: dict, filters: dict | None = None) -> None:
+    def update(self: Self, updates: OrderInfoSchema) -> None:
         """
-        Update orders in the orderbook.
+        Update order in the orderbook.
 
         In case one manually modifies the order. This is not recommended!
         """
-        LOG.debug("Updating orders in the orderbook: %s :: %s", filters, updates)
-        if not filters:
-            filters = {}
-
-        prepared_updates = {}
-        if "txid" in updates:
-            prepared_updates["txid"] = updates["txid"]
-
-        if descr := updates.get("descr"):
-            if descr.get("pair"):
-                prepared_updates["symbol"] = descr["pair"]
-            if descr.get("type"):
-                prepared_updates["side"] = descr["type"]  # should not happen
-            if descr.get("price"):
-                prepared_updates["price"] = descr["price"]
-
-        if "vol" in updates:
-            prepared_updates["volume"] = updates["vol"]
+        LOG.debug("Updating order in the orderbook: %s", updates)
 
         self.__db.update_row(
             self.__table,
-            filters=filters | {"userref": self.__userref},
-            updates=prepared_updates,
+            filters={"userref": self.__userref},
+            updates={
+                "txid": updates.txid,
+                "symbol": updates.pair,
+                "side": updates.side,
+                "price": updates.price,
+                "volume": updates.vol,
+            },
         )
 
     def count(
@@ -183,8 +172,6 @@ class Configuration:
 
         # Create if not exist
         self.__table.create(bind=self.__db.engine, checkfirst=True)
-
-        # self.__migrate_table()
 
         # Add initial values
         if not self.__db.get_rows(

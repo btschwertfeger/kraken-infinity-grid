@@ -187,7 +187,6 @@ async def test_kraken_swing(
     assert float(api.get_balances()["XXBT"]["balance"]) < base_balance_before
 
 
-@pytest.mark.wip
 @pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)

@@ -8,25 +8,29 @@
 """Unit tests for the database module."""
 
 
-from pathlib import Path
+from typing import Generator
 
 import pytest
 
-from kraken_infinity_grid.services.database import (
+from kraken_infinity_grid.infrastructure.database import (
     Configuration,
-    DBConnect,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
+from kraken_infinity_grid.models.configuration import DBConfigDTO
+from kraken_infinity_grid.models.exchange import OrderInfoSchema
+from kraken_infinity_grid.services.database import DBConnect
 
 
 @pytest.fixture
-def db_connect(sqlite_file: Path) -> DBConnect:
+def db_connect(db_config: DBConfigDTO) -> Generator:
     """
     Fixture to create a DBConnect instance with an in-memory SQLite database.
     """
-    return DBConnect(sqlite_file=sqlite_file)
+    conn = DBConnect(db_config)
+    yield conn
+    conn.close()
 
 
 @pytest.fixture
@@ -71,48 +75,63 @@ def test_db_connect_init(db_connect: DBConnect) -> None:
     assert db_connect.metadata is not None
 
 
-def test_orderbook_add(orderbook: Orderbook, db_connect: DBConnect) -> None:
+def test_orderbook_add(orderbook: Orderbook) -> None:
     """Test adding an order to the orderbook."""
-    order = {
-        "txid": "txid1",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "50000"},
-        "vol": "0.1",
-    }
-    orderbook.add(order)
-    result = db_connect.get_rows(
-        orderbook._Orderbook__table,
-        filters={"txid": "txid1"},
+    order = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.1,
+        pair="BTC/USD",
+        txid="txid1",
+        price=50000.0,
+        side="buy",
     )
+    orderbook.add(order)
+    result = orderbook.get_orders(filters={"txid": "txid1"})
     assert result.fetchone() is not None
 
 
-def test_orderbook_get_orders(
-    orderbook: Orderbook,
-) -> None:
+def test_orderbook_get_orders(orderbook: Orderbook) -> None:
     """Test getting orders from the orderbook."""
-    order = {
-        "txid": "txid1",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "50000"},
-        "vol": "0.1",
-    }
+    order = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.1,
+        pair="BTC/USD",
+        txid="txid1",
+        price=50000.0,
+        side="buy",
+    )
     orderbook.add(order)
     result = orderbook.get_orders(filters={"txid": "txid1"})
     assert result.fetchone() is not None
 
     # Ensure filtering, ordering, and limiting work as expected
     orderbook.add(
-        order={
-            "txid": "txid2",
-            "descr": {"pair": "BTC/USD", "type": "buy", "price": "51000"},
-            "vol": "0.1",
-        },
+        OrderInfoSchema(
+            status="open",
+            vol_exec=0.0,
+            userref=123456789,
+            vol=0.1,
+            pair="BTC/USD",
+            txid="txid2",
+            price=51000.0,
+            side="buy",
+        ),
     )
     orderbook.add(
-        order={
-            "txid": "txid3",
-            "descr": {"pair": "BTC/USD", "type": "sell", "price": "51000"},
-            "vol": "0.1",
-        },
+        OrderInfoSchema(
+            status="open",
+            vol_exec=0.0,
+            userref=123456789,
+            vol=0.1,
+            pair="BTC/USD",
+            txid="txid3",
+            price=51000.0,
+            side="sell",
+        ),
     )
 
     result = orderbook.get_orders(
@@ -141,40 +160,49 @@ def test_orderbook_get_orders(
     assert len(result) == 2
 
 
-def test_orderbook_remove(orderbook: Orderbook, db_connect: DBConnect) -> None:
+def test_orderbook_remove(orderbook: Orderbook) -> None:
     """Test removing orders from the orderbook."""
-    order = {
-        "txid": "txid1",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "50000"},
-        "vol": "0.1",
-    }
+    order = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.1,
+        pair="BTC/USD",
+        txid="txid1",
+        price=50000.0,
+        side="buy",
+    )
     orderbook.add(order)
     orderbook.remove(filters={"txid": "txid1"})
-    result = db_connect.get_rows(
-        orderbook._Orderbook__table,
-        filters={"txid": "txid1"},
-    )
+    result = orderbook.get_orders(filters={"txid": "txid1"})
     assert result.fetchone() is None
 
 
-def test_orderbook_update(orderbook: Orderbook, db_connect: DBConnect) -> None:
+def test_orderbook_update(orderbook: Orderbook) -> None:
     """Test updating orders in the orderbook."""
-    order = {
-        "txid": "txid1",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "50000"},
-        "vol": "0.1",
-    }
-    orderbook.add(order)
-    updates = {
-        "txid": "txid1",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "51000"},
-        "vol": "0.2",
-    }
-    orderbook.update(updates, filters={"txid": "txid1"})
-    result = db_connect.get_rows(
-        orderbook._Orderbook__table,
-        filters={"txid": "txid1"},
+    order = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.1,
+        pair="BTC/USD",
+        txid="txid1",
+        price=50000.0,
+        side="buy",
     )
+    orderbook.add(order)
+    updates = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.2,
+        pair="BTC/USD",
+        txid="txid1",
+        price=51000.0,
+        side="buy",
+    )
+    orderbook.update(updates)
+    result = orderbook.get_orders(filters={"txid": "txid1"})
     updated_order = result.fetchone()
     assert updated_order is not None
     assert updated_order["side"] == "buy"
@@ -184,16 +212,26 @@ def test_orderbook_update(orderbook: Orderbook, db_connect: DBConnect) -> None:
 
 def test_orderbook_count(orderbook: Orderbook) -> None:
     """Test counting orders in the orderbook."""
-    order1 = {
-        "txid": "txid1",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "50000"},
-        "vol": "0.1",
-    }
-    order2 = {
-        "txid": "txid2",
-        "descr": {"pair": "BTC/USD", "type": "buy", "price": "50000"},
-        "vol": "0.1",
-    }
+    order1 = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.1,
+        pair="BTC/USD",
+        txid="txid1",
+        price=50000.0,
+        side="buy",
+    )
+    order2 = OrderInfoSchema(
+        status="open",
+        vol_exec=0.0,
+        userref=123456789,
+        vol=0.1,
+        pair="BTC/USD",
+        txid="txid2",
+        price=50000.0,
+        side="buy",
+    )
     orderbook.add(order1)
     count = orderbook.count()
     assert count == 1
@@ -204,6 +242,8 @@ def test_orderbook_count(orderbook: Orderbook) -> None:
     assert count == 1
     count = orderbook.count(filters={"txid": "txid1"}, exclude={"symbol": "BTC/USD"})
     assert count == 0
+    count = orderbook.count(filters={"symbol": "BTC/USD"})
+    assert count == 2
 
 
 def test_configuration_get(configuration: Configuration) -> None:
@@ -222,28 +262,20 @@ def test_configuration_update(configuration: Configuration) -> None:
 
 def test_unsold_buy_order_txids_add(
     unsold_buy_order_txids: UnsoldBuyOrderTXIDs,
-    db_connect: DBConnect,
 ) -> None:
     """Test adding an unsold buy order txid to the table."""
     unsold_buy_order_txids.add(txid="txid1", price=50000.0)
-    result = db_connect.get_rows(
-        unsold_buy_order_txids._UnsoldBuyOrderTXIDs__table,
-        filters={"txid": "txid1"},
-    )
+    result = unsold_buy_order_txids.get(filters={"txid": "txid1"})
     assert result.fetchone()["txid"] == "txid1"
 
 
 def test_unsold_buy_order_txids_remove(
     unsold_buy_order_txids: UnsoldBuyOrderTXIDs,
-    db_connect: DBConnect,
 ) -> None:
     """Test removing an unsold buy order txid from the table."""
     unsold_buy_order_txids.add(txid="txid1", price=50000.0)
     unsold_buy_order_txids.remove(txid="txid1")
-    result = db_connect.get_rows(
-        unsold_buy_order_txids._UnsoldBuyOrderTXIDs__table,
-        filters={"txid": "txid1"},
-    )
+    result = unsold_buy_order_txids.get(filters={"txid": "txid1"})
     assert result.fetchone() is None
 
 
@@ -275,28 +307,20 @@ def test_unsold_buy_order_txids_count(
 
 def test_pending_txids_add(
     pending_txids: PendingTXIDs,
-    db_connect: DBConnect,
 ) -> None:
     """Test adding a pending txid to the table."""
     pending_txids.add(txid="txid1")
-    result = db_connect.get_rows(
-        pending_txids._PendingIXIDs__table,
-        filters={"txid": "txid1"},
-    )
+    result = pending_txids.get(filters={"txid": "txid1"})
     assert result.fetchone()["txid"] == "txid1"
 
 
 def test_pending_txids_remove(
     pending_txids: PendingTXIDs,
-    db_connect: DBConnect,
 ) -> None:
     """Test removing a pending txid from the table."""
     pending_txids.add(txid="txid1")
     pending_txids.remove(txid="txid1")
-    result = db_connect.get_rows(
-        pending_txids._PendingIXIDs__table,
-        filters={"txid": "txid1"},
-    )
+    result = pending_txids.get(filters={"txid": "txid1"})
     assert result.fetchone() is None
 
 

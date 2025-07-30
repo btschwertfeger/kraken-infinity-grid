@@ -1126,7 +1126,6 @@ class GridStrategyBase:
         else:
             self._orderbook_table.update(
                 order_details,
-                filters={"txid": order_details.txid},
             )
             LOG.info("Updated order '%s' in orderbook.", order_details.txid)
 

@@ -8,22 +8,9 @@
 import pytest
 
 from kraken_infinity_grid.models.configuration import (
-    DBConfigDTO,
     NotificationConfigDTO,
     TelegramConfigDTO,
 )
-
-
-@pytest.fixture(scope="session")
-def db_config() -> DBConfigDTO:
-    return DBConfigDTO(
-        user="test_user",
-        password="test_pass",
-        host="localhost",
-        port=5432,
-        database="test_db",
-        sqlite_file=":memory:",
-    )
 
 
 @pytest.fixture(scope="session")

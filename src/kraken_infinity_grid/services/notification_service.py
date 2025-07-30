@@ -44,10 +44,10 @@ class NotificationService:
 
     def notify(self: Self, message: str) -> bool:
         """Send a notification through all configured channels."""
-        LOG.info("Sending notification: %s", message)
         if not self.__channels:
-            LOG.warning("No notification channels configured.")
             return False
+
+        LOG.info("Sending notification: %s", message)
 
         success = False
         for channel in self.__channels:
