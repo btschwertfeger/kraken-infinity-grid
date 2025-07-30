@@ -5,11 +5,7 @@
 # https://github.com/btschwertfeger
 #
 
-"""
-State machine for the Kraken Infinity Grid trading bot.
-
-FIXME: This state machine may work for Kraken, but not for other exchanges.
-"""
+""" State machine for the Kraken Infinity Grid trading bot. """
 
 import asyncio
 from enum import Enum, auto
@@ -38,8 +34,7 @@ class StateMachine:
         self._state: States = initial_state
         self._transitions = self._define_transitions()
         self._callbacks: dict[States, list[Callable]] = {}
-
-        self._facts: dict = {}  # FIXME
+        self._facts: dict = {}
 
     def _define_transitions(self: Self) -> dict[States, list[States]]:
         return {
@@ -84,10 +79,7 @@ class StateMachine:
     def facts(self: Self, new_facts: dict[str, bool]) -> None:
         """Update the facts of the state machine"""
         for key, value in new_facts.items():
-            if key in self._facts:
-                self._facts[key] = value
-            else:
-                raise KeyError(f"Fact '{key}' does not exist in the state machine.")
+            self._facts[key] = value
 
     def register_callback(
         self: Self,

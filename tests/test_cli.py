@@ -6,7 +6,6 @@
 #
 
 import os
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,13 +36,13 @@ def test_cli_version(runner: CliRunner) -> None:
 
 
 @patch.dict(os.environ, {})
-@patch("kraken_infinity_grid.gridbot.KrakenInfinityGridBot")
-def test_cli_run(mock_bot: MagicMock, runner: CliRunner, sqlite_file: Path) -> None:
+@patch("kraken_infinity_grid.core.engine.BotEngine", new_callable=MagicMock)
+def test_cli_run(mock_bot: MagicMock, runner: CliRunner) -> None:
     """Test the run command"""
     command = [
-        "--api-key",
+        "--api-public-key",
         "test_api_key",
-        "--secret-key",
+        "--api-secret-key",
         "test_secret_key",
         "run",
         "--name",
@@ -60,8 +59,7 @@ def test_cli_run(mock_bot: MagicMock, runner: CliRunner, sqlite_file: Path) -> N
         "3",
         "--userref",
         "123456",
-        "--sqlite-file",
-        sqlite_file,
+        "--in-memory",
         "--strategy",
         "cDCA",
     ]
