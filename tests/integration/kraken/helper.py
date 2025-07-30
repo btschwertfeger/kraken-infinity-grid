@@ -25,10 +25,6 @@ class KrakenAPI(Trade, User, Market):
     """
     Class mocking the User and Trade client of the python-kraken-sdk to
     simulate real trading.
-
-    TODOs:
-
-    - [ ] Properly handle updating the user's current balances.
     """
 
     def __init__(self: Self) -> None:
