@@ -5,6 +5,8 @@
 # https://github.com/btschwertfeger
 #
 
+"""Tests for checking if the CLI works as expected."""
+
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -66,6 +68,6 @@ def test_cli_run(mock_bot: MagicMock, runner: CliRunner) -> None:
     mock_bot.return_value.run = AsyncMock()
     result = runner.invoke(cli, command)
 
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.stderr
     mock_bot.assert_called_once()
     mock_bot.return_value.run.assert_any_await()

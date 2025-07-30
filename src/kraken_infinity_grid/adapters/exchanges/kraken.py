@@ -5,6 +5,29 @@
 # https://github.com/btschwertfeger
 #
 
+"""
+Kraken Exchange Adapter for the Infinity Grid Trading Bot.
+
+This module implements adapters for the Kraken exchange REST and WebSocket APIs
+that conform to the bot's exchange interface requirements. It provides
+functionality for trading operations, account management, and real-time market
+data.
+
+The module contains two main adapter classes:
+- KrakenExchangeRESTServiceAdapter: Handles all REST API operations like order
+    management, balance queries, and exchange status checks.
+- KrakenExchangeWebsocketServiceAdapter: Manages WebSocket connections for
+    real-time market data and order execution updates.
+
+These adapters translate between the Kraken API's specific implementation
+details and the bot's standardized interfaces, ensuring compatibility with the
+bot's state machine and event system.
+
+Dependencies:
+- kraken-python-sdk: For communication with Kraken API
+
+"""
+
 from contextlib import suppress
 from decimal import Decimal
 from functools import cache
@@ -12,31 +35,37 @@ from logging import getLogger
 from time import sleep
 from typing import Any, Self
 
-from kraken.exceptions import (
-    KrakenAuthenticationError,
-    KrakenInvalidOrderError,
-    KrakenPermissionDeniedError,
-)
-from kraken.spot import Market, SpotWSClient, Trade, User
+try:
+    from kraken.exceptions import (
+        KrakenAuthenticationError,
+        KrakenInvalidOrderError,
+        KrakenPermissionDeniedError,
+    )
+    from kraken.spot import Market, SpotWSClient, Trade, User
 
-from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.interfaces.exchange import (
-    IExchangeRESTService,
-    IExchangeWebSocketService,
-)
-from kraken_infinity_grid.models.exchange import (
-    AssetBalanceSchema,
-    AssetPairInfoSchema,
-    CreateOrderResponseSchema,
-    ExchangeDomain,
-    ExecutionsUpdateSchema,
-    OnMessageSchema,
-    OrderInfoSchema,
-    PairBalanceSchema,
-    TickerUpdateSchema,
-)
+    from kraken_infinity_grid.core.event_bus import EventBus
+    from kraken_infinity_grid.core.state_machine import StateMachine, States
+    from kraken_infinity_grid.exceptions import BotStateError
+    from kraken_infinity_grid.interfaces.exchange import (
+        IExchangeRESTService,
+        IExchangeWebSocketService,
+    )
+    from kraken_infinity_grid.models.exchange import (
+        AssetBalanceSchema,
+        AssetPairInfoSchema,
+        CreateOrderResponseSchema,
+        ExchangeDomain,
+        ExecutionsUpdateSchema,
+        OnMessageSchema,
+        OrderInfoSchema,
+        PairBalanceSchema,
+        TickerUpdateSchema,
+    )
+except ImportError as exc:
+    raise ImportError(
+        "The Kraken exchange adapter requires the 'kraken' extra. "
+        "Please install it using 'pip install kraken-infinity-grid[kraken]'.",
+    ) from exc
 
 LOG = getLogger(__name__)
 
