@@ -9,6 +9,7 @@
 """ Helper data structures used for integration testing. """
 
 import uuid
+from copy import deepcopy
 from typing import Any, Callable, Self
 
 from kraken.spot import Market, Trade, User
@@ -205,13 +206,13 @@ class KrakenAPI(Trade, User, Market):
 
     def get_orders_info(self: Self, txid: str) -> dict:
         """Get information about a specific order."""
-        if (order := self.__orders.get(txid, None)) is not None:
+        if order := self.__orders.get(txid, None):
             return {txid: order}
         return {}
 
     def get_balances(self: Self, **kwargs: Any) -> dict:  # noqa: ARG002
         """Get the user's current balances."""
-        return self.__balances
+        return deepcopy(self.__balances)
 
 
 async def get_kraken_instance(

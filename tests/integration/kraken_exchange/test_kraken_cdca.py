@@ -80,12 +80,12 @@ async def test_kraken_cdca(
             "data": [{"exec_type": "canceled", "order_id": "txid0"}],
         },
     )
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.INITIALIZING
     assert strategy._ready_to_trade is False
 
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._ticker == 50000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._ready_to_trade is True
 
     # ==========================================================================
@@ -114,7 +114,7 @@ async def test_kraken_cdca(
     # Check if shifting up the buy orders works
     await api.on_ticker_update(callback=ws_client.on_message, last=60000.0)
     assert strategy._ticker == 60000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     # We should now still have 5 buy orders, but at a higher price. The other
     # orders should be canceled.
@@ -135,7 +135,7 @@ async def test_kraken_cdca(
     # Now lets let the price drop a bit so that a buy order gets triggered.
     await api.on_ticker_update(callback=ws_client.on_message, last=59990.0)
     assert strategy._ticker == 59990.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     # Quick re-check ... the price update should not affect any orderbook
     # changes when dropping.
@@ -155,7 +155,7 @@ async def test_kraken_cdca(
 
     # Now trigger the execution of the first buy order
     await api.on_ticker_update(callback=ws_client.on_message, last=59000.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 4
 
     # Ensure that we have 4 buy orders and no sell order
@@ -175,7 +175,7 @@ async def test_kraken_cdca(
     # 4. ENSURING N OPEN BUY ORDERS
     # If there is a new price event, the algorithm will place the 5th buy order.
     await api.on_ticker_update(callback=ws_client.on_message, last=59100.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 5
 
     for order, price, volume in zip(
@@ -194,14 +194,14 @@ async def test_kraken_cdca(
     # 5. RAPID PRICE DROP - FILLING ALL BUY ORDERS
     # Now check the behavior for a rapid price drop.
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 0
     assert rest_api.get_open_orders(userref=strategy._config.userref) == []
 
     # ==========================================================================
     # 6. ENSURE N OPEN BUY ORDERS
     await api.on_ticker_update(callback=ws_client.on_message, last=50100.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 5
 
     for order, price, volume in zip(
@@ -236,4 +236,4 @@ async def test_kraken_cdca(
     assert strategy._orderbook_table.count() == 2
     assert strategy._max_investment_reached
 
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING

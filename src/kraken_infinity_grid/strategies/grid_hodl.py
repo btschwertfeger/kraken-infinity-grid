@@ -43,15 +43,15 @@ class GridHODLStrategy(GridStrategyBase):
                 self._configuration_table.update({"price_of_highest_buy": last_price})
 
             # Sell price 1x interval above buy price
-            order_price = last_price * (1 + self._config.interval)
-            if self._ticker > order_price:
-                order_price = self._ticker * (1 + self._config.interval)
+            factor = 1 + self._config.interval
+            if (order_price := last_price * factor) < self._ticker:
+                order_price = self._ticker * factor
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
-            order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker:
-                order_price = self._ticker * 100 / (100 + 100 * self._config.interval)
+            factor = 100 / (100 + 100 * self._config.interval)
+            if (order_price := last_price * factor) > self._ticker:
+                order_price = self._ticker * factor
             return order_price
 
         raise ValueError(f"Unknown side: {side}!")
@@ -113,7 +113,6 @@ class GridHODLStrategy(GridStrategyBase):
                     txid_to_delete=txid_to_delete,
                 )
                 return
-
         order_price = float(
             self._rest_api.truncate(
                 amount=order_price,
@@ -122,10 +121,6 @@ class GridHODLStrategy(GridStrategyBase):
                 quote_currency=self._config.quote_currency,
             ),
         )
-
-        # For GridSell: This is only the case if there is no corresponding
-        # buy order and the sell order was placed, e.g. due to an extra sell
-        # order via selling of partially filled buy orders.
 
         # Respect the fee to not reduce the quote currency over time, while
         # accumulating the base currency.
@@ -145,6 +140,7 @@ class GridHODLStrategy(GridStrategyBase):
             self._config.base_currency,
             self._config.quote_currency,
         )
+
         if fetched_balances.base_available >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
@@ -180,7 +176,7 @@ class GridHODLStrategy(GridStrategyBase):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._symbol}"
+        message = f"⚠️ {self._config.name} ({self._symbol})\n"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
@@ -193,12 +189,14 @@ class GridHODLStrategy(GridStrategyBase):
 
         if txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
-            #       Added logging statement to monitor occurrences
             # ... This would only be the case for GridHODL and SWING, while
             # those should always have enough base currency available... but
-            # lets check this for a while.
+            # lets check this for a while. The only case I can think of would be
+            # in case the user takes money out of the account while processing a
+            # filled buy order. But this should not happen in a production
+            # environment.
             LOG.warning(
-                "TODO: Not enough funds to place sell order for txid %s",
+                "Not enough funds to place sell order for txid '%s'",
                 txid_to_delete,
             )
             self._orderbook_table.remove(filters={"txid": txid_to_delete})

@@ -44,15 +44,15 @@ class GridSellStrategy(GridStrategyBase):
                 )
 
             # Sell price 1x interval above buy price
-            order_price = last_price * (1 + self._config.interval)
-            if self._ticker > order_price:
-                order_price = self._ticker * (1 + self._config.interval)
+            factor = 1 + self._config.interval
+            if (order_price := last_price * factor) < self._ticker:
+                order_price = self._ticker * factor
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
-            order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker:
-                order_price = self._ticker * 100 / (100 + 100 * self._config.interval)
+            factor = 100 / (100 + 100 * self._config.interval)
+            if (order_price := last_price * factor) > self._ticker:
+                order_price = self._ticker * factor
             return order_price
 
         raise ValueError(f"Unknown side: {side}!")
@@ -193,7 +193,7 @@ class GridSellStrategy(GridStrategyBase):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._config.symbol}"
+        message = f"⚠️ {self._config.name} ({self._symbol})\n"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
@@ -205,6 +205,8 @@ class GridSellStrategy(GridStrategyBase):
         # sell. This could only happen if some orders have not being
         # processed properly, the algorithm is not in sync with the
         # exchange, or manual trades have been made during processing.
+        # Can e.g. happen if user withdraws funds from the account
+        # while the algorithm expects them to be available.
         LOG.error(message)
         self._state_machine.transition_to(States.ERROR)
         raise BotStateError(message)

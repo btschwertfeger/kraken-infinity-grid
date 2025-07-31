@@ -33,9 +33,9 @@ class CDCAStrategy(GridStrategyBase):
             return None
 
         if side == self._exchange_domain.BUY:  # New order is a buy
-            order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker:
-                order_price = self._ticker * 100 / (100 + 100 * self._config.interval)
+            factor = 100 / (100 + 100 * self._config.interval)
+            if (order_price := last_price * factor) > self._ticker:
+                order_price = self._ticker * factor
             return order_price
 
         raise ValueError(f"Unknown side: {side}!")

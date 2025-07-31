@@ -403,8 +403,6 @@ class GridStrategyBase:
 
         This function triggers the Notification message of the executed order and
         places a new order.
-
-        FIXME: closed order must be a pydantic model, not a dict.
         """
         LOG.info("Handling executed order: %s", closed_order.txid)
 

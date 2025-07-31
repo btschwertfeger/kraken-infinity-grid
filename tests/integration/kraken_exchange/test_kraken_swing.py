@@ -5,6 +5,8 @@
 # https://github.com/btschwertfeger
 #
 
+""" Integration tests for the SWING strategy on Kraken exchange."""
+
 import logging
 from unittest import mock
 
@@ -18,6 +20,8 @@ from kraken_infinity_grid.models.configuration import (
 )
 
 from .helper import get_kraken_instance
+
+LOG = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -38,6 +42,7 @@ def kraken_swing_bot_config() -> BotConfigDTO:
     )
 
 
+@pytest.mark.wip
 @pytest.mark.integration
 @pytest.mark.asyncio
 @mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
@@ -56,6 +61,7 @@ async def test_kraken_swing(
     Integration test for the SWING strategy using pre-generated websocket
     messages.
     """
+    LOG.info("******* Starting SWING integration test *******")
     caplog.set_level(logging.INFO)
 
     # Create engine using mocked Kraken API
@@ -82,12 +88,12 @@ async def test_kraken_swing(
             "data": [{"exec_type": "canceled", "order_id": "txid0"}],
         },
     )
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.INITIALIZING
     assert strategy._ready_to_trade is False
 
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._ticker == 50000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._ready_to_trade is True
 
     # ==========================================================================
@@ -95,9 +101,10 @@ async def test_kraken_swing(
     # After both fake-websocket channels are connected, the algorithm went
     # through its full setup and placed orders against the fake Kraken API and
     # finally saved those results into the local orderbook table.
-    #
     # The SWING strategy additionally starts selling the existing base currency
     # at defined intervals.
+    LOG.info("******* Check placement of initial buy orders *******")
+
     for order, price, volume, side in zip(
         strategy._orderbook_table.get_orders().all(),
         (49504.9, 49014.7, 48529.4, 48048.9, 47573.1, 51005.0),
@@ -118,7 +125,7 @@ async def test_kraken_swing(
 
     await api.on_ticker_update(callback=ws_client.on_message, last=40000.0)
     assert strategy._ticker == 40000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     for order, price, volume in zip(
         strategy._orderbook_table.get_orders().all(),
@@ -134,8 +141,9 @@ async def test_kraken_swing(
 
     # ==========================================================================
     # 3. NEW TICKER TO ENSURE N OPEN BUY ORDERS
+    LOG.info("******* Check ensuring N open buy orders *******")
     await api.on_ticker_update(callback=ws_client.on_message, last=40000.1)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     for order, price, volume in zip(
         strategy._orderbook_table.get_orders(filters={"side": "sell"}).all(),
@@ -163,12 +171,13 @@ async def test_kraken_swing(
 
     # ==========================================================================
     # 4. FILLING SELL ORDERS WHILE SHIFTING UP BUY ORDERS
+    LOG.info("******* Check filling sell orders while shifting up buy orders *******")
     # Check if shifting up the buy orders works
     quote_balance_before = float(api.get_balances()["ZUSD"]["balance"])
     base_balance_before = float(api.get_balances()["XXBT"]["balance"])
 
     await api.on_ticker_update(callback=ws_client.on_message, last=60000.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     for order, price, volume in zip(
         strategy._orderbook_table.get_orders().all(),
@@ -185,6 +194,36 @@ async def test_kraken_swing(
     # Ensure that profit has been made
     assert float(api.get_balances()["ZUSD"]["balance"]) > quote_balance_before
     assert float(api.get_balances()["XXBT"]["balance"]) < base_balance_before
+
+    # ==========================================================================
+    # 5. Test what happens if there are not enough funds to place a sell order
+    #    for some reason.
+    LOG.info("******* Check not enough funds for sell order *******")
+
+    # Save the original method to restore it later
+    original_get_pair_balance = strategy._rest_api.get_pair_balance
+
+    # Mock the instance method directly
+    strategy._rest_api.get_pair_balance = mock.Mock(
+        return_value=mock.Mock(
+            base_available=0.000,
+            quote_available=1000.0,
+        ),
+    )
+
+    try:
+        # Now trigger the sell order
+        await api.on_ticker_update(callback=ws_client.on_message, last=59000.0)
+        assert state_machine.state == States.RUNNING
+        assert strategy._orderbook_table.count() == 4
+        assert (
+            len(strategy._orderbook_table.get_orders(filters={"side": "sell"}).all())
+            == 0
+        )
+        assert "Not enough funds" in caplog.text
+    finally:
+        # Restore the original method
+        strategy._rest_api.get_pair_balance = original_get_pair_balance
 
 
 @pytest.mark.integration
@@ -210,6 +249,7 @@ async def test_kraken_swing_unfilled_surplus(
     unfilled surplus: The base currency volume that was partly filled by an buy
     order, before the order was cancelled.
     """
+    LOG.info("******* Starting SWING unfilled surplus integration test *******")
     caplog.set_level(logging.INFO)
 
     # Create engine using mocked Kraken API
@@ -237,12 +277,12 @@ async def test_kraken_swing_unfilled_surplus(
             "data": [{"exec_type": "canceled", "order_id": "txid0"}],
         },
     )
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.INITIALIZING
     assert strategy._ready_to_trade is False
 
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._ticker == 50000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._ready_to_trade is True
 
     # ==========================================================================
@@ -250,6 +290,7 @@ async def test_kraken_swing_unfilled_surplus(
     # After both fake-websocket channels are connected, the algorithm went
     # through its full setup and placed orders against the fake Kraken API and
     # finally saved those results into the local orderbook table.
+    LOG.info("******* Check placement of initial buy orders *******")
 
     # Check if the five initial buy orders are placed with the expected price
     # and volume. Note that the interval is not exactly 0.01 due to the fee
@@ -275,7 +316,8 @@ async def test_kraken_swing_unfilled_surplus(
 
     # ==========================================================================
     # 2. BUYING PARTLY FILLED and ensure that the unfilled surplus is handled
-
+    # correctly.
+    LOG.info("******* Check handling of unfilled surplus *******")
     api.fill_order(strategy._orderbook_table.get_orders().first().txid, 0.002)
     assert strategy._orderbook_table.count() == 6
 
@@ -302,7 +344,7 @@ async def test_kraken_swing_unfilled_surplus(
     #    The sell-check is done only during cancelling orders, as this is the
     #    only time where this amount is touched. So we need to create another
     #    partly filled order.
-
+    LOG.info("******* Check selling the unfilled surplus *******")
     strategy.new_buy_order(order_price=49504.9)
     assert strategy._orderbook_table.count() == 6
     assert (
@@ -343,6 +385,7 @@ async def test_kraken_swing_unfilled_surplus(
 
     # ==========================================================================
     # 4. MAX INVESTMENT REACHED
+    LOG.info("******* Check max investment reached behavior *******")
 
     # First ensure that new buy orders can be placed...
     assert not strategy._max_investment_reached
@@ -361,4 +404,4 @@ async def test_kraken_swing_unfilled_surplus(
     assert strategy._orderbook_table.count() == 2
     assert strategy._max_investment_reached
 
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING

@@ -5,6 +5,8 @@
 # https://github.com/btschwertfeger
 #
 
+"""Integration tests for the GridSell strategy on Kraken exchange."""
+
 import logging
 from unittest import mock
 
@@ -18,6 +20,8 @@ from kraken_infinity_grid.models.configuration import (
 )
 
 from .helper import get_kraken_instance
+
+LOG = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -80,6 +84,7 @@ async def test_kraken_grid_sell(
     This one contains a lot of copy-paste, but hopefully doesn't need to get
     touched anymore.
     """
+    LOG.info("******* Starting GridSell integration test *******")
     caplog.set_level(logging.INFO)
 
     # Create engine using mocked Kraken API
@@ -106,12 +111,12 @@ async def test_kraken_grid_sell(
             "data": [{"exec_type": "canceled", "order_id": "txid0"}],
         },
     )
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.INITIALIZING
     assert strategy._ready_to_trade is False
 
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._ticker == 50000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._ready_to_trade is True
 
     # ==========================================================================
@@ -119,6 +124,7 @@ async def test_kraken_grid_sell(
     # After both fake-websocket channels are connected, the algorithm went
     # through its full setup and placed orders against the fake Kraken API and
     # finally saved those results into the local orderbook table.
+    LOG.info("******* Check placement of initial buy orders *******")
 
     # Check if the five initial buy orders are placed with the expected price
     # and volume. Note that the interval is not exactly 0.01 due to the fee
@@ -137,10 +143,11 @@ async def test_kraken_grid_sell(
 
     # ==========================================================================
     # 2. SHIFTING UP BUY ORDERS
+    LOG.info("******* Check shifting up buy orders works *******")
     # Check if shifting up the buy orders works
     await api.on_ticker_update(callback=ws_client.on_message, last=60000.0)
     assert strategy._ticker == 60000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     # We should now still have 5 buy orders, but at a higher price. The other
     # orders should be canceled.
@@ -158,10 +165,11 @@ async def test_kraken_grid_sell(
 
     # ==========================================================================
     # 3. FILLING A BUY ORDER
+    LOG.info("******* Check filling a buy order works *******")
     # Now lets let the price drop a bit so that a buy order gets triggered.
     await api.on_ticker_update(callback=ws_client.on_message, last=59990.0)
     assert strategy._ticker == 59990.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
 
     # Quick re-check ... the price update should not affect any orderbook
     # changes when dropping.
@@ -181,7 +189,7 @@ async def test_kraken_grid_sell(
 
     # Now trigger the execution of the first buy order
     await api.on_ticker_update(callback=ws_client.on_message, last=59000.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 5
 
     # Ensure that we have 4 buy orders and 1 sell order
@@ -200,9 +208,10 @@ async def test_kraken_grid_sell(
 
     # ==========================================================================
     # 4. ENSURING N OPEN BUY ORDERS
+    LOG.info("******* Check ensuring N open buy orders works *******")
     # If there is a new price event, the algorithm will place the 5th buy order.
     await api.on_ticker_update(callback=ws_client.on_message, last=59100.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 6
 
     for order, price, volume, side in zip(
@@ -220,9 +229,10 @@ async def test_kraken_grid_sell(
 
     # ==========================================================================
     # 5. FILLING A SELL ORDER
+    LOG.info("******* Check filling a sell order works *******")
     # Now let's see if the sell order gets triggered.
     await api.on_ticker_update(callback=ws_client.on_message, last=60000.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 5
 
     for order, price, volume, side in zip(
@@ -245,9 +255,10 @@ async def test_kraken_grid_sell(
 
     # ==========================================================================
     # 6. RAPID PRICE DROP - FILLING ALL BUY ORDERS
+    LOG.info("******* Check filling all buy due to rapid price drop *******")
     # Now check the behavior for a rapid price drop.
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 5
 
     for order, price, volume in zip(
@@ -268,8 +279,11 @@ async def test_kraken_grid_sell(
     #    triggers a new buy order, causing us to have 9 buy orders and a single
     #    sell order. Which is not a problem, since the buy orders that are too
     #    much will get canceled after the next price update.
+    LOG.info(
+        "******* Check filling all sell orders and ensuring N open buy orders *******",
+    )
     await api.on_ticker_update(callback=ws_client.on_message, last=59100.0)
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._orderbook_table.count() == 6
     current_orders = strategy._orderbook_table.get_orders().all()
     assert len(current_orders) == 6
@@ -300,6 +314,7 @@ async def test_kraken_grid_sell(
 
     # ==========================================================================
     # 8. MAX INVESTMENT REACHED
+    LOG.info("******* Check max investment reached behavior *******")
 
     # First ensure that new buy orders can be placed...
     assert not strategy._max_investment_reached
@@ -311,14 +326,50 @@ async def test_kraken_grid_sell(
     # Now with a different max investment, the max investment should be reached
     # and no further orders be placed.
     assert not strategy._max_investment_reached
+    old_max_investment = strategy._config.max_investment
     strategy._config.max_investment = 202.0  # 200 USD + fee
     strategy._GridStrategyBase__cancel_all_open_buy_orders()
     assert strategy._orderbook_table.count() == 1
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._orderbook_table.count() == 2
     assert strategy._max_investment_reached
+    assert state_machine.state == States.RUNNING
+    strategy._config.max_investment = old_max_investment
 
-    assert state_machine.state != States.ERROR
+    # ==========================================================================
+    # 9. Test what happens if there are not enough funds to place a sell order
+    #    for some reason. The GridSell strategy will fail in this case to trigger
+    #    a restart (handled by external process manager)
+    LOG.info("******* Check not enough funds for sell order *******")
+    # Ensure buy orders exist
+    await api.on_ticker_update(callback=ws_client.on_message, last=58500.0)
+    assert strategy._orderbook_table.count() == 6  # 5 buy and one sell order
+    LOG.info("******* Check not enough funds for sell order *******")
+
+    # Save the original method to restore it later
+    original_get_pair_balance = strategy._rest_api.get_pair_balance
+
+    # Mock the instance method directly
+    strategy._rest_api.get_pair_balance = mock.Mock(
+        return_value=mock.Mock(
+            base_available=0.000,
+            quote_available=1000.0,
+        ),
+    )
+
+    try:
+        # Now trigger the sell order
+        await api.on_ticker_update(callback=ws_client.on_message, last=57900.0)
+        assert state_machine.state == States.ERROR
+        assert strategy._orderbook_table.count() != 5
+        assert (
+            len(strategy._orderbook_table.get_orders(filters={"side": "sell"}).all())
+            == 1
+        )
+        assert "Not enough" in caplog.text
+    finally:
+        # Restore the original method
+        strategy._rest_api.get_pair_balance = original_get_pair_balance
 
 
 @pytest.mark.integration
@@ -344,6 +395,7 @@ async def test_kraken_grid_sell_unfilled_surplus(
     unfilled surplus: The base currency volume that was partly filled by an buy
     order, before the order was cancelled.
     """
+    LOG.info("******* Starting GridSell unfilled surplus integration test *******")
     caplog.set_level(logging.INFO)
 
     # Create engine using mocked Kraken API
@@ -371,12 +423,12 @@ async def test_kraken_grid_sell_unfilled_surplus(
             "data": [{"exec_type": "canceled", "order_id": "txid0"}],
         },
     )
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.INITIALIZING
     assert strategy._ready_to_trade is False
 
     await api.on_ticker_update(callback=ws_client.on_message, last=50000.0)
     assert strategy._ticker == 50000.0
-    assert state_machine.state != States.ERROR
+    assert state_machine.state == States.RUNNING
     assert strategy._ready_to_trade is True
 
     # ==========================================================================
@@ -384,6 +436,7 @@ async def test_kraken_grid_sell_unfilled_surplus(
     # After both fake-websocket channels are connected, the algorithm went
     # through its full setup and placed orders against the fake Kraken API and
     # finally saved those results into the local orderbook table.
+    LOG.info("******* Check placement of initial buy orders *******")
 
     # Check if the five initial buy orders are placed with the expected price
     # and volume. Note that the interval is not exactly 0.01 due to the fee
@@ -402,6 +455,7 @@ async def test_kraken_grid_sell_unfilled_surplus(
 
     # ==========================================================================
     # 2. BUYING PARTLY FILLED and ensure that the unfilled surplus is handled
+    LOG.info("******* Check partially filled orders *******")
 
     api.fill_order(strategy._orderbook_table.get_orders().first().txid, 0.002)
     assert strategy._orderbook_table.count() == 5
@@ -425,6 +479,7 @@ async def test_kraken_grid_sell_unfilled_surplus(
     #    The sell-check is done only during cancelling orders, as this is the
     #    only time where this amount is touched. So we need to create another
     #    partly filled order.
+    LOG.info("******* Check selling the unfilled surplus *******")
 
     strategy.new_buy_order(order_price=49504.9)
     assert strategy._orderbook_table.count() == 5

@@ -59,15 +59,15 @@ class SwingStrategy(GridStrategyBase):
                     )
 
                 # Sell price 1x interval above buy price
-                order_price = last_price * (1 + self._config.interval)
-                if self._ticker > order_price:
-                    order_price = self._ticker * (1 + self._config.interval)
+                factor = 1 + self._config.interval
+                if (order_price := last_price * factor) < self._ticker:
+                    order_price = self._ticker * factor
             return order_price
 
         if side == self._exchange_domain.BUY:  # New order is a buy
-            order_price = last_price * 100 / (100 + 100 * self._config.interval)
-            if order_price > self._ticker:
-                order_price = self._ticker * 100 / (100 + 100 * self._config.interval)
+            factor = 100 / (100 + 100 * self._config.interval)
+            if (order_price := last_price * factor) > self._ticker:
+                order_price = self._ticker * factor
             return order_price
 
         raise ValueError(f"Unknown side: {side}!")
@@ -224,14 +224,12 @@ class SwingStrategy(GridStrategyBase):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._symbol}"
+        message = f"⚠️ {self._config.name} ({self._symbol})\n"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
-        self._event_bus.publish(
-            "notification",
-            data={"message": message},
-        )
+
+        self._event_bus.publish("notification", data={"message": message})
         LOG.warning("Current balances: %s", fetched_balances)
 
         if txid_to_delete is not None:
@@ -241,7 +239,7 @@ class SwingStrategy(GridStrategyBase):
             # those should always have enough base currency available... but
             # lets check this for a while.
             LOG.warning(
-                "TODO: Not enough funds to place sell order for txid %s",
+                "Not enough funds to place sell order for txid %s",
                 txid_to_delete,
             )
             self._orderbook_table.remove(filters={"txid": txid_to_delete})
