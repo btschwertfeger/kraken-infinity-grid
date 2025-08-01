@@ -23,6 +23,7 @@ def mock_config() -> BotConfigDTO:
     config.fee = 0.001  # 0.1% fee
     config.base_currency = "BTC"
     config.quote_currency = "USD"
+    config.name = "TestBot"
     return config
 
 

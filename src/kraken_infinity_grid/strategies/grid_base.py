@@ -1279,16 +1279,29 @@ class GridStrategyBase:
         return order_price
 
     def _get_sell_order_price(
-        self,
+        self: Self,
         last_price: float,
-        extra_sell: bool = False,
-    ) -> float:  # pragma: no cover
+    ) -> float:
         """
-        Returns the order price for the next buy order.
+        Returns the order price. Also assigns a new highest buy price to
+        configuration if there was a new highest buy.
+        """
+        LOG.debug("Computing the order price...")
 
-        This method should be implemented by the concrete strategy classes.
-        """
-        raise NotImplementedError("This method should be implemented by subclasses.")
+        order_price: float
+        price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
+        last_price = float(last_price)
+
+        if last_price > price_of_highest_buy:
+            self._configuration_table.update({"price_of_highest_buy": last_price})
+
+        # Sell price 1x interval above buy price
+        factor = 1 + self._config.interval
+        if (order_price := last_price * factor) < self._ticker:
+            order_price = self._ticker * factor
+        return order_price
+
+    # ==========================================================================
 
     def _check_extra_sell_order(self: Self) -> None:  # pragma: no cover
         """

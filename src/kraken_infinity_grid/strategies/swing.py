@@ -20,10 +20,9 @@ LOG = getLogger(__name__)
 
 class SwingStrategy(GridStrategyBase):
 
-    def _get_sell_order_price(
+    def _get_extra_sell_order_price(
         self: Self,
         last_price: float,
-        extra_sell: bool = False,
     ) -> float:
         """
         Returns the sell order price depending. Also assigns a new highest buy
@@ -34,29 +33,18 @@ class SwingStrategy(GridStrategyBase):
         price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
         last_price = float(last_price)
 
-        if extra_sell:
-            # Extra sell order when SWING
-            # 2x interval above [last close price | price of highest buy]
+        # Extra sell order when SWING
+        # 2x interval above [last close price | price of highest buy]
+        order_price = (
+            last_price * (1 + self._config.interval) * (1 + self._config.interval)
+        )
+        if order_price < price_of_highest_buy:
             order_price = (
-                last_price * (1 + self._config.interval) * (1 + self._config.interval)
+                price_of_highest_buy
+                * (1 + self._config.interval)
+                * (1 + self._config.interval)
             )
-            if order_price < price_of_highest_buy:
-                order_price = (
-                    price_of_highest_buy
-                    * (1 + self._config.interval)
-                    * (1 + self._config.interval)
-                )
 
-        else:
-            # Regular sell order (even for SWING) (cDCA will trigger this
-            # but it will be filtered out later)
-            if last_price > price_of_highest_buy:
-                self._configuration_table.update({"price_of_highest_buy": last_price})
-
-            # Sell price 1x interval above buy price
-            factor = 1 + self._config.interval
-            if (order_price := last_price * factor) < self._ticker:
-                order_price = self._ticker * factor
         return order_price
 
     def _check_extra_sell_order(self: Self) -> None:
@@ -78,9 +66,8 @@ class SwingStrategy(GridStrategyBase):
                 fetched_balances.base_available * self._ticker
                 > self._amount_per_grid_plus_fee
             ):
-                order_price = self._get_sell_order_price(
+                order_price = self._get_extra_sell_order_price(
                     last_price=self._ticker,
-                    extra_sell=True,
                 )
                 self._event_bus.publish(
                     "notification",
