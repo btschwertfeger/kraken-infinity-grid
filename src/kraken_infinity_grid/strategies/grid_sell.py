@@ -20,45 +20,44 @@ LOG = getLogger(__name__)
 
 
 class GridSellStrategy(GridStrategyBase):
-    def _get_order_price(
+    def _get_sell_order_price(
         self: Self,
-        side: str,
         last_price: float,
         extra_sell: bool = False,  # noqa: ARG002
     ) -> float:
         """
-        Returns the order price depending on the strategy and side. Also assigns
-        a new highest buy price to configuration if there was a new highest buy.
+        Returns the sell order price depending. Also assigns a new highest buy
+        price to configuration if there was a new highest buy.
         """
         LOG.debug("Computing the order price...")
         order_price: float
         price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
         last_price = float(last_price)
 
-        if side == self._exchange_domain.SELL:  # New order is a sell
-            # Regular sell order (even for SWING) (cDCA will trigger this
-            # but it will be filtered out later)
-            if last_price > price_of_highest_buy:
-                self._configuration_table.update(
-                    {"price_of_highest_buy": last_price},
-                )
+        if last_price > price_of_highest_buy:
+            self._configuration_table.update(
+                {"price_of_highest_buy": last_price},
+            )
 
-            # Sell price 1x interval above buy price
-            factor = 1 + self._config.interval
-            if (order_price := last_price * factor) < self._ticker:
-                order_price = self._ticker * factor
-            return order_price
+        # Sell price 1x interval above buy price
+        factor = 1 + self._config.interval
+        if (order_price := last_price * factor) < self._ticker:
+            order_price = self._ticker * factor
+        return order_price
 
-        if side == self._exchange_domain.BUY:  # New order is a buy
-            factor = 100 / (100 + 100 * self._config.interval)
-            if (order_price := last_price * factor) > self._ticker:
-                order_price = self._ticker * factor
-            return order_price
+    def _get_buy_order_price(self: Self, last_price: float) -> float:
+        """Returns the order price for the next buy order."""
+        LOG.debug("Computing the order price...")
 
-        raise ValueError(f"Unknown side: {side}!")
+        order_price: float
+        last_price = float(last_price)
+        factor = 100 / (100 + 100 * self._config.interval)
+        if (order_price := last_price * factor) > self._ticker:
+            order_price = self._ticker * factor
+        return order_price
 
     def _check_extra_sell_order(self: Self) -> None:
-        pass
+        """Not applicable for GridSell strategy."""
 
     def _new_sell_order(
         self: Self,

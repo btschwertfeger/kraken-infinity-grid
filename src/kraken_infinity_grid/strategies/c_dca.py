@@ -15,30 +15,28 @@ LOG = getLogger(__name__)
 
 class CDCAStrategy(GridStrategyBase):
 
-    def _get_order_price(
+    def _get_sell_order_price(
         self: Self,
-        side: str,
         last_price: float,
         extra_sell: bool = False,  # noqa: ARG002
     ) -> float:
-        """
-        Returns the order price depending on the strategy and side. Also assigns
-        a new highest buy price to configuration if there was a new highest buy.
-        """
-        LOG.debug("Computing the order price...")
+        """Returns the order price for the next sell order."""
+        LOG.debug("cDCA strategy does not place sell orders.")
 
-        if side == self._exchange_domain.SELL:  # New order is a sell
-            # There is no order price for sell orders in cDCA strategy, since no
-            # sell orders are placed.
-            return None
+        if (last_price := float(last_price)) > self._configuration_table.get()[
+            "price_of_highest_buy"
+        ]:
+            self._configuration_table.update({"price_of_highest_buy": last_price})
+        return None
 
-        if side == self._exchange_domain.BUY:  # New order is a buy
-            factor = 100 / (100 + 100 * self._config.interval)
-            if (order_price := last_price * factor) > self._ticker:
-                order_price = self._ticker * factor
-            return order_price
+    def _get_buy_order_price(self: Self, last_price: float) -> float:
+        """Returns the order price for the next buy order."""
+        LOG.debug("Computing the buy order price...")
 
-        raise ValueError(f"Unknown side: {side}!")
+        factor = 100 / (100 + 100 * self._config.interval)
+        if (order_price := float(last_price) * factor) > self._ticker:
+            order_price = self._ticker * factor
+        return order_price
 
     def _check_extra_sell_order(self: Self) -> None:
         """Not applicable for cDCA strategy."""

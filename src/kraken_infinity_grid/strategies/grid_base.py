@@ -424,8 +424,7 @@ class GridStrategyBase:
         if closed_order.side == self._exchange_domain.BUY:
             self._handle_arbitrage(
                 side=self._exchange_domain.SELL,
-                order_price=self._get_order_price(
-                    side=self._exchange_domain.SELL,
+                order_price=self._get_sell_order_price(
                     last_price=closed_order.price,
                 ),
                 txid_to_delete=closed_order.txid,
@@ -447,8 +446,7 @@ class GridStrategyBase:
             ):
                 self._handle_arbitrage(
                     side=self._exchange_domain.BUY,
-                    order_price=self._get_order_price(
-                        side=self._exchange_domain.BUY,
+                    order_price=self._get_buy_order_price(
                         last_price=closed_order.price,
                     ),
                     txid_to_delete=closed_order.txid,
@@ -674,8 +672,7 @@ class GridStrategyBase:
                 self._config.quote_currency,
             )
             if fetched_balances.quote_available > self._amount_per_grid_plus_fee:
-                order_price: float = self._get_order_price(
-                    side=self._exchange_domain.BUY,
+                order_price: float = self._get_buy_order_price(
                     last_price=(
                         self._ticker if n_active_buy_orders == 0 else min(buy_prices)
                     ),
@@ -778,14 +775,13 @@ class GridStrategyBase:
             return
 
         if side == self._exchange_domain.BUY:
-            self.new_buy_order(
-                order_price=order_price,
-                txid_to_delete=txid_to_delete,
-            )
+            self.new_buy_order(order_price=order_price, txid_to_delete=txid_to_delete)
         elif side == self._exchange_domain.SELL:
-            self._new_sell_order(
-                order_price=order_price,
-                txid_to_delete=txid_to_delete,
+            self._new_sell_order(order_price=order_price, txid_to_delete=txid_to_delete)
+        else:
+            self._state_machine.transition_to(States.ERROR)
+            raise BotStateError(
+                f"Unknown side '{side}' for arbitrage handling in {self._symbol}!",
             )
 
         # Wait a bit to avoid rate limiting.
@@ -964,10 +960,7 @@ class GridStrategyBase:
         if order_details.side == self._exchange_domain.BUY:
             self._handle_arbitrage(
                 side=self._exchange_domain.SELL,
-                order_price=self._get_order_price(
-                    side=self._exchange_domain.SELL,
-                    last_price=order_details.price,
-                ),
+                order_price=self._get_sell_order_price(last_price=order_details.price),
                 txid_to_delete=txid,
             )
 
@@ -987,8 +980,7 @@ class GridStrategyBase:
             # orders will be placed in ``check_price_range`` during shift-up.
             self._handle_arbitrage(
                 side=self._exchange_domain.BUY,
-                order_price=self._get_order_price(
-                    side=self._exchange_domain.BUY,
+                order_price=self._get_buy_order_price(
                     last_price=order_details.price,
                 ),
                 txid_to_delete=txid,
@@ -1077,8 +1069,7 @@ class GridStrategyBase:
                 )
                 self._handle_arbitrage(
                     side=self._exchange_domain.SELL,
-                    order_price=self._get_order_price(
-                        side=self._exchange_domain.SELL,
+                    order_price=self._get_sell_order_price(
                         last_price=b["vol_of_unfilled_remaining_max_price"],
                     ),
                 )
@@ -1274,20 +1265,31 @@ class GridStrategyBase:
         self._configuration_table.update({"last_status_update": datetime.now()})
 
     # ==========================================================================
-    def _get_order_price(
+
+    def _get_sell_order_price(
         self,
-        side: str,
         last_price: float,
         extra_sell: bool = False,
     ) -> float:  # pragma: no cover
         """
-        Returns the order price for the next buy or sell order.
+        Returns the order price for the next buy order.
 
         This method should be implemented by the concrete strategy classes.
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def _check_extra_sell_order(self: Self) -> None:
+    def _get_buy_order_price(
+        self,
+        last_price: float,
+    ) -> float:  # pragma: no cover
+        """
+        Returns the order price for the next buy order.
+
+        This method should be implemented by the concrete strategy classes.
+        """
+        raise NotImplementedError("This method should be implemented by subclasses.")
+
+    def _check_extra_sell_order(self: Self) -> None:  # pragma: no cover
         """
         Checks if an extra sell order can be placed. This only applies for the
         SWING strategy.
@@ -1298,7 +1300,7 @@ class GridStrategyBase:
         self: Self,
         order_price: float,
         txid_to_delete: str | None = None,
-    ) -> None:
+    ) -> None:  # pragma: no cover
         """
         Places a new sell order.
 
