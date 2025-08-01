@@ -14,6 +14,7 @@ from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
 
 if TYPE_CHECKING:
     from kraken_infinity_grid.models.exchange import OrderInfoSchema
+
 LOG = getLogger(__name__)
 
 
@@ -50,25 +51,12 @@ class SwingStrategy(GridStrategyBase):
             # Regular sell order (even for SWING) (cDCA will trigger this
             # but it will be filtered out later)
             if last_price > price_of_highest_buy:
-                self._configuration_table.update(
-                    {"price_of_highest_buy": last_price},
-                )
+                self._configuration_table.update({"price_of_highest_buy": last_price})
 
             # Sell price 1x interval above buy price
             factor = 1 + self._config.interval
             if (order_price := last_price * factor) < self._ticker:
                 order_price = self._ticker * factor
-        return order_price
-
-    def _get_buy_order_price(
-        self: Self,
-        last_price: float,
-    ) -> float:
-        """Returns the order price for the next buy order."""
-        last_price = float(last_price)
-        factor = 100 / (100 + 100 * self._config.interval)
-        if (order_price := last_price * factor) > self._ticker:
-            order_price = self._ticker * factor
         return order_price
 
     def _check_extra_sell_order(self: Self) -> None:

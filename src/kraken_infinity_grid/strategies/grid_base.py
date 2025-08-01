@@ -567,6 +567,8 @@ class GridStrategyBase:
         If the price (``self.ticker``) raises to high, the open buy orders
         will be canceled and new buy orders below the price respecting the
         interval will be placed.
+
+        FIXME: Does it makes sens to use events for all these checks?
         """
         if self._config.dry_run:
             LOG.debug("Dry run, not checking price range.")
@@ -1266,21 +1268,20 @@ class GridStrategyBase:
 
     # ==========================================================================
 
+    def _get_buy_order_price(
+        self: Self,
+        last_price: float,
+    ) -> float:
+        """Returns the order price for the next buy order."""
+        factor = 100 / (100 + 100 * self._config.interval)
+        if (order_price := float(last_price) * factor) > self._ticker:
+            order_price = self._ticker * factor
+        return order_price
+
     def _get_sell_order_price(
         self,
         last_price: float,
         extra_sell: bool = False,
-    ) -> float:  # pragma: no cover
-        """
-        Returns the order price for the next buy order.
-
-        This method should be implemented by the concrete strategy classes.
-        """
-        raise NotImplementedError("This method should be implemented by subclasses.")
-
-    def _get_buy_order_price(
-        self,
-        last_price: float,
     ) -> float:  # pragma: no cover
         """
         Returns the order price for the next buy order.

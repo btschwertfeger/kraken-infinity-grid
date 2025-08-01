@@ -13,30 +13,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kraken_infinity_grid.models.configuration import BotConfigDTO
 from kraken_infinity_grid.strategies.c_dca import CDCAStrategy
 
 
 class TestCDCAStrategy:
     """Test cases for CDCAStrategy order price calculation methods."""
-
-    @pytest.fixture
-    def mock_config(self: Self) -> BotConfigDTO:
-        """Create a mock configuration for testing."""
-        config = Mock(spec=BotConfigDTO)
-        config.interval = 0.05  # 5% interval
-        config.dry_run = False
-        config.userref = "123456"
-        return config
-
-    @pytest.fixture
-    def mock_dependencies(self: Self) -> dict:
-        """Create mock dependencies needed for cDCA Strategy initialization."""
-        return {
-            "event_bus": Mock(),
-            "state_machine": Mock(),
-            "db": Mock(),
-        }
 
     @pytest.fixture
     def mock_strategy(
@@ -71,65 +52,6 @@ class TestCDCAStrategy:
             strategy._ticker = 50000.0
 
             return strategy
-
-    def test_get_buy_order_price_normal_case(
-        self: Self,
-        mock_strategy: mock.MagicMock,
-    ) -> None:
-        """Test buy order price calculation for normal market conditions."""
-        last_price = 50000.0
-        expected_price = 47619.047619047619
-        result = mock_strategy._get_buy_order_price(last_price)
-
-        assert result == pytest.approx(expected_price, rel=1e-4)
-        assert result < last_price  # Buy order should be below market price
-
-    def test_get_buy_order_price_above_ticker(
-        self: Self,
-        mock_strategy: mock.MagicMock,
-    ) -> None:
-        """Test buy order price calculation when calculated price exceeds ticker."""
-        # Set a high last_price that would make the calculated order_price > ticker
-        last_price = 60000.0  # Higher than ticker (50000.0)
-        expected_price = 47619.047619047619
-
-        result = mock_strategy._get_buy_order_price(last_price)
-        assert result == pytest.approx(expected_price, rel=1e-4)
-        assert result < mock_strategy._ticker
-
-    def test_get_buy_order_price_different_intervals(
-        self: Self,
-        mock_config: mock.MagicMock,
-        mock_dependencies: mock.MagicMock,
-    ) -> None:
-        """Test buy order price calculation with different interval values."""
-        test_cases = [
-            (0.01, 50000.0, 49504.9504950495),
-            (0.10, 52000.0, 47272.72727272727),
-            (0.20, 48000.0, 40000.0),
-        ]
-
-        for interval, last_price, expected_price in test_cases:
-            mock_config.interval = interval
-
-            with (
-                patch("kraken_infinity_grid.strategies.grid_base.Orderbook"),
-                patch("kraken_infinity_grid.strategies.grid_base.Configuration"),
-                patch("kraken_infinity_grid.strategies.grid_base.PendingTXIDs"),
-                patch("kraken_infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
-            ):
-                strategy = CDCAStrategy(
-                    config=mock_config,
-                    event_bus=mock_dependencies["event_bus"],
-                    state_machine=mock_dependencies["state_machine"],
-                    db=mock_dependencies["db"],
-                )
-                strategy._configuration_table = Mock()
-                strategy._ticker = 50000.0
-
-                result = strategy._get_buy_order_price(last_price)
-                assert result == pytest.approx(expected_price, rel=1e-4)
-                assert result < last_price
 
     def test_get_sell_order_price_returns_none(
         self: Self,

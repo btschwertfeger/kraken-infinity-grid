@@ -45,16 +45,6 @@ class GridHODLStrategy(GridStrategyBase):
             order_price = self._ticker * factor
         return order_price
 
-    def _get_buy_order_price(self: Self, last_price: float) -> float:
-        """Returns the order price for the next buy order."""
-        LOG.debug("Computing the order price...")
-
-        last_price = float(last_price)
-        factor = 100 / (100 + 100 * self._config.interval)
-        if (order_price := last_price * factor) > self._ticker:
-            order_price = self._ticker * factor
-        return order_price
-
     def _check_extra_sell_order(self: Self) -> None:
         """
         GridHODL does not support extra sell orders, since the base asset is

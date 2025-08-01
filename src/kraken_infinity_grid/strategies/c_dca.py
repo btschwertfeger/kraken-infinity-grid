@@ -29,15 +29,6 @@ class CDCAStrategy(GridStrategyBase):
             self._configuration_table.update({"price_of_highest_buy": last_price})
         return None
 
-    def _get_buy_order_price(self: Self, last_price: float) -> float:
-        """Returns the order price for the next buy order."""
-        LOG.debug("Computing the buy order price...")
-
-        factor = 100 / (100 + 100 * self._config.interval)
-        if (order_price := float(last_price) * factor) > self._ticker:
-            order_price = self._ticker * factor
-        return order_price
-
     def _check_extra_sell_order(self: Self) -> None:
         """Not applicable for cDCA strategy."""
 
