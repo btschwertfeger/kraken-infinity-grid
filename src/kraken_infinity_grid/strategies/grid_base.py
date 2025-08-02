@@ -5,6 +5,14 @@
 # https://github.com/btschwertfeger
 #
 
+"""
+This module contains the base class for grid-based trading strategies.
+
+All grid-based strategies should inherit from this class and implement
+the required methods and override exiting ones as needed.
+"""
+
+
 import asyncio
 import traceback
 from datetime import datetime, timedelta
@@ -88,6 +96,14 @@ class GridStrategyBase:
         self._ready_to_trade = False
 
     async def run(self: Self) -> None:
+        """
+        Main entry point when starting a trading strategy.
+
+        - Connects to the exchange API.
+        - Checks exchange status and API key permissions.
+        - Subscribes to the required WebSocket channels.
+        - Runs the main loop.
+        """
         # ======================================================================
         # Try to connect to the API, validate credentials and API key
         # permissions.
@@ -173,10 +189,11 @@ class GridStrategyBase:
             await asyncio.sleep(6)
 
     async def stop(self: Self) -> None:
+        """Stop the WebSocket connection(s)."""
         await self.__ws_client.close()
 
     def on_message(self: Self, message: OnMessageSchema) -> None:  # noqa: C901
-        """Handle incoming messages from the websocket."""
+        """Handle incoming messages from the WebSocket connection(s)."""
         try:
             # ==================================================================
             # Initial setup
@@ -186,6 +203,7 @@ class GridStrategyBase:
                     # Set ticker the first time to have the ticker set during setup.
                     self.__on_ticker_update(message.ticker_data)
                     LOG.info("- Subscribed to ticker channel successfully!")
+
                 elif (
                     message.channel == "executions"
                     and not self._executions_channel_connected
@@ -215,7 +233,7 @@ class GridStrategyBase:
 
                     # Return here, until the algorithm is ready to trade. It is
                     # ready when the init/setup is done and the orderbook is
-                    # updated.
+                    # updated/synced initially.
                     return
 
             # ==================================================================
@@ -284,6 +302,10 @@ class GridStrategyBase:
     # Event handlers
     def __on_ticker_update(self, ticker_info: TickerUpdateSchema) -> None:
         if ticker_info.symbol != self._symbol:
+            LOG.debug(
+                "Ignoring ticker update for different symbol: %s",
+                ticker_info.symbol,
+            )
             # The grid strategy is only interested in ticker updates for its
             # symbol.
             return
@@ -306,6 +328,7 @@ class GridStrategyBase:
         updating the orderbook.
 
         This function must be sync, since it must block until the setup is done.
+        FIXME: The naming of the function is not ideal
         """
         LOG.info(
             "Preparing for trading by initializing and updating local orderbook...",
@@ -319,24 +342,19 @@ class GridStrategyBase:
         # ======================================================================
 
         # Check the fee and pair of the asset pair
-        ##
         self.__retrieve_asset_information()
 
         # Append orders to local orderbook in case they are not saved yet
-        ##
         self._assign_all_pending_transactions()
 
         # Try to place missing sell orders that not get through because
         # of "missing funds".
-        ##
         self.__add_missed_sell_orders()
 
         # Update the orderbook, check for closed, filled, cancelled trades,
         # and submit new orders if necessary.
-        ##
-
         try:
-            self.__update_order_book()
+            self.__sync_order_book()
         except Exception as exc:
             message = f"Exception while updating the orderbook: {exc}: {traceback.format_exc()}"
             LOG.error(message)
@@ -345,18 +363,15 @@ class GridStrategyBase:
 
         # Check if the configured amount per grid or the interval have changed,
         # requiring a cancellation of all open buy orders.
-        ##
         self.__check_configuration_changes()
 
         # Everything is done, the bot is ready to trade live.
-        ##
         self._ready_to_trade = True
         LOG.info("Algorithm is ready to trade!")
 
         # Checks if the open orders match the range and cancel if necessary. It
         # is the heart of this algorithm and gets triggered every time the price
         # changes.
-        ##
         self.__check_price_range()
         self._state_machine.transition_to(States.RUNNING)
 
@@ -364,7 +379,14 @@ class GridStrategyBase:
     # Setup methods
 
     def __retrieve_asset_information(self: Self) -> None:
-        """Check the asset pair information."""
+        """
+        Retrieve the asset pair information from the exchange.
+
+        This includes:
+        - Estimated fee
+        - Cost decimals
+        - Amount per grid plus + fee
+        """
         LOG.info("- Retrieving asset pair information...")
         pair_info: AssetPairInfoSchema = self._rest_api.get_asset_pair_info(
             base_currency=self._config.base_currency,
@@ -383,7 +405,10 @@ class GridStrategyBase:
         )
 
     def __update_orderbook_get_open_orders(self: Self) -> list[OrderInfoSchema]:
-        """Get the open orders and txid as lists."""
+        """
+        Retrieve all open orders from the upstream exchange that are related to
+        the current trading pair.
+        """
         LOG.info("  - Retrieving open orders from upstream...")
 
         return [
@@ -454,7 +479,7 @@ class GridStrategyBase:
             else:
                 self._orderbook_table.remove(filters={"txid": closed_order.txid})
 
-    def __update_order_book(self: Self) -> None:
+    def __sync_order_book(self: Self) -> None:
         """
         This function only gets triggered once during the setup of the
         algorithm.
@@ -529,7 +554,8 @@ class GridStrategyBase:
 
     def __check_configuration_changes(self: Self) -> None:
         """
-        Checking if the database content match with the setup parameters.
+        Checking if the database content match with the setup parameters of this
+        instance. A change may happen in case the bot configuration is updated.
 
         Checking if the order size or the interval have changed, requiring
         all open buy orders to be cancelled.

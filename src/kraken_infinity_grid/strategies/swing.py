@@ -49,8 +49,7 @@ class SwingStrategy(GridStrategyBase):
 
     def _check_extra_sell_order(self: Self) -> None:
         """
-        Checks if an extra sell order can be placed. This only applies for the
-        SWING strategy.
+        Checks if an extra sell order can be placed.
         """
         LOG.debug("Checking if extra sell order can be placed...")
         if (
