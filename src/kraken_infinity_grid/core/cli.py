@@ -149,7 +149,12 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     option(
         "--strategy",
         type=Choice(
-            choices=("cDCA", "GridHODL", "GridSell", "SWING"),
+            choices=(
+                "cDCA",
+                "GridHODL",
+                "GridSell",
+                "SWING",
+            ),  # FIXME: rename to "Swing"
             case_sensitive=True,
         ),
         help="The strategy to run.",
@@ -245,7 +250,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         can be caught immediately.
         """,
     ),
-    constraint=If(
+    constraint=If(  # Useless if no further strategies are implemented
         Equal("strategy", "cDCA")
         | Equal("strategy", "GridHODL")
         | Equal("strategy", "GridSell")

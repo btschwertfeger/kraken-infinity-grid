@@ -120,7 +120,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -142,7 +142,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -164,7 +164,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # Now trigger the execution of the first buy order
@@ -183,7 +183,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == side
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -204,7 +204,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == side
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -225,7 +225,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == side
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ... as we can see, the sell order got removed from the orderbook.
@@ -250,7 +250,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == "sell"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -275,7 +275,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == "sell"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     for order, price, volume in zip(
@@ -287,7 +287,7 @@ async def test_kraken_grid_hodl(  # noqa: C901
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -439,7 +439,7 @@ async def test_kraken_grid_hodl_unfilled_surplus(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================

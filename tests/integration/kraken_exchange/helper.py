@@ -43,7 +43,7 @@ class KrakenAPI(Trade, User, Market):
         order = {
             "userref": kwargs["userref"],
             "descr": {
-                "pair": "BTCUSD",
+                "pair": "XBTUSD",
                 "type": kwargs["side"],
                 "ordertype": kwargs["ordertype"],
                 "price": kwargs["price"],
@@ -245,6 +245,8 @@ async def get_kraken_instance(
         api_public_key=bot_config.api_public_key,
         api_secret_key=bot_config.api_secret_key,
         state_machine=engine._BotEngine__state_machine,
+        base_currency=bot_config.base_currency,
+        quote_currency=bot_config.quote_currency,
     )
 
     api = KrakenAPI()

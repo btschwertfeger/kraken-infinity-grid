@@ -12,10 +12,11 @@ This module contains Pydantic models that define the structure and validation
 rules for exchange-related data such as orders, balances, and market updates.
 All schemas include appropriate validators to ensure data integrity.
 """
+from __future__ import annotations
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ExchangeDomain(BaseModel):
@@ -48,26 +49,42 @@ class AssetPairInfoSchema(BaseModel):
 class OrderInfoSchema(BaseModel):
     """Model for order information"""
 
+    pair: str = Field(
+        ...,
+        min_length=1,
+        description="Asset pair name",
+    )  # altname without "/"
+    price: float = Field(..., gt=0, description="Order price")
+    side: str = Field(..., description="Order side (buy/sell)")
     status: str = Field(
         ...,
         description="Order status",
     )  # e.g. "open", "closed", "canceled"
+    txid: str = Field(..., min_length=1, description="Transaction ID")
+    userref: int = Field(..., ge=0, description="User reference number")
     vol_exec: float = Field(..., ge=0, description="Volume executed")
     vol: float = Field(..., gt=0, description="Total volume of the order")
-    pair: str = Field(..., min_length=1, description="Asset pair name")  # altname
-    userref: int = Field(..., ge=0, description="User reference number")
-    txid: str = Field(..., min_length=1, description="Transaction ID")
-    price: float = Field(..., gt=0, description="Order price")
-    side: str = Field(..., description="Order side (buy/sell)")
 
     @model_validator(mode="after")
-    def validate_volume_relationship(self) -> Self:
+    def validate_volume_relationship(self: Self) -> Self:
         """Validate that executed volume doesn't exceed total volume"""
         if self.vol_exec > self.vol:
             raise ValueError(
                 f"Executed volume ({self.vol_exec}) cannot exceed total volume ({self.vol})",
             )
         return self
+
+    @field_validator("pair")
+    def clean_pair(cls: OrderInfoSchema, v: str) -> str:  # noqa: N805
+        """
+        Remove any '/' characters from the pair field
+
+        Ensuring that the pair is always the "altname", e.g. "XBT/USD" will be
+        transformed to "XBTUSD". This is necessary for consistency
+        across different parts of the application that expect the pair without
+        slashes.
+        """
+        return v.replace("/", "")
 
 
 class PairBalanceSchema(BaseModel):

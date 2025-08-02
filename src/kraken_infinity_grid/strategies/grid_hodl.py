@@ -85,8 +85,6 @@ class GridHODLStrategy(GridStrategyBase):
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                base_currency=self._config.base_currency,
-                quote_currency=self._config.quote_currency,
             ),
         )
 
@@ -97,17 +95,12 @@ class GridHODLStrategy(GridStrategyBase):
                 amount=Decimal(self._config.amount_per_grid)
                 / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
                 amount_type="volume",
-                base_currency=self._config.base_currency,
-                quote_currency=self._config.quote_currency,
             ),
         )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
-        fetched_balances = self._rest_api.get_pair_balance(
-            self._config.base_currency,
-            self._config.quote_currency,
-        )
+        fetched_balances = self._rest_api.get_pair_balance()
 
         if fetched_balances.base_available >= volume:
             # Place new sell order, append id to pending list, and delete
@@ -124,8 +117,6 @@ class GridHODLStrategy(GridStrategyBase):
                 ordertype="limit",
                 side=self._exchange_domain.SELL,
                 volume=volume,
-                base_currency=self._config.base_currency,
-                quote_currency=self._config.quote_currency,
                 price=order_price,
                 userref=self._config.userref,
                 validate=self._config.dry_run,
@@ -144,7 +135,7 @@ class GridHODLStrategy(GridStrategyBase):
 
         # ======================================================================
         # Not enough funds to sell
-        message = f"⚠️ {self._config.name} ({self._symbol})\n"
+        message = f"⚠️ {self._config.name} ({self._rest_api.rest_symbol})\n"
         message += f"├ Not enough {self._config.base_currency}"
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"

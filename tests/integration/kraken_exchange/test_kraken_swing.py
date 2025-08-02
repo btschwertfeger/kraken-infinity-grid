@@ -62,7 +62,7 @@ async def test_kraken_swing(
     messages.
     """
     LOG.info("******* Starting SWING integration test *******")
-    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG)
 
     # Create engine using mocked Kraken API
     engine = await get_kraken_instance(
@@ -115,7 +115,7 @@ async def test_kraken_swing(
         assert order.price == price
         assert order.volume == volume
         assert order.side == side
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -136,7 +136,7 @@ async def test_kraken_swing(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "sell"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -154,7 +154,7 @@ async def test_kraken_swing(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "sell"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     for order, price, volume in zip(
@@ -166,7 +166,7 @@ async def test_kraken_swing(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -188,7 +188,7 @@ async def test_kraken_swing(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # Ensure that profit has been made
@@ -305,7 +305,7 @@ async def test_kraken_swing_unfilled_surplus(
         assert order.price == price
         assert order.volume == volume
         assert order.side == side
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     balances = api.get_balances()

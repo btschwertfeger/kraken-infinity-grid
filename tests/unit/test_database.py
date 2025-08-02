@@ -240,10 +240,10 @@ class TestOrderbook:
         assert count == 1
         count = orderbook.count(
             filters={"txid": "txid1"},
-            exclude={"symbol": "BTC/USD"},
+            exclude={"symbol": order1.pair},
         )
         assert count == 0
-        count = orderbook.count(filters={"symbol": "BTC/USD"})
+        count = orderbook.count(filters={"symbol": order1.pair})
         assert count == 2
 
 

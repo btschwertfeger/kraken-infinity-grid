@@ -30,7 +30,7 @@ Dependencies:
 
 from contextlib import suppress
 from decimal import Decimal
-from functools import cache
+from functools import cache, cached_property
 from logging import getLogger
 from time import sleep
 from typing import Any, Self
@@ -78,7 +78,11 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         api_public_key: str,
         api_secret_key: str,
         state_machine: StateMachine,
+        base_currency: str,
+        quote_currency: str,
     ) -> None:
+        self.__base_currency = base_currency
+        self.__quote_currency = quote_currency
         self.__user_service: User = User(key=api_public_key, secret=api_secret_key)
         self.__trade_service: Trade = Trade(key=api_public_key, secret=api_secret_key)
         self.__market_service: Market = Market()
@@ -167,16 +171,22 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_orders_info(self: Self, txid: str) -> OrderInfoSchema | None:
         """
-        {
-            "descr": {"pair": "XBTUSD", "price": "10000.0", "type": "buy"},
-            "txid": "O5X7QF-3W5X7Q-3W5X7Q", # added manually
-            "userref": 123456,
-        }
+        Return the order information for a given transaction ID (txid) from the
+        upstream.
         """
         if not (order_info := self.__user_service.get_orders_info(txid=txid).get(txid)):
             return None
-        order_info["descr"]["side"] = order_info["descr"]["type"]
-        return OrderInfoSchema(**order_info, **order_info["descr"], txid=txid)
+
+        return OrderInfoSchema(
+            pair=order_info["descr"]["pair"],
+            price=order_info["descr"]["price"],
+            side=order_info["descr"]["type"],
+            status=order_info["status"],
+            txid=txid,
+            userref=order_info["userref"],
+            vol_exec=order_info["vol_exec"],
+            vol=order_info["vol"],
+        )
 
     def get_open_orders(
         self: Self,
@@ -188,7 +198,18 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             userref=userref,
             trades=trades,
         )["open"].items():
-            orders.append(OrderInfoSchema(**order, **order["descr"], txid=txid))
+            orders.append(
+                OrderInfoSchema(
+                    pair=order["descr"]["pair"],
+                    price=order["descr"]["price"],
+                    side=order["descr"]["type"],
+                    status=order["status"],
+                    txid=txid,
+                    userref=order["userref"],
+                    vol_exec=order["vol_exec"],
+                    vol=order["vol"],
+                ),
+            )
         return orders
 
     def get_order_with_retry(
@@ -254,8 +275,6 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_pair_balance(
         self: Self,
-        base_currency: str,
-        quote_currency: str,
     ) -> PairBalanceSchema:
         """
         Returns the available and overall balances of the quote and base
@@ -263,10 +282,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
         FIXME: Is there a way to get the balances of the asset pair directly?
         """
-        custom_base, custom_quote = self.__retrieve_custom_base_quote_names(
-            base_currency=base_currency,
-            quote_currency=quote_currency,
-        )
+        custom_base, custom_quote = self.__retrieve_custom_base_quote_names()
 
         base_balance = Decimal(0)
         base_available = Decimal(0)
@@ -292,34 +308,50 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         )
         return balances
 
-    @cache  # noqa: B019
-    def symbol(self: Self, base_currency: str, quote_currency: str) -> str:
+    @cached_property
+    def ws_symbol(self: Self) -> str:
         """Returns the symbol for the given base and quote currency."""
-        # base_currency_response = self.__market_service.get_assets(assets=base_currency)
-        # base_key = next(iter(base_currency_response))
-        # base_currency = base_currency_response[base_key]["altname"]
+        return f"{self.__base_currency}/{self.__quote_currency}"
 
-        # quote_currency_response = self.__market_service.get_assets(
-        #     assets=quote_currency
-        # )
-        # quote_key = next(iter(quote_currency_response))
-        # quote_currency = quote_currency_response[quote_key]["altname"]
-        return f"{base_currency}/{quote_currency}".upper()
-
-    @cache  # noqa: B019
-    def altname(self: Self, base_currency: str, quote_currency: str) -> str:
-        symbol = self.symbol(base_currency, quote_currency)
-        base_currency, quote_currency = symbol.split("/")
+    @cached_property
+    def ws_altname(self: Self) -> str:
+        base_currency, quote_currency = self.rest_symbol.split("/")
         return f"{base_currency}{quote_currency}"
 
-    def create_order(  # noqa: PLR0913
+    @cached_property
+    def rest_symbol(self: Self) -> str:
+        """Returns the symbol for the given base and quote currency."""
+        asset_response = self.__market_service.get_assets(
+            assets=[self.__base_currency, self.__quote_currency],
+        )
+
+        base_currency = quote_currency = None
+        for key, value in asset_response.items():
+            if key == self.__base_currency:
+                base_currency = value["altname"]
+            elif key == self.__quote_currency:
+                quote_currency = value["altname"]
+
+        if not base_currency or not quote_currency:
+            self.__state_machine.transition_to(States.ERROR)
+            raise BotStateError(
+                f"Could not find altname for base '{self.__base_currency}' or"
+                f" quote '{self.__quote_currency}' currency.",
+            )
+        return f"{base_currency}/{quote_currency}"
+
+    @cached_property
+    def rest_altname(self: Self) -> str:
+        # base_currency, quote_currency = self.ws_symbol.split("/")
+        # return f"{base_currency}{quote_currency}"
+        return self.ws_altname
+
+    def create_order(
         self: Self,
         *,
         ordertype: str,
         side: str,
         volume: float,
-        base_currency: str,
-        quote_currency: str,
         price: float,
         userref: int,
         validate: bool = False,
@@ -331,10 +363,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
                 ordertype=ordertype,
                 side=side,
                 volume=volume,
-                pair=self.symbol(
-                    base_currency=base_currency,
-                    quote_currency=quote_currency,
-                ),
+                pair=self.rest_altname,
                 price=price,
                 userref=userref,
                 validate=validate,
@@ -350,17 +379,12 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         self: Self,
         amount: float | Decimal | str,
         amount_type: str,
-        base_currency: str,
-        quote_currency: str,
     ) -> str:
         """Truncate amount according to exchange precision."""
         return self.__trade_service.truncate(  # type: ignore[no-any-return]
             amount=amount,
             amount_type=amount_type,
-            pair=self.symbol(
-                base_currency=base_currency,
-                quote_currency=quote_currency,
-            ),
+            pair=self.rest_altname,
         )
 
     def get_system_status(self: Self) -> str:
@@ -369,19 +393,18 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def get_asset_pair_info(
         self: Self,
-        base_currency: str,
-        quote_currency: str,
     ) -> AssetPairInfoSchema:
         """Get available asset pair information from the exchange."""
-        # FIXME: Proper error handling
-        pair = self.symbol(
-            base_currency=base_currency,
-            quote_currency=quote_currency,
-        )
-        if (pair_info := self.__market_service.get_asset_pairs(pair=pair)) == {}:
-            raise ValueError(
-                f"Could not get asset pair info for {pair}. "
-                "Please check the pair name and try again.",
+        # NOTE: Kraken allows "XBTUSD", "BTCUSD", "BTC/USD" but not "XBT/USD"
+        # which is the actual self.rest_symbol, so we need to use self.ws_symbol
+        # here. Ticket Nr.: 18252552
+        if (
+            pair_info := self.__market_service.get_asset_pairs(pair=self.ws_symbol)
+        ) == {}:
+            self.__state_machine.transition_to(States.ERROR)
+            raise BotStateError(
+                f"Could not get asset pair info for {self.rest_symbol}."
+                " Please check the pair name and try again.",
             )
         return AssetPairInfoSchema(**pair_info[next(iter(pair_info))])
 
@@ -403,8 +426,6 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
     @cache  # noqa: B019
     def __retrieve_custom_base_quote_names(
         self: Self,
-        base_currency: str,
-        quote_currency: str,
     ) -> tuple[str, str]:
         """
         Returns the custom base and quote name for the given currencies.
@@ -413,10 +434,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
         This can be cached, since the asset names do not change frequently.
         """
-        pair_info: AssetPairInfoSchema = self.get_asset_pair_info(
-            base_currency=base_currency,
-            quote_currency=quote_currency,
-        )
+        pair_info: AssetPairInfoSchema = self.get_asset_pair_info()
         return pair_info.base, pair_info.quote
 
 

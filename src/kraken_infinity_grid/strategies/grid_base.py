@@ -17,7 +17,6 @@ import asyncio
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
-from functools import cached_property
 from logging import getLogger
 from time import sleep
 from typing import TYPE_CHECKING, Iterable, Self
@@ -114,6 +113,8 @@ class GridStrategyBase:
             api_public_key=self._config.api_public_key,
             api_secret_key=self._config.api_secret_key,
             state_machine=self._state_machine,
+            base_currency=self._config.base_currency,
+            quote_currency=self._config.quote_currency,
         )
         self._exchange_domain = self._rest_api.get_exchange_domain()
 
@@ -148,7 +149,7 @@ class GridStrategyBase:
         # FIXME: improve this to be more generic and not hardcoded at this place
         for subscription in {
             "Kraken": [
-                {"channel": "ticker", "symbol": [self._symbol]},
+                {"channel": "ticker", "symbol": [self._rest_api.ws_symbol]},
                 {
                     "channel": "executions",
                     # Snapshots are only required to check if the channel is
@@ -301,13 +302,11 @@ class GridStrategyBase:
     # ==========================================================================
     # Event handlers
     def __on_ticker_update(self, ticker_info: TickerUpdateSchema) -> None:
-        if ticker_info.symbol != self._symbol:
+        if ticker_info.symbol != self._rest_api.ws_symbol:
             LOG.debug(
                 "Ignoring ticker update for different symbol: %s",
                 ticker_info.symbol,
             )
-            # The grid strategy is only interested in ticker updates for its
-            # symbol.
             return
 
         self._ticker = float(ticker_info.last)
@@ -388,10 +387,7 @@ class GridStrategyBase:
         - Amount per grid plus + fee
         """
         LOG.info("- Retrieving asset pair information...")
-        pair_info: AssetPairInfoSchema = self._rest_api.get_asset_pair_info(
-            base_currency=self._config.base_currency,
-            quote_currency=self._config.quote_currency,
-        )
+        pair_info: AssetPairInfoSchema = self._rest_api.get_asset_pair_info()
         LOG.debug(pair_info)
 
         if self._config.fee is None:
@@ -414,7 +410,7 @@ class GridStrategyBase:
         return [
             order
             for order in self._rest_api.get_open_orders(userref=self._config.userref)
-            if order.pair == self._altname
+            if order.pair == self._rest_api.rest_symbol
         ]
 
     def __update_order_book_handle_closed_order(
@@ -435,7 +431,7 @@ class GridStrategyBase:
             "notification",
             data={
                 "message": str(
-                    f"✅ {self._symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
+                    f"✅ {self._rest_api.rest_symbol}: {closed_order.side[0].upper()}{closed_order.side[1:]} "
                     "order executed"
                     f"\n ├ Price » {closed_order.price} {self._config.quote_currency}"
                     f"\n ├ Size » {closed_order.vol_exec} {self._config.base_currency}"
@@ -683,7 +679,6 @@ class GridStrategyBase:
         )
         can_place_buy_order: bool = True
         buy_prices: list[float] = list(self._get_current_buy_prices())
-
         while (
             (
                 n_active_buy_orders := self._orderbook_table.count(
@@ -695,10 +690,7 @@ class GridStrategyBase:
             and self._pending_txids_table.count() == 0
             and not self._max_investment_reached
         ):
-            fetched_balances = self._rest_api.get_pair_balance(
-                self._config.base_currency,
-                self._config.quote_currency,
-            )
+            fetched_balances = self._rest_api.get_pair_balance()
             if fetched_balances.quote_available > self._amount_per_grid_plus_fee:
                 order_price: float = self._get_buy_order_price(
                     last_price=(
@@ -742,7 +734,10 @@ class GridStrategyBase:
         """
         LOG.info("Cancelling all open buy orders...")
         for order in self._rest_api.get_open_orders(userref=self._config.userref):
-            if order.side == self._exchange_domain.BUY and order.pair == self._altname:
+            if (
+                order.side == self._exchange_domain.BUY
+                and order.pair == self._rest_api.rest_altname
+            ):
                 self._handle_cancel_order(txid=order.txid)
                 sleep(0.2)  # Avoid rate limiting
 
@@ -809,7 +804,7 @@ class GridStrategyBase:
         else:
             self._state_machine.transition_to(States.ERROR)
             raise BotStateError(
-                f"Unknown side '{side}' for arbitrage handling in {self._symbol}!",
+                f"Unknown side '{side}' for arbitrage handling in {self._rest_api.rest_symbol}!",
             )
 
         # Wait a bit to avoid rate limiting.
@@ -844,8 +839,6 @@ class GridStrategyBase:
             self._rest_api.truncate(
                 amount=order_price,
                 amount_type="price",
-                base_currency=self._config.base_currency,
-                quote_currency=self._config.quote_currency,
             ),
         )
 
@@ -855,17 +848,12 @@ class GridStrategyBase:
             self._rest_api.truncate(
                 amount=Decimal(self._config.amount_per_grid) / Decimal(order_price),
                 amount_type="volume",
-                base_currency=self._config.base_currency,
-                quote_currency=self._config.quote_currency,
             ),
         )
 
         # ======================================================================
         # Check if there is enough quote balance available to place a buy order.
-        current_balances = self._rest_api.get_pair_balance(
-            self._config.base_currency,
-            self._config.quote_currency,
-        )
+        current_balances = self._rest_api.get_pair_balance()
         if current_balances.quote_available > self._amount_per_grid_plus_fee:
             LOG.info(
                 "Placing order to buy %s %s @ %s %s.",
@@ -881,8 +869,6 @@ class GridStrategyBase:
                 ordertype="limit",
                 side=self._exchange_domain.BUY,
                 volume=volume,
-                base_currency=self._config.base_currency,
-                quote_currency=self._config.quote_currency,
                 price=order_price,
                 userref=self._config.userref,
                 validate=self._config.dry_run,
@@ -895,7 +881,7 @@ class GridStrategyBase:
 
         # ======================================================================
         # Not enough available funds to place a buy order.
-        message = f"⚠️ {self._symbol}"
+        message = f"⚠️ {self._rest_api.rest_symbol}"
         message += f"├ Not enough {self._config.quote_currency}"
         message += f"├ to buy {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
@@ -922,7 +908,7 @@ class GridStrategyBase:
         # Check if the order belongs to this bot and return if not
         ##
         if (
-            order_details.pair != self._altname
+            order_details.pair != self._rest_api.rest_altname
             or order_details.userref != self._config.userref
         ):
             LOG.debug(
@@ -971,7 +957,7 @@ class GridStrategyBase:
             "notification",
             data={
                 "message": str(
-                    f"✅ {self._symbol}: "
+                    f"✅ {self._rest_api.rest_symbol}: "
                     f"{order_details.side[0].upper()}{order_details.side[1:]} "
                     "order executed"
                     f"\n ├ Price » {order_details.price} {self._config.quote_currency}"
@@ -1041,9 +1027,13 @@ class GridStrategyBase:
         order_details: OrderInfoSchema = self._rest_api.get_order_with_retry(txid=txid)
 
         if (
-            order_details.pair != self._altname
+            order_details.pair != self._rest_api.rest_altname
             or order_details.userref != self._config.userref
         ):
+            LOG.debug(
+                "Not handling cancellation for order '%s' - not from this instance.",
+                txid,
+            )
             return
 
         if self._config.dry_run:
@@ -1131,7 +1121,7 @@ class GridStrategyBase:
         LOG.debug("- Order information: %s", order_details)
 
         if (
-            order_details.pair != self._altname
+            order_details.pair != self._rest_api.rest_altname
             or order_details.userref != self._config.userref
         ):
             LOG.info("Order '%s' does not belong to this instance.", txid)
@@ -1154,7 +1144,7 @@ class GridStrategyBase:
         )
 
     def _get_current_buy_prices(self: Self) -> Iterable[float]:
-        """Returns a generator of the prices of open buy orders."""
+        """Returns a list of the prices of open buy orders."""
         LOG.debug("Getting current buy prices...")
         for order in self._orderbook_table.get_orders(
             filters={"side": self._exchange_domain.BUY},
@@ -1168,7 +1158,7 @@ class GridStrategyBase:
             float(order["price"]) * float(order["volume"]) for order in orders
         )
         LOG.debug(
-            "Value of open orders: %d %s",
+            "Value of open orders: %s %s",
             investment,
             self._config.quote_currency,
         )
@@ -1200,34 +1190,9 @@ class GridStrategyBase:
             return True
         return False
 
-    # ==========================================================================
-    # Properties
-    @cached_property
-    def _altname(self) -> str:
-        """
-        Returns the alternative name for the given base and quote currency.
-        """
-        return self._rest_api.altname(
-            base_currency=self._config.base_currency,
-            quote_currency=self._config.quote_currency,
-        )
-
-    @cached_property
-    def _symbol(self) -> str:
-        """
-        Returns the alternative name for the given base and quote currency.
-        """
-        return self._rest_api.symbol(
-            base_currency=self._config.base_currency,
-            quote_currency=self._config.quote_currency,
-        )
-
     def send_status_update(self: Self) -> None:
         """Send a message to the Notification channel with the current status."""
-        balances = self._rest_api.get_pair_balance(
-            base_currency=self._config.base_currency,
-            quote_currency=self._config.quote_currency,
-        )
+        balances = self._rest_api.get_pair_balance()
 
         message = f"👑 {self._config.name}\n"
         message += f"└ Price » {self._ticker} {self._config.quote_currency}\n\n"
@@ -1241,7 +1206,7 @@ class GridStrategyBase:
         message += f"├ Available {self._config.base_currency} » {balances.base_available - float(self._configuration_table.get()['vol_of_unfilled_remaining'])}\n"  # noqa: E501
         message += f"├ Unfilled surplus of {self._config.base_currency} » {self._configuration_table.get()['vol_of_unfilled_remaining']}\n"  # noqa: E501
         message += f"├ Wealth » {round(balances.base_balance * self._ticker + balances.quote_balance, self._cost_decimals)} {self._config.quote_currency}\n"  # noqa: E501
-        message += f"└ Investment » {round(self._config.investment, self._cost_decimals)} / {self._config.max_investment} {self._config.quote_currency}\n\n"  # noqa: E501
+        message += f"└ Investment » {round(self._investment, self._cost_decimals)} / {self._config.max_investment} {self._config.quote_currency}\n\n"  # noqa: E501
 
         message += "💠 Orders\n"
         message += f"├ Amount per Grid » {self._config.amount_per_grid} {self._config.quote_currency}\n"

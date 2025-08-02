@@ -98,9 +98,8 @@ class Orderbook:
 
         self.__db.update_row(
             self.__table,
-            filters={"userref": self.__userref},
+            filters={"userref": self.__userref, "txid": updates.txid},
             updates={
-                "txid": updates.txid,
                 "symbol": updates.pair,
                 "side": updates.side,
                 "price": updates.price,

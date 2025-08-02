@@ -106,7 +106,7 @@ async def test_kraken_cdca(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -127,7 +127,7 @@ async def test_kraken_cdca(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -148,7 +148,7 @@ async def test_kraken_cdca(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     assert strategy._orderbook_table.count() == 5
@@ -168,7 +168,7 @@ async def test_kraken_cdca(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -187,7 +187,7 @@ async def test_kraken_cdca(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
@@ -213,7 +213,7 @@ async def test_kraken_cdca(
         assert order.price == price
         assert order.volume == volume
         assert order.side == "buy"
-        assert order.symbol == "BTCUSD"
+        assert order.symbol == "XBTUSD"
         assert order.userref == strategy._config.userref
 
     # ==========================================================================
