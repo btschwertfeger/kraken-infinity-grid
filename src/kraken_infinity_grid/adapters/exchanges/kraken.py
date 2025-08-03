@@ -480,7 +480,11 @@ class KrakenExchangeWebsocketServiceAdapter(IExchangeWebSocketService):
             LOG.warning("Message is not a dict: %s", message)  # type: ignore[unreachable]
             return
 
-        if (channel := message.get("channel")) in {"heartbeat", "status", "pong"}:
+        if (channel := message.get("channel")) in {
+            "heartbeat",
+            "status",
+            "pong",
+        } or message.get("python-kraken-sdk"):
             return
 
         if method := message.get("method"):

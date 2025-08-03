@@ -1225,9 +1225,23 @@ class GridStrategyBase:
             )
         ]
         next_sells.reverse()
+        next_buys = [
+            order["price"]
+            for order in self._orderbook_table.get_orders(
+                filters={"side": self._exchange_domain.BUY},
+                order_by=("price", "DESC"),
+                limit=max_orders_to_list,
+            )
+        ]
+        n_buys = len(next_buys)
 
         if (n_sells := len(next_sells)) == 0:
-            message += f"└───┬> {self._ticker}\n"
+            if n_buys == 0:
+                # This only happens if there are not enough funds to place a buy
+                # order or if the bot is in dry run mode.
+                message += f"└────> {self._ticker}\n"
+            else:
+                message += f"└───┬> {self._ticker}\n"
         else:
             for index, sell_price in enumerate(next_sells):
                 change = (sell_price / self._ticker - 1) * 100
@@ -1237,15 +1251,7 @@ class GridStrategyBase:
                     message += f" │  ├[ {sell_price} (+{change:.2f}%)\n"
             message += f" └──┼> {self._ticker}\n"
 
-        next_buys = [
-            order["price"]
-            for order in self._orderbook_table.get_orders(
-                filters={"side": self._exchange_domain.BUY},
-                order_by=("price", "DESC"),
-                limit=max_orders_to_list,
-            )
-        ]
-        if (n_buys := len(next_buys)) != 0:
+        if n_buys != 0:
             for index, buy_price in enumerate(next_buys):
                 change = (buy_price / self._ticker - 1) * 100
                 if index < n_buys - 1 and index != max_orders_to_list:
