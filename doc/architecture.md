@@ -93,17 +93,15 @@ graph TD
   subgraph Notification
     NOTIF[Notification Interface]
     TGM[Telegram Adapter]
-    DISC["Discord Adapter (TBD)"]
+    DISC["Discord Adapter (e.g.)"]
   end
 
   subgraph Strategies
     GRID[Grid Strategies]
-    EVENT[Custom Strategy]
     SWING[Swing Flavor]
     CDCA[cDCA Flavor]
     GRIDSELL[GridSell Flavor]
     GRIDHODL[GridHODL Flavor]
-
   end
 
   subgraph Exchanges
@@ -114,7 +112,6 @@ graph TD
 
 
   STRIF --> GRID
-  STRIF --> EVENT
   GRID --> SWING
   GRID --> CDCA
   GRID --> GRIDSELL
@@ -131,7 +128,7 @@ graph TD
   DB -->|uses| SQLITE[(SQLite)]
   DB -->|uses| MEMORY[(In-Memory)]
 
-  Exchanges --> Strategies
+  Strategies --> Exchanges
 
   EXIF --> KRA
   EXIF --> BIN
@@ -147,16 +144,3 @@ graph TD
 - Bot Engine manages execution, interacts with state machine, and orchestrates flow.
 - Database Layer can be PostgreSQL (prod), SQLite (lightweight), or in-memory
   (testing).
-
-## Exchange-Strategy Compatibility
-
-Strategies declare what they need, and exchanges declare what they offer:
-
-```python
-class ExchangeMetadata:
-    supports_ohlc: bool
-    supports_market_order: bool
-    supports_partial_fills: bool
-    supports_websocket_trades: bool
-    ...
-```
