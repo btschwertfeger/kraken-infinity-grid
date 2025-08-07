@@ -63,7 +63,7 @@ from unittest.mock import patch
 from kraken.spot import Market, Trade, User
 from tqdm import tqdm
 
-from kraken_infinity_grid.gridbot import KrakenInfinityGridBot
+from kraken_infinity_grid.core.gridbot import KrakenInfinityGridBot
 
 
 @contextmanager

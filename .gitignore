@@ -51,5 +51,6 @@ doc/_build/
 *.csv
 
 # Other artifacts
-*.sqlite
+*.sqlite*
+*sqlite*
 *.sqlite-journal

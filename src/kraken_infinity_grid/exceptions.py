@@ -8,7 +8,7 @@
 """Custom exceptions for the Kraken Infinity Grid trading bot."""
 
 
-class GridBotStateError(Exception):
+class BotStateError(Exception):
     """
     Custom exception for terminating the algorithm due to an error state.
 

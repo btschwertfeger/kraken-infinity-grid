@@ -28,6 +28,7 @@ dependencies = [
   "requests~=2.32",
   "psycopg2-binary~=2.9",
   "sqlalchemy~=2.0",
+  "pydantic~=2.11"
 ]
 keywords = ["crypto", "trading", "kraken", "exchange", "api"]
 classifiers = [
@@ -53,7 +54,7 @@ dev = ["mypy", "black", "ruff"]
 test = ["pytest", "pytest-cov", "pytest-asyncio"]
 
 [project.scripts]
-kraken-infinity-grid = "kraken_infinity_grid.cli:cli"
+kraken-infinity-grid = "kraken_infinity_grid.core.cli:cli"
 
 [tool.setuptools]
 include-package-data = false
@@ -244,6 +245,8 @@ task-tags = ["todo", "TODO", "fixme", "FIXME"]
   "SLF001", # private member access
   "TID252", # ban relative imports
   "N999",   # Invalid module name
+  "PLR0915", # Too many statements
+  "PLC0415", # Import outside top-level
 ]
 "tools/*.py" = [
   "T201", # `print` found
