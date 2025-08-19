@@ -5,12 +5,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /apps
 COPY . /apps
 
+# hadolint ignore=DL3013,DL3008
 RUN --mount=type=cache,target=/var/lib/apt/,sharing=locked \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=tmpfs,target=/var/log/apt/ \
-    apt update \
-    && apt install -y git \
-    && python -m pip install --upgrade pip build \
+    apt-get update \
+    && apt-get install --no-install-recommends -y git \
+    && python -m pip install --no-cache-dir --compile --upgrade pip build \
     && python -m build .
 
 # ------------------------------------------------------------------------------
@@ -19,6 +20,7 @@ FROM python:3.13-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# hadolint ignore=DL3008
 RUN --mount=type=bind,target=/context,from=builder,source=/apps \
     --mount=type=cache,target=/var/lib/apt/,sharing=locked \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \

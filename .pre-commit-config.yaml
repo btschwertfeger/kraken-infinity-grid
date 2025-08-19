@@ -83,3 +83,14 @@ repos:
       - id: isort
         args:
           - --profile=black
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        files: \.(dockerfile|Dockerfile)$|^Dockerfile
+  - repo: https://github.com/docker-compose-linter/pre-commit-dclint
+    rev: v3.1.0
+    hooks:
+      - id: dclint-docker
+        files: (docker-)?compose\.ya?ml$
+        # args: [--fix]

@@ -17,30 +17,11 @@
 # you can simply duplicate and configure the service, as it supports sharing the
 # same database.
 
-services:
-  postgresql:
-    image: postgres:13-bookworm
-    environment:
-      TZ: Europe/Berlin
-      POSTGRES_USER: kraken_infinity_grid
-      POSTGRES_PASSWORD: kraken_infinity_grid
-      POSTGRES_DB: kraken_infinity_grid
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kraken_infinity_grid"]
-      interval: 10s
-      retries: 5
-    networks:
-      - internal_network
-    restart: always
+name: infinity-grid
 
+services:
   kraken-infinity-grid:
-    # If using the image from Docker Hub, consider using a release tag instead
-    # of "latest":
-    image: btschwertfeger/kraken-infinity-grid:latest
-    # Or build the image from sources if you have cloned the repository:
-    # build: .
+    image: btschwertfeger/kraken-infinity-grid:latest # dclint disable-line service-image-require-explicit-tag
     depends_on:
       postgresql:
         condition: service_healthy
@@ -76,10 +57,27 @@ services:
       - internal_network
     restart: always
 
+  postgresql:
+    image: postgres:13-bookworm
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      TZ: Europe/Berlin
+      POSTGRES_USER: kraken_infinity_grid
+      POSTGRES_PASSWORD: kraken_infinity_grid
+      POSTGRES_DB: kraken_infinity_grid
+    networks:
+      - internal_network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kraken_infinity_grid"]
+      interval: 10s
+      retries: 5
+
+networks:
+  infinity_grid_network:
+    driver: bridge
+
 volumes:
   postgres-data:
     external: false
-
-networks:
-  internal_network:
-    driver: bridge
