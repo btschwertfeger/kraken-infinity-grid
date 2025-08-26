@@ -1,33 +1,36 @@
-<h1 align="center">Infinity Grid Trading Algorithm for the Kraken Exchange</h1>
+<h1 align="center">Multi-exchange Infinity Grid Trading Algorithm</h1>
 
 <div align="center">
 
-[![GitHub](https://badgen.net/badge/icon/github?icon=github&label)](https://github.com/btschwertfeger/kraken-infinity-grid)
-[![Generic badge](https://img.shields.io/badge/python-3.11+-blue.svg)](https://shields.io/)
-[![Downloads](https://static.pepy.tech/personalized-badge/kraken-infinity-grid?period=total&units=abbreviation&left_color=grey&right_color=orange&left_text=downloads)](https://pepy.tech/project/kraken-infinity-grid)
+[![GitHub](https://badgen.net/badge/icon/github?icon=github&label)](https://github.com/btschwertfeger/infinity-grid)
+[![Generic
+badge](https://img.shields.io/badge/python-3.11+-blue.svg)](https://shields.io/)
+[![Downloads](https://static.pepy.tech/personalized-badge/infinity-grid?period=total&units=abbreviation&left_color=grey&right_color=orange&left_text=downloads)](https://pepy.tech/project/infinity-grid)
 
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Typing](https://img.shields.io/badge/typing-mypy-informational)](https://mypy-lang.org/)
-[![CI/CD](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml/badge.svg?branch=master)](https://github.com/btschwertfeger/kraken-infinity-grid/actions/workflows/cicd.yaml)
-[![codecov](https://codecov.io/gh/btschwertfeger/kraken-infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/kraken-infinity-grid)
+[![CI/CD](https://github.com/btschwertfeger/infinity-grid/actions/workflows/cicd.yaml/badge.svg?branch=master)](https://github.com/btschwertfeger/infinity-grid/actions/workflows/cicd.yaml)
+[![codecov](https://codecov.io/gh/btschwertfeger/infinity-grid/branch/master/badge.svg)](https://app.codecov.io/gh/btschwertfeger/infinity-grid)
 
-[![OpenSSF ScoreCard](https://img.shields.io/ossf-scorecard/github.com/btschwertfeger/kraken-infinity-grid?label=openssf%20scorecard&style=flat)](https://securityscorecards.dev/viewer/?uri=github.com/btschwertfeger/kraken-infinity-grid)
+[![OpenSSF
+ScoreCard](https://img.shields.io/ossf-scorecard/github.com/btschwertfeger/infinity-grid?label=openssf%20scorecard&style=flat)](https://securityscorecards.dev/viewer/?uri=github.com/btschwertfeger/infinity-grid)
 [![OpenSSF Best
 Practices](https://www.bestpractices.dev/projects/9956/badge)](https://www.bestpractices.dev/projects/9956)
 
-[![release](https://shields.io/github/release-date/btschwertfeger/kraken-infinity-grid)](https://github.com/btschwertfeger/kraken-infinity-grid/releases)
-[![release](https://img.shields.io/pypi/v/kraken-infinity-grid)](https://pypi.org/project/kraken-infinity-grid/)
-[![Documentation Status Stable](https://readthedocs.org/projects/kraken-infinity-grid/badge/?version=stable)](https://kraken-infinity-grid.readthedocs.io/en/stable)
+[![release](https://shields.io/github/release-date/btschwertfeger/infinity-grid)](https://github.com/btschwertfeger/infinity-grid/releases)
+[![release](https://img.shields.io/pypi/v/infinity-grid)](https://pypi.org/project/infinity-grid/)
+[![Documentation Status Stable](https://readthedocs.org/projects/infinity-grid/badge/?version=stable)](https://infinity-grid.readthedocs.io/en/stable)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14735203.svg)](https://doi.org/10.5281/zenodo.14735203)
 
 </div>
 
 > ⚠️ **Disclaimer**: This software was initially designed for private use only.
-> Please note that this project is independent and not endorsed by Kraken or
-> Payward Ltd. Users should be aware that they are using third-party software,
-> and the authors of this project are not responsible for any issues, losses, or
-> risks associated with its usage. **Payward Ltd. and Kraken are in no way
-> associated with the authors of this package and documentation.**
+> Please note that this project is independent and not endorsed by any of the
+> supported exchanges including Kraken or Payward Ltd. Users should be aware
+> that they are using third-party software, and the authors of this project are
+> not responsible for any issues, losses, or risks associated with its usage.
+> **The supported exchanges and their parent companies are in no way associated
+> with the authors of this package and documentation.**
 >
 > There is no guarantee that this software will work flawlessly at this or later
 > times. Of course, no responsibility is taken for possible profits or losses.
@@ -36,13 +39,14 @@ Practices](https://www.bestpractices.dev/projects/9956/badge)](https://www.bestp
 > investment. By using this software you release the author(s) from any
 > liability regarding the use of this software.
 
-The kraken-infinity-grid is a trading algorithm that uses grid trading
-strategies that places buy and sell orders in a grid-like manner, while
-following the principle of buying low and selling high. It is designed for
-trading cryptocurrencies on the [Kraken](https://pro.kraken.com) Spot exchange,
-is written in Python and uses the
+The infinity-grid is a trading algorithm that uses grid trading strategies that
+places buy and sell orders in a grid-like manner, while following the principle
+of buying low and selling high. It is designed for trading cryptocurrencies on
+various exchanges, initially supporting [Kraken](https://pro.kraken.com) Spot
+exchange with plans to expand to other major exchanges, is written in Python and
+currently uses the
 [python-kraken-sdk](https://github.com/btschwertfeger/python-kraken-sdk) library
-to interact with the Kraken API.
+to interact with the Kraken API, with additional exchange adapters planned.
 
 The algorithm requires a PostgreSQL or SQLite database and can be run either
 locally or in a Docker container (recommended). The algorithm can be configured
@@ -57,16 +61,16 @@ one for exception notifications (see [Setup](#Setup) for more information).
 
 Documentation:
 
-- https://kraken-infinity-grid.readthedocs.io/en/latest/
-- https://kraken-infinity-grid.readthedocs.io/en/stable/
+- https://infinity-grid.readthedocs.io/en/latest/
+- https://infinity-grid.readthedocs.io/en/stable/
 
 PnL Calculator (for tax purposes):
 
-- https://github.com/btschwertfeger/kraken-pnl-calculator
+- Kraken: https://github.com/btschwertfeger/kraken-pnl-calculator
 
 ## 📚 Fundamental concepts
 
-`kraken-infinity-grid` is a sophisticated trading algorithm designed for
+`infinity-grid` is a sophisticated trading algorithm designed for
 automated cryptocurrency trading using a grid strategy. This approach is
 particularly effective in volatile markets, where frequent price fluctuations
 allow for consistent profit opportunities through structured buying and selling
@@ -94,10 +98,10 @@ _All currency pairs mentioned here are for illustrative purposes only._
 
 ### 📊 Key Elements of Grid Trading
 
-1. **Intervals**: Unlike fully static systems, `kraken-infinity-grid` uses
-   fixed intervals that shift up or down based on price movements, ensuring
-   continuous trading and avoids manual interactions. This flexibility is
-   crucial for maintaining profitability in diverse market environments.
+1. **Intervals**: Unlike fully static systems, `infinity-grid` uses fixed
+   intervals that shift up or down based on price movements, ensuring continuous
+   trading and avoids manual interactions. This flexibility is crucial for
+   maintaining profitability in diverse market environments.
 
 2. **Volatility Advantage**: High volatility is a friend to grid traders. The
    more the price oscillates, the more opportunities arise to buy low and sell
@@ -137,10 +141,10 @@ over time.
 
 Technical Breakdown:
 
-- **Order Placement**: The algorithm dynamically adjusts $n$ buy orders
-  below the current market price. For example, with a 4% interval, if the
-  current BTC price is $50,000, the first buy order is set at $48,000, the
-  second at $46,080, and so on.
+- **Order Placement**: The algorithm dynamically adjusts $n$ buy orders below
+  the current market price. For example, with a 4% interval, if the current BTC
+  price is $50,000, the first buy order is set at $48,000, the second at
+  $46,080, and so on.
 - **Execution**: Upon execution of a buy order, a corresponding sell order is
   immediately placed at 4% above the purchase price respecting a fixed quote
   volume. This creates a cycle of continuous buying and selling, with each cycle
@@ -200,9 +204,8 @@ Technical Breakdown:
   both upward trends (through sell orders) and downward corrections (through
   continued accumulation).
 
-> ⚠️ It also starts selling the already existing base currency above the
-> current price. This should be kept in mind when choosing this
-> strategy.
+> ⚠️ It also starts selling the already existing base currency above the current
+> price. This should be kept in mind when choosing this strategy.
 
 ### `cDCA`
 
@@ -235,10 +238,13 @@ Technical Breakdown:
 
 ### Preparation
 
-Before installing and running the `kraken-infinity-grid`, you need to make sure
-to clearly understand the available trading strategies and their configuration.
-Avoid running the algorithm with real money before you are confident in the
-algorithm's behavior and performance!
+Before installing and running the `infinity-grid` algorithm, you need to make
+sure to clearly understand the available trading strategies and their
+configuration. Avoid running the algorithm with real money before you are
+confident in the algorithm's behavior and performance!
+
+Depending on the used exchange, different preparatory steps might be needed. In
+the following, the steps for use with the Kraken Crypto Asset Exchange is shown:
 
 1. In order to trade at the [Kraken Cryptocurrency
    Exchange](https://pro.kraken.com), you need to generate API keys for the
@@ -287,17 +293,17 @@ To run the algorithm as a pure Python process, follow these steps:
    ```bash
    python3 -m venv venv
    source venv/bin/activate
-   pip install kraken-infinity-grid
+   pip install infinity-grid
    ```
 
 2. The algorithm can be started via the command-line interface. For using a
    local SQLite database, you can specify the path to the SQLite database file
-   via the `--sqlite-file` option. The SQLite database is created
-   automatically if it does not exist, otherwise the existing database is used.
-   See more configuration options within the configuration section.
+   via the `--sqlite-file` option. The SQLite database is created automatically
+   if it does not exist, otherwise the existing database is used. See more
+   configuration options within the configuration section.
 
    ```bash
-   kraken-infinity-grid \
+   infinity-grid \
        --api-key <your-api-key> \
        --secret-key <your-api-secret> \
        run \
@@ -309,7 +315,7 @@ To run the algorithm as a pure Python process, follow these steps:
 **Docker Compose**
 
 The repository of the
-[`kraken-infinity-grid`](https://github.com/btschwertfeger/kraken-infinity-grid)
+[`infinity-grid`](https://github.com/btschwertfeger/infinity-grid)
 contains a `docker-compose.yaml` file that can be used to run the algorithm
 using Docker Compose. This file also provides a default configuration for the
 PostgreSQL database. To run the algorithm, follow these steps:
@@ -317,7 +323,7 @@ PostgreSQL database. To run the algorithm, follow these steps:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/btschwertfeger/kraken-infinity-grid.git
+   git clone https://github.com/btschwertfeger/infinity-grid.git
    ```
 
 2. Build the Docker images:
@@ -341,32 +347,32 @@ PostgreSQL database. To run the algorithm, follow these steps:
 
 ## 🛠 Configuration
 
-| Variable                       | Type               | Description                                                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `KRAKEN_API_KEY`               | `str`              | Your Kraken API key.                                                                                                                                                                                                                                                                                           |
-| `KRAKEN_SECRET_KEY`            | `str`              | Your Kraken secret key.                                                                                                                                                                                                                                                                                        |
-| `KRAKEN_RUN_NAME`              | `str`              | The name of the instance. Can be any name that is used to differentiate between instances of the kraken-infinity-grid.                                                                                                                                                                                         |
-| `KRAKEN_RUN_USERREF`           | `int`              | A reference number to identify the algorithms's orders. This can be a timestamp or any integer number. **Use different userref's for different algorithms!**                                                                                                                                                   |
-| `KRAKEN_BOT_VERBOSE`           | `int`/(`-v`,`-vv`) | Enable verbose logging.                                                                                                                                                                                                                                                                                        |
-| `KRAKEN_DRY_RUN`               | `bool`             | Enable dry-run mode (no actual trades).                                                                                                                                                                                                                                                                        |
-| `KRAKEN_RUN_BASE_CURRENCY`     | `str`              | The base currency e.g., `BTC`.                                                                                                                                                                                                                                                                                 |
-| `KRAKEN_RUN_QUOTE_CURRENCY`    | `str`              | The quote currency e.g., `USD`.                                                                                                                                                                                                                                                                                |
-| `KRAKEN_RUN_AMOUNT_PER_GRID`   | `float`            | The amount to use per grid interval e.g., `100` (USD).                                                                                                                                                                                                                                                         |
-| `KRAKEN_RUN_INTERVAL`          | `float`            | The interval between orders e.g., `0.04` to have 4 % intervals.                                                                                                                                                                                                                                                |
-| `KRAKEN_RUN_N_OPEN_BUY_ORDERS` | `int`              | The number of concurrent open buy orders e.g., `5`. The number of always open buy positions specifies how many buy positions should be open at the same time. If the interval is defined to 2%, a number of 5 open buy positions ensures that a rapid price drop of almost 10% that can be caught immediately. |
-| `KRAKEN_RUN_MAX_INVESTMENT`    | `str`              | The maximum investment amount, e.g. `1000` USD.                                                                                                                                                                                                                                                                |
-| `KRAKEN_RUN_FEE`               | `float`            | A custom fee percentage, e.g. `0.0026` for 0.26 % fee.                                                                                                                                                                                                                                                         |
-| `KRAKEN_RUN_STRATEGY`          | `str`              | The trading strategy (e.g., `GridHODL`, `GridSell`, `SWING`, or `cDCA`).                                                                                                                                                                                                                                       |
-| `KRAKEN_RUN_TELEGRAM_TOKEN`    | `str`              | The Telegram bot token for notifications.                                                                                                                                                                                                                                                                      |
-| `KRAKEN_RUN_TELEGRAM_CHAT_ID`  | `str`              | The Telegram chat ID for notifications.                                                                                                                                                                                                                                                                        |
-| `KRAKEN_RUN_EXCEPTION_TOKEN`   | `str`              | The Telegram bot token for exception notifications.                                                                                                                                                                                                                                                            |
-| `KRAKEN_RUN_EXCEPTION_CHAT_ID` | `str`              | The Telegram chat ID for exception notifications.                                                                                                                                                                                                                                                              |
-| `KRAKEN_RUN_DB_USER`           | `str`              | The PostgreSQL database user.                                                                                                                                                                                                                                                                                  |
-| `KRAKEN_RUN_DB_NAME`           | `str`              | The PostgreSQL database name.                                                                                                                                                                                                                                                                                  |
-| `KRAKEN_RUN_DB_PASSWORD`       | `str`              | The PostgreSQL database password.                                                                                                                                                                                                                                                                              |
-| `KRAKEN_RUN_DB_HOST`           | `str`              | The PostgreSQL database host.                                                                                                                                                                                                                                                                                  |
-| `KRAKEN_RUN_DB_PORT`           | `int`              | The PostgreSQL database port.                                                                                                                                                                                                                                                                                  |
-| `KRAKEN_RUN_SQLITE_FILE`       | `str`              | The path to a local SQLite database file, e.g., `/path/to/sqlite.db`, will be created if it does not exist. If a SQLite database is used, the PostgreSQL database configuration is ignored.                                                                                                                    |
+| Variable                              | Type               | Description                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INFINITY_GRID_API_KEY`               | `str`              | Your API key.                                                                                                                                                                                                                                                                                                  |
+| `INFINITY_GRID_SECRET_KEY`            | `str`              | Your secret key.                                                                                                                                                                                                                                                                                               |
+| `INFINITY_GRID_RUN_NAME`              | `str`              | The name of the instance. Can be any name that is used to differentiate between instances of the infinity-grid.                                                                                                                                                                                                |
+| `INFINITY_GRID_RUN_USERREF`           | `int`              | A reference number to identify the algorithms's orders. This can be a timestamp or any integer number. **Use different userref's for different algorithms!**                                                                                                                                                   |
+| `INFINITY_GRID_BOT_VERBOSE`           | `int`/(`-v`,`-vv`) | Enable verbose logging.                                                                                                                                                                                                                                                                                        |
+| `INFINITY_GRID_DRY_RUN`               | `bool`             | Enable dry-run mode (no actual trades).                                                                                                                                                                                                                                                                        |
+| `INFINITY_GRID_RUN_BASE_CURRENCY`     | `str`              | The base currency e.g., `BTC`.                                                                                                                                                                                                                                                                                 |
+| `INFINITY_GRID_RUN_QUOTE_CURRENCY`    | `str`              | The quote currency e.g., `USD`.                                                                                                                                                                                                                                                                                |
+| `INFINITY_GRID_RUN_AMOUNT_PER_GRID`   | `float`            | The amount to use per grid interval e.g., `100` (USD).                                                                                                                                                                                                                                                         |
+| `INFINITY_GRID_RUN_INTERVAL`          | `float`            | The interval between orders e.g., `0.04` to have 4 % intervals.                                                                                                                                                                                                                                                |
+| `INFINITY_GRID_RUN_N_OPEN_BUY_ORDERS` | `int`              | The number of concurrent open buy orders e.g., `5`. The number of always open buy positions specifies how many buy positions should be open at the same time. If the interval is defined to 2%, a number of 5 open buy positions ensures that a rapid price drop of almost 10% that can be caught immediately. |
+| `INFINITY_GRID_RUN_MAX_INVESTMENT`    | `str`              | The maximum investment amount, e.g. `1000` USD.                                                                                                                                                                                                                                                                |
+| `INFINITY_GRID_RUN_FEE`               | `float`            | A custom fee percentage, e.g. `0.0026` for 0.26 % fee.                                                                                                                                                                                                                                                         |
+| `INFINITY_GRID_RUN_STRATEGY`          | `str`              | The trading strategy (e.g., `GridHODL`, `GridSell`, `SWING`, or `cDCA`).                                                                                                                                                                                                                                       |
+| `INFINITY_GRID_RUN_TELEGRAM_TOKEN`    | `str`              | The Telegram bot token for notifications.                                                                                                                                                                                                                                                                      |
+| `INFINITY_GRID_RUN_TELEGRAM_CHAT_ID`  | `str`              | The Telegram chat ID for notifications.                                                                                                                                                                                                                                                                        |
+| `INFINITY_GRID_RUN_EXCEPTION_TOKEN`   | `str`              | The Telegram bot token for exception notifications.                                                                                                                                                                                                                                                            |
+| `INFINITY_GRID_RUN_EXCEPTION_CHAT_ID` | `str`              | The Telegram chat ID for exception notifications.                                                                                                                                                                                                                                                              |
+| `INFINITY_GRID_RUN_DB_USER`           | `str`              | The PostgreSQL database user.                                                                                                                                                                                                                                                                                  |
+| `INFINITY_GRID_RUN_DB_NAME`           | `str`              | The PostgreSQL database name.                                                                                                                                                                                                                                                                                  |
+| `INFINITY_GRID_RUN_DB_PASSWORD`       | `str`              | The PostgreSQL database password.                                                                                                                                                                                                                                                                              |
+| `INFINITY_GRID_RUN_DB_HOST`           | `str`              | The PostgreSQL database host.                                                                                                                                                                                                                                                                                  |
+| `INFINITY_GRID_RUN_DB_PORT`           | `int`              | The PostgreSQL database port.                                                                                                                                                                                                                                                                                  |
+| `INFINITY_GRID_RUN_SQLITE_FILE`       | `str`              | The path to a local SQLite database file, e.g., `/path/to/sqlite.db`, will be created if it does not exist. If a SQLite database is used, the PostgreSQL database configuration is ignored.                                                                                                                    |
 
 <a name="monitoring"></a>
 
@@ -401,21 +407,21 @@ current state of the algorithm via Telegram Bots (see
 
 ## 🚨 Troubleshooting
 
-- Only use release versions of the `kraken-infinity-grid`. The `master` branch
-  might contain unstable code! Also pin the the dependencies used in order to
-  avoid unexpected behavior.
+- Only use release versions of the `infinity-grid` algorithm. The `master`
+  branch might contain unstable code! Also pin the the dependencies used in
+  order to avoid unexpected behavior.
 - Check the **permissions of your API keys** and the required permissions on the
-  respective endpoints.
-- If you get some Cloudflare or **rate limit errors**, please check your Kraken
-  Tier level and maybe apply for a higher rank if required.
+  respective endpoints of your chosen exchange.
+- If you get some Cloudflare or **rate limit errors**, please check your tier
+  level on your exchange and maybe apply for a higher rank if required.
 - **Use different API keys for different algorithms**, because the nonce
   calculation is based on timestamps and a sent nonce must always be the highest
   nonce ever sent of that API key. Having multiple algorithms using the same
   keys will result in invalid nonce errors.
-- Kraken often has **maintenance windows**. Please check the status page at
-  https://status.kraken.com/ for more information.
+- Exchanges often have **maintenance windows**. Please check the status page of
+  your exchange for more information.
 - When encountering errors like "Could not find order '...'. Retry 3/3 ...",
-  this might be due to the **Kraken API being slow**. The algorithm will retry
+  this might be due to the **exchange API being slow**. The algorithm will retry
   the request up to three times before raising an exception. If the order is
   still not available, just restart the algorithm - or let this be handled by
   Docker compose to restart the container automatically. Then the order will

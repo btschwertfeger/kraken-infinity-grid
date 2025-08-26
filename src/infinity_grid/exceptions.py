@@ -5,7 +5,7 @@
 # https://github.com/btschwertfeger
 #
 
-"""Custom exceptions for the Kraken Infinity Grid trading bot."""
+"""Custom exceptions for the Infinity Grid trading bot."""
 
 
 class BotStateError(Exception):
@@ -31,4 +31,10 @@ class BotStateError(Exception):
                 LOG.error(msg=message, exc_info=exc)
                 self.state_machine.transition_to(States.ERROR)
                 raise GridBotErrorState(message) from exc
+    """
+
+
+class UnknownOrderError(Exception):
+    """
+    Exception used to be raised when an order that was requested is unknown.
     """

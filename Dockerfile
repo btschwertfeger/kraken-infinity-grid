@@ -38,12 +38,12 @@ RUN --mount=type=bind,target=/context,from=builder,source=/apps \
         procps \
     && locale-gen en_US.UTF.8 \
     && rm -rf /var/lib/apt/lists/* \
-    && python -m pip install --compile --no-cache-dir /context/dist/*.whl
+    && python -m pip install --compile --no-cache-dir "/context/dist/*.whl[kraken]"
 
-ENTRYPOINT ["kraken-infinity-grid", "run"]
+ENTRYPOINT ["infinity-grid", "run"]
 
-LABEL title="Kraken Infinity Grid"
+LABEL title="Infinity Grid"
 LABEL maintainer="Benjamin Thomas Schwertfeger contact@b-schwertfeger.de"
-LABEL description="The Infinity Grid Trading Algorithm for the Kraken Cryptocurrency Exchange."
-LABEL documentation="https://kraken-infinity-grid.readthedocs.io/en/stable"
-LABEL image.url="https://github.com/btschwerfeger/kraken-infinity-grid"
+LABEL description="The Infinity Grid Trading Algorithm."
+LABEL documentation="https://infinity-grid.readthedocs.io/en/stable"
+LABEL image.url="https://github.com/btschwerfeger/infinity-grid"

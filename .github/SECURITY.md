@@ -2,7 +2,7 @@
 
 ## Reporting Security Vulnerabilities
 
-At kraken-infinity-grid, we take security seriously. We welcome and encourage
+At infinity-grid, we take security seriously. We welcome and encourage
 responsible disclosure of security vulnerabilities. If you believe you've found
 a security vulnerability within our project, please report it immediately.
 

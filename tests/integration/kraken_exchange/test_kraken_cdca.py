@@ -10,8 +10,8 @@ from unittest import mock
 
 import pytest
 
-from kraken_infinity_grid.core.state_machine import States
-from kraken_infinity_grid.models.configuration import (
+from infinity_grid.core.state_machine import States
+from infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
@@ -40,8 +40,8 @@ def kraken_cdca_bot_config() -> BotConfigDTO:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@mock.patch("kraken_infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
-@mock.patch("kraken_infinity_grid.strategies.grid_base.sleep", return_value=None)
+@mock.patch("infinity_grid.adapters.exchanges.kraken.sleep", return_value=None)
+@mock.patch("infinity_grid.strategies.grid_base.sleep", return_value=None)
 async def test_kraken_cdca(
     mock_sleep1: mock.MagicMock,  # noqa: ARG001
     mock_sleep2: mock.MagicMock,  # noqa: ARG001

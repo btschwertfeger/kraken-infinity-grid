@@ -5,7 +5,7 @@ must be addressed before a PR will be accepted.
 
 - [ ] **All** pre-commit hooks must run through - successfully.
 - [ ] Make sure that the changes confirm the coding style of the
-      [kraken-infinity-grid](https://github.com/btschwertfeger/kraken-infinity-grid).
+      [infinity-grid](https://github.com/btschwertfeger/infinity-grid).
       Most issues will be resolve through the pre-commit hooks.
 - [ ] Also take care to follow the community guidelines and the [Code of
       Conduct](./CODE_OF_CONDUCT.md).

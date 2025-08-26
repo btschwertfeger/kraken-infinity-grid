@@ -10,7 +10,7 @@
 import pytest
 from pydantic import ValidationError
 
-from kraken_infinity_grid.models.configuration import (
+from infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,

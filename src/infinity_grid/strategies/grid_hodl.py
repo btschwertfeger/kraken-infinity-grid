@@ -10,71 +10,22 @@ from logging import getLogger
 from time import sleep
 from typing import TYPE_CHECKING, Self
 
-from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
+from infinity_grid.strategies.grid_base import GridStrategyBase
 
 if TYPE_CHECKING:
-    from kraken_infinity_grid.models.exchange import OrderInfoSchema
+    from infinity_grid.models.exchange import OrderInfoSchema
+
 
 LOG = getLogger(__name__)
 
 
-class SwingStrategy(GridStrategyBase):
-
-    def _get_extra_sell_order_price(
-        self: Self,
-        last_price: float,
-    ) -> float:
-        """
-        Returns the sell order price depending. Also assigns a new highest buy
-        price to configuration if there was a new highest buy.
-        """
-        LOG.debug("Computing the sell order price...")
-        order_price: float
-        price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
-        last_price = float(last_price)
-
-        # Extra sell order when SWING
-        # 2x interval above [last close price | price of highest buy]
-        order_price = (
-            last_price * (1 + self._config.interval) * (1 + self._config.interval)
-        )
-        if order_price < price_of_highest_buy:
-            order_price = (
-                price_of_highest_buy
-                * (1 + self._config.interval)
-                * (1 + self._config.interval)
-            )
-
-        return order_price
+class GridHODLStrategy(GridStrategyBase):
 
     def _check_extra_sell_order(self: Self) -> None:
         """
-        Checks if an extra sell order can be placed.
+        GridHODL does not support extra sell orders, since the base asset is
+        accumulated over time.
         """
-        LOG.debug("Checking if extra sell order can be placed...")
-        if (
-            self._orderbook_table.count(filters={"side": self._exchange_domain.SELL})
-            == 0
-        ):
-            fetched_balances = self._rest_api.get_pair_balance()
-
-            if (
-                fetched_balances.base_available * self._ticker
-                > self._amount_per_grid_plus_fee
-            ):
-                order_price = self._get_extra_sell_order_price(
-                    last_price=self._ticker,
-                )
-                self._event_bus.publish(
-                    "notification",
-                    data={
-                        "message": f"ℹ️ {self._config.name}: Placing extra sell order",  # noqa: RUF001
-                    },
-                )
-                self._handle_arbitrage(
-                    side=self._exchange_domain.SELL,
-                    order_price=order_price,
-                )
 
     def _new_sell_order(
         self: Self,
@@ -130,7 +81,6 @@ class SwingStrategy(GridStrategyBase):
                     txid_to_delete=txid_to_delete,
                 )
                 return
-
         order_price = float(
             self._rest_api.truncate(
                 amount=order_price,
@@ -151,6 +101,7 @@ class SwingStrategy(GridStrategyBase):
         # ======================================================================
         # Check if there is enough base currency available for selling.
         fetched_balances = self._rest_api.get_pair_balance()
+
         if fetched_balances.base_available >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
@@ -189,17 +140,22 @@ class SwingStrategy(GridStrategyBase):
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
 
-        self._event_bus.publish("notification", data={"message": message})
+        self._event_bus.publish(
+            "notification",
+            data={"message": message},
+        )
         LOG.warning("Current balances: %s", fetched_balances)
 
         if txid_to_delete is not None:
             # TODO: Check if this is appropriate or not
-            #       Added logging statement to monitor occurrences
             # ... This would only be the case for GridHODL and SWING, while
             # those should always have enough base currency available... but
-            # lets check this for a while.
+            # lets check this for a while. The only case I can think of would be
+            # in case the user takes money out of the account while processing a
+            # filled buy order. But this should not happen in a production
+            # environment.
             LOG.warning(
-                "Not enough funds to place sell order for txid %s",
+                "Not enough funds to place sell order for txid '%s'",
                 txid_to_delete,
             )
             self._orderbook_table.remove(filters={"txid": txid_to_delete})

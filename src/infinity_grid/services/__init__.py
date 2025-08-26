@@ -5,7 +5,7 @@
 # https://github.com/btschwertfeger
 #
 
-from kraken_infinity_grid.services.notification_service import NotificationService
+from infinity_grid.services.notification_service import NotificationService
 
 __all__ = [
     "NotificationService",

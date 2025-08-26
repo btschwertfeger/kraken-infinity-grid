@@ -6,7 +6,7 @@
 #
 
 """
-Exchange models and schemas for the Kraken Infinity Grid trading bot.
+Exchange models and schemas for the Infinity Grid trading bot.
 
 This module contains Pydantic models that define the structure and validation
 rules for exchange-related data such as orders, balances, and market updates.

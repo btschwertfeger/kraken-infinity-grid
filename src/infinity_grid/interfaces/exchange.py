@@ -15,9 +15,9 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import Any, Self
 
-from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.core.state_machine import StateMachine
-from kraken_infinity_grid.models.exchange import (
+from infinity_grid.core.event_bus import EventBus
+from infinity_grid.core.state_machine import StateMachine
+from infinity_grid.models.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,

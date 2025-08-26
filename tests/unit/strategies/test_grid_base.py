@@ -12,11 +12,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kraken_infinity_grid.strategies.c_dca import CDCAStrategy
-from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
-from kraken_infinity_grid.strategies.grid_hodl import GridHODLStrategy
-from kraken_infinity_grid.strategies.grid_sell import GridSellStrategy
-from kraken_infinity_grid.strategies.swing import SwingStrategy
+from infinity_grid.strategies.c_dca import CDCAStrategy
+from infinity_grid.strategies.grid_base import GridStrategyBase
+from infinity_grid.strategies.grid_hodl import GridHODLStrategy
+from infinity_grid.strategies.grid_sell import GridSellStrategy
+from infinity_grid.strategies.swing import SwingStrategy
 
 
 class TestGridBaseBuyOrderPrice:
@@ -45,10 +45,10 @@ class TestGridBaseBuyOrderPrice:
     ) -> mock.MagicMock:
         """Create a Strategy instance with mocked dependencies."""
         with (
-            patch("kraken_infinity_grid.strategies.grid_base.Orderbook"),
-            patch("kraken_infinity_grid.strategies.grid_base.Configuration"),
-            patch("kraken_infinity_grid.strategies.grid_base.PendingTXIDs"),
-            patch("kraken_infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
+            patch("infinity_grid.strategies.grid_base.Orderbook"),
+            patch("infinity_grid.strategies.grid_base.Configuration"),
+            patch("infinity_grid.strategies.grid_base.PendingTXIDs"),
+            patch("infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
         ):
             strategy = strategy_class(
                 config=mock_config,
@@ -108,10 +108,10 @@ class TestGridBaseBuyOrderPrice:
             mock_config.interval = interval
 
             with (
-                patch("kraken_infinity_grid.strategies.grid_base.Orderbook"),
-                patch("kraken_infinity_grid.strategies.grid_base.Configuration"),
-                patch("kraken_infinity_grid.strategies.grid_base.PendingTXIDs"),
-                patch("kraken_infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
+                patch("infinity_grid.strategies.grid_base.Orderbook"),
+                patch("infinity_grid.strategies.grid_base.Configuration"),
+                patch("infinity_grid.strategies.grid_base.PendingTXIDs"),
+                patch("infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
             ):
                 strategy = strategy_class(
                     config=mock_config,
@@ -152,10 +152,10 @@ class TestGridBaseSellOrderPrice:
     ) -> mock.MagicMock:
         """Create a Strategy instance with mocked dependencies."""
         with (
-            patch("kraken_infinity_grid.strategies.grid_base.Orderbook"),
-            patch("kraken_infinity_grid.strategies.grid_base.Configuration"),
-            patch("kraken_infinity_grid.strategies.grid_base.PendingTXIDs"),
-            patch("kraken_infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
+            patch("infinity_grid.strategies.grid_base.Orderbook"),
+            patch("infinity_grid.strategies.grid_base.Configuration"),
+            patch("infinity_grid.strategies.grid_base.PendingTXIDs"),
+            patch("infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
         ):
             strategy = strategy_class(
                 config=mock_config,
@@ -214,10 +214,10 @@ class TestGridBaseSellOrderPrice:
             mock_config.interval = interval
 
             with (
-                patch("kraken_infinity_grid.strategies.grid_base.Orderbook"),
-                patch("kraken_infinity_grid.strategies.grid_base.Configuration"),
-                patch("kraken_infinity_grid.strategies.grid_base.PendingTXIDs"),
-                patch("kraken_infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
+                patch("infinity_grid.strategies.grid_base.Orderbook"),
+                patch("infinity_grid.strategies.grid_base.Configuration"),
+                patch("infinity_grid.strategies.grid_base.PendingTXIDs"),
+                patch("infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
             ):
                 strategy = GridHODLStrategy(
                     config=mock_config,

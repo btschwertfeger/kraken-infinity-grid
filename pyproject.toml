@@ -10,12 +10,12 @@ requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kraken-infinity-grid"
+name = "infinity-grid"
 dynamic = ["version"]
 authors = [
   { name = "Benjamin Thomas Schwertfeger", email = "contact@b-schwertfeger.de" },
 ]
-description = "Infinity grid trading algorithm for the Kraken cryptocurrency exchange."
+description = "Multi-exchange Infinity Grid Trading Algorithm"
 readme = "README.md"
 license-files = ["LICENSE"]
 
@@ -24,13 +24,13 @@ dependencies = [
   "asyncio~=3.4",
   "click~=8.1",
   "cloup~=3.0",
-  "python-kraken-sdk~=3.2",
   "requests~=2.32",
   "psycopg2-binary~=2.9",
   "sqlalchemy~=2.0",
   "pydantic~=2.11"
 ]
-keywords = ["crypto", "trading", "kraken", "exchange", "api"]
+
+keywords = ["crypto", "trading", "trading bot", "grid trading", "exchange"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
@@ -52,9 +52,10 @@ classifiers = [
 [project.optional-dependencies]
 dev = ["mypy", "black", "ruff"]
 test = ["pytest", "pytest-cov", "pytest-asyncio"]
+kraken = ["python-kraken-sdk~=3.2"]
 
 [project.scripts]
-infinity-grid = "kraken_infinity_grid.core.cli:cli"
+infinity-grid = "infinity_grid.core.cli:cli"
 
 [tool.setuptools]
 include-package-data = false
@@ -62,11 +63,11 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["kraken_infinity_grid*"]
+include = ["infinity_grid*"]
 exclude = [".env", "tests", ".venv", "tools", ".github", ".cache"]
 
 [tool.setuptools_scm]
-write_to = "src/kraken_infinity_grid/_version.py"
+write_to = "src/infinity_grid/_version.py"
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 
@@ -106,7 +107,7 @@ check-filenames = true
 python_version = "3.11"
 
 # junit_xml = "mypy.xml"
-files = ["src/kraken_infinity_grid/*.py"]
+files = ["src/infinity_grid/*.py"]
 exclude = ["tests/*"]
 
 cache_dir = ".cache/mypy"

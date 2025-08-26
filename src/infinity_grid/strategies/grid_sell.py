@@ -10,22 +10,42 @@ from logging import getLogger
 from time import sleep
 from typing import TYPE_CHECKING, Self
 
-from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
+from infinity_grid.core.state_machine import States
+from infinity_grid.exceptions import BotStateError
+from infinity_grid.strategies.grid_base import GridStrategyBase
 
 if TYPE_CHECKING:
-    from kraken_infinity_grid.models.exchange import OrderInfoSchema
-
-
+    from infinity_grid.models.exchange import OrderInfoSchema
 LOG = getLogger(__name__)
 
 
-class GridHODLStrategy(GridStrategyBase):
+class GridSellStrategy(GridStrategyBase):
+    def _get_sell_order_price(
+        self: Self,
+        last_price: float,
+        extra_sell: bool = False,  # noqa: ARG002
+    ) -> float:
+        """
+        Returns the sell order price depending. Also assigns a new highest buy
+        price to configuration if there was a new highest buy.
+        """
+        LOG.debug("Computing the order price...")
+
+        order_price: float
+        price_of_highest_buy = self._configuration_table.get()["price_of_highest_buy"]
+        last_price = float(last_price)
+
+        if last_price > price_of_highest_buy:
+            self._configuration_table.update({"price_of_highest_buy": last_price})
+
+        # Sell price 1x interval above buy price
+        factor = 1 + self._config.interval
+        if (order_price := last_price * factor) < self._ticker:
+            order_price = self._ticker * factor
+        return order_price
 
     def _check_extra_sell_order(self: Self) -> None:
-        """
-        GridHODL does not support extra sell orders, since the base asset is
-        accumulated over time.
-        """
+        """Not applicable for GridSell strategy."""
 
     def _new_sell_order(
         self: Self,
@@ -67,7 +87,7 @@ class GridHODLStrategy(GridStrategyBase):
             # the vol_exec is missing. In this case, the function will be
             # called again after a short delay.
             if (
-                corresponding_buy_order.status != self._exchange_domain.CLOSED
+                corresponding_buy_order.status != "closed"
                 or corresponding_buy_order.vol_exec == 0
             ):
                 LOG.warning(
@@ -81,6 +101,16 @@ class GridHODLStrategy(GridStrategyBase):
                     txid_to_delete=txid_to_delete,
                 )
                 return
+
+            # Volume of a GridSell is fixed to the executed volume of the
+            # buy order.
+            volume = float(
+                self._rest_api.truncate(
+                    amount=float(corresponding_buy_order.vol_exec),
+                    amount_type="volume",
+                ),
+            )
+
         order_price = float(
             self._rest_api.truncate(
                 amount=order_price,
@@ -88,20 +118,24 @@ class GridHODLStrategy(GridStrategyBase):
             ),
         )
 
-        # Respect the fee to not reduce the quote currency over time, while
-        # accumulating the base currency.
-        volume = float(
-            self._rest_api.truncate(
-                amount=Decimal(self._config.amount_per_grid)
-                / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
-                amount_type="volume",
-            ),
-        )
+        if volume is None:
+            # For GridSell: This is only the case if there is no corresponding
+            # buy order and the sell order was placed, e.g. due to an extra sell
+            # order via selling of partially filled buy orders.
+
+            # Respect the fee to not reduce the quote currency over time, while
+            # accumulating the base currency.
+            volume = float(
+                self._rest_api.truncate(
+                    amount=Decimal(self._config.amount_per_grid)
+                    / (Decimal(order_price) * (1 - (2 * Decimal(self._config.fee)))),
+                    amount_type="volume",
+                ),
+            )
 
         # ======================================================================
         # Check if there is enough base currency available for selling.
         fetched_balances = self._rest_api.get_pair_balance()
-
         if fetched_balances.base_available >= volume:
             # Place new sell order, append id to pending list, and delete
             # corresponding buy order from local orderbook.
@@ -140,22 +174,15 @@ class GridHODLStrategy(GridStrategyBase):
         message += f"├ to sell {volume} {self._config.base_currency}"
         message += f"└ for {order_price} {self._config.quote_currency}"
 
-        self._event_bus.publish(
-            "notification",
-            data={"message": message},
-        )
+        self._event_bus.publish("notification", data={"message": message})
         LOG.warning("Current balances: %s", fetched_balances)
 
-        if txid_to_delete is not None:
-            # TODO: Check if this is appropriate or not
-            # ... This would only be the case for GridHODL and SWING, while
-            # those should always have enough base currency available... but
-            # lets check this for a while. The only case I can think of would be
-            # in case the user takes money out of the account while processing a
-            # filled buy order. But this should not happen in a production
-            # environment.
-            LOG.warning(
-                "Not enough funds to place sell order for txid '%s'",
-                txid_to_delete,
-            )
-            self._orderbook_table.remove(filters={"txid": txid_to_delete})
+        # Restart the algorithm if there is not enough base currency to
+        # sell. This could only happen if some orders have not being
+        # processed properly, the algorithm is not in sync with the
+        # exchange, or manual trades have been made during processing.
+        # Can e.g. happen if user withdraws funds from the account
+        # while the algorithm expects them to be available.
+        LOG.error(message)
+        self._state_machine.transition_to(States.ERROR)
+        raise BotStateError(message)

@@ -7,7 +7,7 @@
 
 import pytest
 
-from kraken_infinity_grid.models.configuration import DBConfigDTO
+from infinity_grid.models.configuration import DBConfigDTO
 
 
 @pytest.fixture(scope="session")

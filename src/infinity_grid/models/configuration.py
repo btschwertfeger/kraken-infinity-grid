@@ -107,7 +107,7 @@ class DBConfigDTO(BaseModel):
     db_password: str | None = None
     db_host: str | None = None
     db_port: int | None = None
-    db_name: str = "kraken_infinity_grid"
+    db_name: str = "infinity_grid"
 
     @field_validator("db_port")
     @classmethod

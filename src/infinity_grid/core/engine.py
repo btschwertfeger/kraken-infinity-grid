@@ -12,17 +12,17 @@ from importlib.metadata import version
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.models.configuration import (
+from infinity_grid.core.event_bus import EventBus
+from infinity_grid.core.state_machine import StateMachine, States
+from infinity_grid.exceptions import BotStateError
+from infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
 )
-from kraken_infinity_grid.services.database import DBConnect
-from kraken_infinity_grid.services.notification_service import NotificationService
-from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
+from infinity_grid.services.database import DBConnect
+from infinity_grid.services.notification_service import NotificationService
+from infinity_grid.strategies.grid_base import GridStrategyBase
 
 LOG = getLogger(__name__)
 
@@ -40,8 +40,8 @@ class BotEngine:
         notification_config: NotificationConfigDTO,
     ) -> None:
         LOG.info(
-            "Initiate the Kraken Infinity Grid Algorithm instance (v%s)",
-            version("kraken-infinity-grid"),
+            "Initiate the Infinity Grid algorithm instance (v%s)",
+            version("infinity-grid"),
         )
         LOG.debug("Config: %s", bot_config)
 
@@ -64,7 +64,7 @@ class BotEngine:
         self.__setup_event_handlers()
 
     def __strategy_factory(self: Self) -> GridStrategyBase:
-        from kraken_infinity_grid.strategies import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
+        from infinity_grid.strategies import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             CDCAStrategy,
             GridHODLStrategy,
             GridSellStrategy,

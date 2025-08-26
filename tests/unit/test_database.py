@@ -12,15 +12,15 @@ from typing import Generator
 
 import pytest
 
-from kraken_infinity_grid.infrastructure.database import (
+from infinity_grid.infrastructure.database import (
     Configuration,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
-from kraken_infinity_grid.models.configuration import DBConfigDTO
-from kraken_infinity_grid.models.exchange import OrderInfoSchema
-from kraken_infinity_grid.services.database import DBConnect
+from infinity_grid.models.configuration import DBConfigDTO
+from infinity_grid.models.exchange import OrderInfoSchema
+from infinity_grid.services.database import DBConnect
 
 
 @pytest.fixture

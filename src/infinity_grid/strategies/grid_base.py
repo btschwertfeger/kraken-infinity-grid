@@ -21,32 +21,30 @@ from logging import getLogger
 from time import sleep
 from typing import TYPE_CHECKING, Iterable, Self
 
-from kraken.exceptions import KrakenUnknownOrderError
-
-from kraken_infinity_grid.core.event_bus import EventBus
-from kraken_infinity_grid.core.state_machine import StateMachine, States
-from kraken_infinity_grid.exceptions import BotStateError
-from kraken_infinity_grid.infrastructure.database import (
+from infinity_grid.core.event_bus import EventBus
+from infinity_grid.core.state_machine import StateMachine, States
+from infinity_grid.exceptions import BotStateError, UnknownOrderError
+from infinity_grid.infrastructure.database import (
     Configuration,
     Orderbook,
     PendingTXIDs,
     UnsoldBuyOrderTXIDs,
 )
-from kraken_infinity_grid.interfaces.exchange import (
+from infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
-from kraken_infinity_grid.models.configuration import BotConfigDTO
-from kraken_infinity_grid.models.exchange import (
+from infinity_grid.models.configuration import BotConfigDTO
+from infinity_grid.models.exchange import (
     OnMessageSchema,
     OrderInfoSchema,
     TickerUpdateSchema,
 )
-from kraken_infinity_grid.services.database import DBConnect
+from infinity_grid.services.database import DBConnect
 
 if TYPE_CHECKING:
 
-    from kraken_infinity_grid.models.exchange import AssetPairInfoSchema, ExchangeDomain
+    from infinity_grid.models.exchange import AssetPairInfoSchema, ExchangeDomain
 
 LOG = getLogger(__name__)
 
@@ -278,7 +276,7 @@ class GridStrategyBase:
     def get_rest_adapter(cls, exchange: str) -> type[IExchangeRESTService]:
         """Get the exchange REST adapter."""
         if exchange == "Kraken":
-            from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
+            from infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
                 KrakenExchangeRESTServiceAdapter,
             )
 
@@ -291,7 +289,7 @@ class GridStrategyBase:
     @classmethod
     def get_websocket_adapter(cls, exchange: str) -> type[IExchangeWebSocketService]:
         if exchange == "Kraken":
-            from kraken_infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
+            from infinity_grid.adapters.exchanges.kraken import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
                 KrakenExchangeWebsocketServiceAdapter,
             )
 
@@ -1046,7 +1044,7 @@ class GridStrategyBase:
 
         try:
             self._rest_api.cancel_order(txid=txid)
-        except KrakenUnknownOrderError:
+        except UnknownOrderError:
             LOG.info(
                 "Order '%s' is already closed. Removing from orderbook...",
                 txid,

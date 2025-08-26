@@ -10,7 +10,7 @@ from typing import Self
 
 import requests
 
-from kraken_infinity_grid.interfaces import INotificationChannel
+from infinity_grid.interfaces import INotificationChannel
 
 LOG = getLogger(__name__)
 

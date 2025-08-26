@@ -5,11 +5,11 @@
 # https://github.com/btschwertfeger
 #
 
-from kraken_infinity_grid.interfaces.exchange import (
+from infinity_grid.interfaces.exchange import (
     IExchangeRESTService,
     IExchangeWebSocketService,
 )
-from kraken_infinity_grid.interfaces.notification import INotificationChannel
+from infinity_grid.interfaces.notification import INotificationChannel
 
 __all__ = [
     "IExchangeRESTService",

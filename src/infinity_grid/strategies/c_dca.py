@@ -8,7 +8,7 @@
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.strategies.grid_base import GridStrategyBase
+from infinity_grid.strategies.grid_base import GridStrategyBase
 
 LOG = getLogger(__name__)
 

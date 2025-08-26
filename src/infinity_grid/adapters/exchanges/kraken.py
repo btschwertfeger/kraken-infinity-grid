@@ -40,32 +40,34 @@ try:
         KrakenAuthenticationError,
         KrakenInvalidOrderError,
         KrakenPermissionDeniedError,
+        KrakenUnknownOrderError,
     )
     from kraken.spot import Market, SpotWSClient, Trade, User
 
-    from kraken_infinity_grid.core.event_bus import EventBus
-    from kraken_infinity_grid.core.state_machine import StateMachine, States
-    from kraken_infinity_grid.exceptions import BotStateError
-    from kraken_infinity_grid.interfaces.exchange import (
-        IExchangeRESTService,
-        IExchangeWebSocketService,
-    )
-    from kraken_infinity_grid.models.exchange import (
-        AssetBalanceSchema,
-        AssetPairInfoSchema,
-        CreateOrderResponseSchema,
-        ExchangeDomain,
-        ExecutionsUpdateSchema,
-        OnMessageSchema,
-        OrderInfoSchema,
-        PairBalanceSchema,
-        TickerUpdateSchema,
-    )
 except ImportError as exc:
     raise ImportError(
         "The Kraken exchange adapter requires the 'kraken' extra. "
-        "Please install it using 'pip install kraken-infinity-grid[kraken]'.",
+        "Please install it using 'pip install infinity-grid[kraken]'.",
     ) from exc
+
+from infinity_grid.core.event_bus import EventBus
+from infinity_grid.core.state_machine import StateMachine, States
+from infinity_grid.exceptions import BotStateError, UnknownOrderError
+from infinity_grid.interfaces.exchange import (
+    IExchangeRESTService,
+    IExchangeWebSocketService,
+)
+from infinity_grid.models.exchange import (
+    AssetBalanceSchema,
+    AssetPairInfoSchema,
+    CreateOrderResponseSchema,
+    ExchangeDomain,
+    ExecutionsUpdateSchema,
+    OnMessageSchema,
+    OrderInfoSchema,
+    PairBalanceSchema,
+    TickerUpdateSchema,
+)
 
 LOG = getLogger(__name__)
 
@@ -120,7 +122,7 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
             with suppress(KrakenInvalidOrderError):
                 self.__trade_service.cancel_order(
                     txid="",
-                    extra_params={"cl_ord_id": "kraken_infinity_grid_internal"},
+                    extra_params={"cl_ord_id": "infinity_grid_internal"},
                 )
 
             LOG.info(" - Checking if 'Websocket interface' permission set...")
@@ -373,7 +375,10 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
 
     def cancel_order(self: Self, txid: str, **kwargs: dict[str, Any]) -> None:
         """Cancel an order."""
-        self.__trade_service.cancel_order(txid=txid, **kwargs)
+        try:
+            self.__trade_service.cancel_order(txid=txid, **kwargs)
+        except KrakenUnknownOrderError as exc:
+            raise UnknownOrderError from exc
 
     def truncate(
         self: Self,

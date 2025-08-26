@@ -7,10 +7,7 @@
 
 import pytest
 
-from kraken_infinity_grid.models.configuration import (
-    NotificationConfigDTO,
-    TelegramConfigDTO,
-)
+from infinity_grid.models.configuration import NotificationConfigDTO, TelegramConfigDTO
 
 
 @pytest.fixture(scope="session")

@@ -8,8 +8,8 @@
 from logging import getLogger
 from typing import Self
 
-from kraken_infinity_grid.interfaces import INotificationChannel
-from kraken_infinity_grid.models.configuration import NotificationConfigDTO
+from infinity_grid.interfaces import INotificationChannel
+from infinity_grid.models.configuration import NotificationConfigDTO
 
 LOG = getLogger(__name__)
 
@@ -36,7 +36,7 @@ class NotificationService:
 
     def add_telegram_channel(self: Self, token: str, chat_id: str) -> None:
         """Convenience method to add a Telegram notification channel."""
-        from kraken_infinity_grid.adapters.notification import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
+        from infinity_grid.adapters.notification import (  # pylint: disable=import-outside-toplevel # noqa: PLC0415
             TelegramNotificationChannelAdapter,
         )
 

@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from kraken_infinity_grid.core.cli import cli
+from infinity_grid.core.cli import cli
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def test_cli_version(runner: CliRunner) -> None:
 
 
 @patch.dict(os.environ, {})
-@patch("kraken_infinity_grid.core.engine.BotEngine", new_callable=MagicMock)
+@patch("infinity_grid.core.engine.BotEngine", new_callable=MagicMock)
 def test_cli_run(mock_bot: MagicMock, runner: CliRunner) -> None:
     """Test the run command"""
     command = [

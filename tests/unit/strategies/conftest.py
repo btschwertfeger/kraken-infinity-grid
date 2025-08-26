@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from kraken_infinity_grid.models.configuration import BotConfigDTO
+from infinity_grid.models.configuration import BotConfigDTO
 
 
 @pytest.fixture

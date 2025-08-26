@@ -9,13 +9,13 @@
 Test module for exchange models and schemas.
 
 This module contains focused tests for the most critical aspects of
-Pydantic models defined in kraken_infinity_grid.models.exchange.
+Pydantic models defined in infinity_grid.models.exchange.
 """
 
 import pytest
 from pydantic import ValidationError
 
-from kraken_infinity_grid.models.exchange import (
+from infinity_grid.models.exchange import (
     AssetBalanceSchema,
     AssetPairInfoSchema,
     CreateOrderResponseSchema,

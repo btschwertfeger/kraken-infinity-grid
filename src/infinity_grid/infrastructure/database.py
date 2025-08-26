@@ -15,8 +15,8 @@ from typing import Self
 from sqlalchemy import Column, DateTime, Float, Integer, String, Table, func, select
 from sqlalchemy.engine.result import MappingResult
 
-from kraken_infinity_grid.models.exchange import OrderInfoSchema
-from kraken_infinity_grid.services.database import DBConnect
+from infinity_grid.models.exchange import OrderInfoSchema
+from infinity_grid.services.database import DBConnect
 
 LOG = getLogger(__name__)
 
@@ -152,7 +152,7 @@ class Configuration:
                 "version",  # FIXME: This never gets updated
                 String,
                 nullable=False,
-                default=version("kraken-infinity-grid"),
+                default=version("infinity-grid"),
             ),
             Column("vol_of_unfilled_remaining", Float, nullable=False, default=0),
             Column(
@@ -298,10 +298,10 @@ class UnsoldBuyOrderTXIDs:
 class PendingTXIDs:
     """
     Table containing pending TXIDs. TXIDs are pending for the time from being
-    placed to processed by Kraken. Usually an order gets placed, the TXID is
-    returned and stored in this table. Then the algorithm fetches this 'pending'
-    TXID to retrieve the full order information in order to add these to the
-    local orderbook. After that, the TXID gets removed from this table.
+    placed to processed by an exchange. Usually an order gets placed, the TXID
+    is returned and stored in this table. Then the algorithm fetches this
+    'pending' TXID to retrieve the full order information in order to add these
+    to the local orderbook. After that, the TXID gets removed from this table.
     """
 
     def __init__(self: Self, userref: int, db: DBConnect) -> None:

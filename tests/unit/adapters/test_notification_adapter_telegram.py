@@ -12,10 +12,8 @@ from unittest.mock import Mock, patch
 import pytest
 from requests.exceptions import ConnectionError  # noqa: A004
 
-from kraken_infinity_grid.adapters.notification import (
-    TelegramNotificationChannelAdapter,
-)
-from kraken_infinity_grid.interfaces import INotificationChannel
+from infinity_grid.adapters.notification import TelegramNotificationChannelAdapter
+from infinity_grid.interfaces import INotificationChannel
 
 
 @pytest.fixture

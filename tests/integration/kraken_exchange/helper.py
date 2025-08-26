@@ -14,8 +14,8 @@ from typing import Any, Callable, Self
 
 from kraken.spot import Market, Trade, User
 
-from kraken_infinity_grid.core.engine import BotEngine
-from kraken_infinity_grid.models.configuration import (
+from infinity_grid.core.engine import BotEngine
+from infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
@@ -232,7 +232,7 @@ async def get_kraken_instance(
         notification_config=notification_config,
     )
 
-    from kraken_infinity_grid.adapters.exchanges.kraken import (
+    from infinity_grid.adapters.exchanges.kraken import (
         KrakenExchangeRESTServiceAdapter,
         KrakenExchangeWebsocketServiceAdapter,
     )

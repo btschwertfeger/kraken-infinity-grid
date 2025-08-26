@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kraken_infinity_grid.strategies.swing import SwingStrategy
+from infinity_grid.strategies.swing import SwingStrategy
 
 
 class TestSwingStrategy:
@@ -27,10 +27,10 @@ class TestSwingStrategy:
     ) -> SwingStrategy:
         """Create a Swing Strategy instance with mocked dependencies."""
         with (
-            patch("kraken_infinity_grid.strategies.grid_base.Orderbook"),
-            patch("kraken_infinity_grid.strategies.grid_base.Configuration"),
-            patch("kraken_infinity_grid.strategies.grid_base.PendingTXIDs"),
-            patch("kraken_infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
+            patch("infinity_grid.strategies.grid_base.Orderbook"),
+            patch("infinity_grid.strategies.grid_base.Configuration"),
+            patch("infinity_grid.strategies.grid_base.PendingTXIDs"),
+            patch("infinity_grid.strategies.grid_base.UnsoldBuyOrderTXIDs"),
         ):
             strategy = SwingStrategy(
                 config=mock_config,

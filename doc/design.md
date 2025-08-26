@@ -14,7 +14,7 @@ that need to be explored.
    Idea: Separate the components like:
 
    ```
-   src/kraken_infinity_grid/
+   src/infinity_grid/
    ├── core/
    │   ├── bot.py                 # Orchestration only
    │   └── state_machine.py       # Proper state management

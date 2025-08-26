@@ -12,7 +12,7 @@ from click import FLOAT, INT, STRING, Context, echo, pass_context
 from cloup import Choice, HelpFormatter, HelpTheme, Style, group, option, option_group
 from cloup.constraints import Equal, If, IsSet, accept_none, require_all
 
-from kraken_infinity_grid.models.configuration import (
+from infinity_grid.models.configuration import (
     BotConfigDTO,
     DBConfigDTO,
     NotificationConfigDTO,
@@ -28,7 +28,7 @@ def print_version(ctx: Context, param: Any, value: Any) -> None:  # noqa: ANN401
         version,
     )
 
-    echo(version("kraken-infinity-grid"))
+    echo(version("infinity-grid"))
     ctx.exit()
 
 
@@ -79,14 +79,14 @@ def ensure_larger_equal_zero(
 @option(
     "--api-public-key",
     required=True,
-    help="The Kraken Spot API key",
+    help="The Spot API key",
     type=STRING,
 )
 @option(
     "--api-secret-key",
     required=True,
     type=STRING,
-    help="The Kraken Spot API secret key",
+    help="The Spot API secret key",
 )
 @option(
     "-v",
@@ -166,7 +166,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         type=STRING,
         help="""
         The name of the instance. Can be any name that is used to differentiate
-        between instances of the kraken-infinity-grid.
+        between instances of the infinity-grid.
         """,
     ),
     option(
@@ -279,7 +279,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     option(
         "--db-name",
         type=STRING,
-        default="kraken_infinity_grid",
+        default="infinity_grid",
         help="The database name.",
     ),
     option(
@@ -341,7 +341,7 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
     # pylint: disable=import-outside-top-level
     import asyncio  # noqa: PLC0415
 
-    from kraken_infinity_grid.core.engine import BotEngine  # noqa: PLC0415
+    from infinity_grid.core.engine import BotEngine  # noqa: PLC0415
 
     # Handle in-memory database option
     if kwargs.pop("in_memory", False):
@@ -353,7 +353,7 @@ def run(ctx: Context, **kwargs: dict[str, Any]) -> None:
         db_password=kwargs.pop("db_password", None),
         db_host=kwargs.pop("db_host", None),
         db_port=kwargs.pop("db_port", None),
-        db_name=kwargs.pop("db_name", "kraken_infinity_grid"),
+        db_name=kwargs.pop("db_name", "infinity_grid"),
     )
     notification_config = NotificationConfigDTO(
         telegram=TelegramConfigDTO(

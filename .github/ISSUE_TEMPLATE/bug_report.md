@@ -28,7 +28,7 @@ Please _do not upload any files_.
 
 - OS: [e.g. Ubuntu 24.04]
 - Python [e.g. 3.11, 3.12, 3.13]
-- kraken-infinity-grid version [e.g. 1.0.0]
+- infinity-grid version [e.g. 1.0.0]
 
 **Additional context**
 Add any other context about the problem here.

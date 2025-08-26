@@ -16,7 +16,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from kraken_infinity_grid.core.event_bus import EventBus
+from infinity_grid.core.event_bus import EventBus
 
 
 class TestEventBus:

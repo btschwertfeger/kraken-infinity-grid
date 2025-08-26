@@ -63,7 +63,7 @@ matches the grid interval.
 .. NOTE:: The value passed to the interval is a percentage value. For example,
           an interval of 4 % means that the buy and sell orders are placed 4 %
           apart from each other. In this case, you have to pass a value of
-          ``0.04`` to ``--interval``, or ``KRAKEN_RUN_INTERVAL``.
+          ``0.04`` to ``--interval``, or ``INFINITY_GRID_RUN_INTERVAL``.
 
 Choosing the optimal amount per grid
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -84,8 +84,7 @@ in your account to cover all open buy orders.
 Another aspect to consider is the minimal order sizes of the quote currency that
 can be traded on the exchange. Make sure to set the amount per grid higher than
 the minimal amount to avoid errors. For further information, check the
-exchange's article `Minimum order size (volume) for trading
-<https://support.kraken.com/hc/en-us/articles/205893708-Minimum-order-size-volume-for-trading>`_.
+exchange's minimum order size for trading documentation.
 
 Choosing the optimal amount of concurrent open buy orders
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,16 +103,16 @@ open buy orders.
 Setting a custom fee
 ~~~~~~~~~~~~~~~~~~~~
 
-Another aspect to consider is the fee that is charged by the Kraken exchange.
+Another aspect to consider is the fee that is charged by the exchanges.
 The fee is usually a percentage of the traded amount. If the fee is not set
 during program start, the highest taker fee for that currency pair used which
 doesn't mean that the highest fee is paid. It is used internally to calculate
 order sizes, prices, and ensures that profits are calculated correctly.
 
-Setting a custom fee via the ``--fee`` or ``KRAKEN_RUN_FEE`` option enables,
-depending on the strategy, a more accurate profit calculation. For the average
-user, this is not necessary. For more information about the fees, check the
-`Fee Schedule <https://www.kraken.com/features/fee-schedule>`_.
+Setting a custom fee via the ``--fee`` or ``INFINITY_GRID_RUN_FEE`` option
+enables, depending on the strategy, a more accurate profit calculation. For the
+average user, this is not necessary. For more information about the fees, check
+the fee schedule of the respective exchange.
 
 .. NOTE:: The fee is always paid in the quote currency.
 
@@ -129,7 +128,7 @@ Especially the maximum investment is important to prevent the algorithm from
 investing more than you are willing to lose. The maximum investment defines the
 maximum amount of the quote currency that the algorithm will use for trading.
 Setting the maximum investment is recommended and can be done via the
-``--max-investment`` or ``KRAKEN_RUN_MAX_INVESTMENT`` option.
+``--max-investment`` or ``INFINITY_GRID_RUN_MAX_INVESTMENT`` option.
 
 The amount per grid, the interval, and the number of concurrent open buy orders
 should be chosen based on the maximum investment. In order to demonstrate this,
@@ -170,23 +169,23 @@ at 4% higher than the buy order.
 Command-line Interface
 ----------------------
 
-`kraken-infinity-grid`_ provides a command-line interface (CLI) to configure and
+`infinity-grid`_ provides a command-line interface (CLI) to configure and
 run the trading algorithm. The CLI is based on the `Click
 <https://click.palletsprojects.com>`_ library and provides a set of commands to
 interact with the algorithm.
 
 
-.. click:: kraken_infinity_grid.cli:cli
-   :prog: kraken-infinity-grid
+.. click:: infinity_grid.cli:cli
+   :prog: infinity-grid
    :nested: full
 
 Environment Variables
 ---------------------
 
-Since `kraken-infinity-grid`_ is designed to be run in containerized
+Since `infinity-grid`_ is designed to be run in containerized
 environments, the configuration can also be done via environment variables. The
 naming pattern follows the convention of the command-line arguments respecting
-the ``KRAKEN_`` prefix and `Click's
+the ``INFINITY_GRID_`` prefix and `Click's
 <https://click.palletsprojects.com/en/stable/options/#values-from-environment-variables>`_
 naming convention.
 
@@ -196,84 +195,84 @@ naming convention.
     * - Variable
       - Type
       - Description
-    * - ``KRAKEN_API_KEY``
+    * - ``INFINITY_GRID_API_KEY``
       - ``str``
-      - Your Kraken API key.
-    * - ``KRAKEN_SECRET_KEY``
+      - Your API key.
+    * - ``INFINITY_GRID_SECRET_KEY``
       - ``str``
-      - Your Kraken secret key.
-    * - ``KRAKEN_RUN_NAME``
+      - Your secret key.
+    * - ``INFINITY_GRID_RUN_NAME``
       - ``str``
       - The name of the instance. Can be any name that is used to differentiate
-        between instances of the kraken-infinity-grid.
-    * - ``KRAKEN_RUN_USERREF``
+        between instances of the infinity-grid.
+    * - ``INFINITY_GRID_RUN_USERREF``
       - ``int``
       - A reference number to identify the algorithm's orders. This can be a
         timestamp or any integer number.
         **Use different userref's for different instances!**
-    * - ``KRAKEN_BOT_VERBOSE``
+    * - ``INFINITY_GRID_BOT_VERBOSE``
       - ``int`` / (``-v``, ``-vv``)
       - Enable verbose logging.
-    * - ``KRAKEN_DRY_RUN``
+    * - ``INFINITY_GRID_DRY_RUN``
       - ``bool``
       - Enable dry-run mode (no actual trades).
-    * - ``KRAKEN_RUN_BASE_CURRENCY``
+    * - ``INFINITY_GRID_RUN_BASE_CURRENCY``
       - ``str``
       - The base currency e.g., ``BTC`` or ``ETH``.
-    * - ``KRAKEN_RUN_QUOTE_CURRENCY``
+    * - ``INFINITY_GRID_RUN_QUOTE_CURRENCY``
       - ``str``
       - The quote currency e.g., ``USD`` or ``EUR``.
-    * - ``KRAKEN_RUN_AMOUNT_PER_GRID``
+    * - ``INFINITY_GRID_RUN_AMOUNT_PER_GRID``
       - ``float``
       - The quote amount to use per grid interval e.g., ``100`` (USD) per trade.
-    * - ``KRAKEN_RUN_INTERVAL``
+    * - ``INFINITY_GRID_RUN_INTERVAL``
       - ``float``
       - The interval between orders e.g., ``0.04`` to have 4 % intervals.
-    * - ``KRAKEN_RUN_N_OPEN_BUY_ORDERS``
+    * - ``INFINITY_GRID_RUN_N_OPEN_BUY_ORDERS``
       - ``int``
       - The number of concurrent open buy orders e.g., ``5``. The number of
         always open buy positions specifies how many buy positions should be
         open at the same time. If the interval is defined to 2%, a number of 5
         open buy positions ensures that a rapid price drop of almost 10% that
         can be caught immediately.
-    * - ``KRAKEN_RUN_MAX_INVESTMENT``
+    * - ``INFINITY_GRID_RUN_MAX_INVESTMENT``
       - ``str``
       - The maximum investment, e.g. ``1000`` USD that the algorithm will
         manage.
-    * - ``KRAKEN_RUN_FEE``
+    * - ``INFINITY_GRID_RUN_FEE``
       - ``float``
       - A custom fee percentage, e.g. ``0.0026`` for 0.26 % fee.
-    * - ``KRAKEN_RUN_STRATEGY``
+    * - ``INFINITY_GRID_RUN_STRATEGY``
       - ``str``
       - The trading strategy, e.g., ``GridHODL``, ``GridSell``, ``SWING``, or ``cDCA``
-    * - ``KRAKEN_RUN_TELEGRAM_TOKEN``
+    * - ``INFINITY_GRID_RUN_TELEGRAM_TOKEN``
       - ``str``
       - The Telegram bot token for notifications.
-    * - ``KRAKEN_RUN_TELEGRAM_CHAT_ID``
+    * - ``INFINITY_GRID_RUN_TELEGRAM_CHAT_ID``
       - ``str``
       - The Telegram chat ID for notifications.
-    * - ``KRAKEN_RUN_EXCEPTION_TOKEN``
+    * - ``INFINITY_GRID_RUN_EXCEPTION_TOKEN``
       - ``str``
       - The Telegram bot token for exception notifications.
-    * - ``KRAKEN_RUN_EXCEPTION_CHAT_ID``
+    * - ``INFINITY_GRID_RUN_EXCEPTION_CHAT_ID``
       - ``str``
       - The Telegram chat ID for exception notifications.
-    * - ``KRAKEN_RUN_DB_USER``
+    * - ``INFINITY_GRID_RUN_DB_USER``
       - ``str``
       - The PostgreSQL database user.
-    * - ``KRAKEN_RUN_DB_NAME``
+    * - ``INFINITY_GRID_RUN_DB_NAME``
       - ``str``
       - The PostgreSQL database name.
-    * - ``KRAKEN_RUN_DB_PASSWORD``
+    * - ``INFINITY_GRID_RUN_DB_PASSWORD``
       - ``str``
       - The PostgreSQL database password.
-    * - ``KRAKEN_RUN_DB_HOST``
+    * - ``INFINITY_GRID_RUN_DB_HOST``
       - ``str``
       - The PostgreSQL database host.
-    * - ``KRAKEN_RUN_DB_PORT``
+    * - ``INFINITY_GRID_RUN_DB_PORT``
       - ``int``
       - The PostgreSQL database port.
-    * - ``KRAKEN_RUN_SQLITE_FILE``
+    * - ``INFINITY_GRID_RUN_SQLITE_FILE``
       - ``str``
       - The path to a local SQLite database file, e.g., ``/path/to/sqlite.db``,
         will be created if it does not exist. If a SQLite database is used, the PostgreSQL database configuration is ignored.
@@ -297,11 +296,11 @@ the PostgreSQL database is automatically configured.
 The algorithm requires the following environment variables to be set, in order
 to connect to the PostgreSQL database:
 
-- ``KRAKEN_RUN_DB_USER``
-- ``KRAKEN_RUN_DB_NAME``
-- ``KRAKEN_RUN_DB_PASSWORD``
-- ``KRAKEN_RUN_DB_HOST``
-- ``KRAKEN_RUN_DB_PORT``
+- ``INFINITY_GRID_RUN_DB_USER``
+- ``INFINITY_GRID_RUN_DB_NAME``
+- ``INFINITY_GRID_RUN_DB_PASSWORD``
+- ``INFINITY_GRID_RUN_DB_HOST``
+- ``INFINITY_GRID_RUN_DB_PORT``
 
 SQLite
 ~~~~~~
@@ -314,7 +313,7 @@ For this purpose, the option ``--sqlite-file`` can be used to specify the path
 to the SQLite database file. The SQLite database is created automatically if it
 does not exist.
 
-Alternatively, the ``KRAKEN_RUN_SQLITE_FILE`` environment variable can be used
+Alternatively, the ``INFINITY_GRID_RUN_SQLITE_FILE`` environment variable can be used
 to specify the path to the SQLite database file.
 
 .. NOTE:: Do not use ``:memory:`` for an in-memory database, as this will

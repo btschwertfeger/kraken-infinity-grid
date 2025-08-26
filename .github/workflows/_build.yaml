@@ -79,24 +79,24 @@ jobs:
         if: runner.os == 'linux'
         run: |
           uv build .
-          uv tool install dist/kraken_infinity_grid*.whl
-          uv run kraken-infinity-grid --version
+          uv tool install dist/infinity_grid*.whl
+          uv run infinity-grid --version
 
       - name: Build macOS
         if: runner.os == 'macOS'
         run: |
           uv build .
-          uv tool install dist/kraken_infinity_grid*.whl
-          uv run kraken-infinity-grid --version
+          uv tool install dist/infinity_grid*.whl
+          uv run infinity-grid --version
 
       - name: Build Windows
         if: runner.os == 'Windows'
         run: |
           uv build .
           try {
-              $WHEEL = Get-ChildItem -Path ./dist -Filter "kraken_infinity_grid*.whl" -ErrorAction Stop
+              $WHEEL = Get-ChildItem -Path ./dist -Filter "infinity_grid*.whl" -ErrorAction Stop
               uv tool install $WHEEL#
-              uv run kraken-infinity-grid --version
+              uv run infinity-grid --version
           } catch {
               Write-Error "Error: .whl file not found in .\dist."
               exit 1

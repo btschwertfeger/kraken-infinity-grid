@@ -16,12 +16,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from kraken_infinity_grid.interfaces import INotificationChannel
-from kraken_infinity_grid.models.configuration import (
-    NotificationConfigDTO,
-    TelegramConfigDTO,
-)
-from kraken_infinity_grid.services.notification_service import NotificationService
+from infinity_grid.interfaces import INotificationChannel
+from infinity_grid.models.configuration import NotificationConfigDTO, TelegramConfigDTO
+from infinity_grid.services.notification_service import NotificationService
 
 TOKEN = "123:abdsljhbfadshkjfgbakrjhfbadjfhbac"  # noqa: S105
 CHAT_ID = "456"
@@ -41,7 +38,7 @@ class TestNotificationService:
         assert service.notify("test") is False
 
     @patch(
-        "kraken_infinity_grid.adapters.notification.TelegramNotificationChannelAdapter",
+        "infinity_grid.adapters.notification.TelegramNotificationChannelAdapter",
     )
     def test_init_with_enabled_telegram(self, mock_telegram_adapter: MagicMock) -> None:
         """Test initialization with enabled telegram config"""
@@ -71,7 +68,7 @@ class TestNotificationService:
         mock_channel.send.assert_called_once_with("test message")
 
     @patch(
-        "kraken_infinity_grid.adapters.notification.TelegramNotificationChannelAdapter",
+        "infinity_grid.adapters.notification.TelegramNotificationChannelAdapter",
     )
     def test_add_telegram_channel(self, mock_telegram_adapter: MagicMock) -> None:
         """Test adding telegram channel via convenience method"""
@@ -173,7 +170,7 @@ class TestNotificationService:
         fail_channel1.send.assert_called_once_with("test message")
         fail_channel2.send.assert_called_once_with("test message")
 
-    @patch("kraken_infinity_grid.services.notification_service.LOG")
+    @patch("infinity_grid.services.notification_service.LOG")
     def test_notify_logs_message(self, mock_log: MagicMock) -> None:
         """Test that notify logs the message being sent"""
         config = NotificationConfigDTO(
@@ -221,7 +218,7 @@ class TestNotificationService:
             service.on_notification({"data": "no message key"})
 
     @patch(
-        "kraken_infinity_grid.adapters.notification.TelegramNotificationChannelAdapter",
+        "infinity_grid.adapters.notification.TelegramNotificationChannelAdapter",
     )
     def test_setup_channels_from_config_enabled(
         self,

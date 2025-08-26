@@ -10,7 +10,7 @@ UV ?= uv
 PYTHON := python
 PYTEST := pytest
 PYTEST_OPTS := -vv --junit-xml=pytest.xml
-PYTEST_COV_OPTS := $(PYTEST_OPTS) --cov=kraken_infinity_grid --cov-report=xml:coverage.xml --cov-report=term-missing
+PYTEST_COV_OPTS := $(PYTEST_OPTS) --cov=infinity_grid --cov-report=xml:coverage.xml --cov-report=term-missing
 TEST_DIR := tests
 
 ## ======= H E L P =============================================================
@@ -46,7 +46,7 @@ install: check-uv
 ##
 .PHONY: dev
 dev: check-uv
-	$(UV) pip install --compile -e ".[dev,test]" -r doc/requirements.txt
+	$(UV) pip install --compile -e ".[kraken,dev,test]" -r doc/requirements.txt
 
 ## ======= T E S T I N G =======================================================
 ## test		Run the unit tests
@@ -100,7 +100,7 @@ clean:
 		.vscode \
 		dist/ \
 		doc/_build \
-		src/kraken_infinity_grid.egg-info \
+		src/infinity_grid.egg-info \
 	    build/
 
 	rm -f \
@@ -109,13 +109,13 @@ clean:
 		*.log \
 		*.zip \
 		coverage.xml \
-		src/kraken_infinity_grid/_version.py \
+		src/infinity_grid/_version.py \
 		mypy.xml \
 		pytest.xml \
-		kraken_infinity_grid-*.whl \
+		infinity_grid-*.whl \
 		uv.lock
 
-	find src/kraken_infinity_grid -name "__pycache__" | xargs rm -rf
+	find src/infinity_grid -name "__pycache__" | xargs rm -rf
 	find tests -name "__pycache__" | xargs rm -rf
 	find tools -name ".ipynb_checkpoints" | xargs rm -rf
 	find tools -name "__pycache__" | xargs rm -rf

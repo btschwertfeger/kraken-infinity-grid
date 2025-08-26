@@ -36,5 +36,4 @@ jobs:
           context: .
           file: Dockerfile
           push: false
-          tags: |
-            btschwertfeger/kraken-infinity-grid:dev
+          tags: btschwertfeger/infinity-grid:dev

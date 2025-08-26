@@ -5,54 +5,54 @@
 # https://github.com/btschwertfeger
 #
 
-# This Docker Compose file creates a PostgreSQL and kraken-infinity-grid
+# This Docker Compose file creates a PostgreSQL and infinity-grid
 # container.
 #
 # In order to use this file to run the trading algorithm, a few environment
 # variables must be set, see
-# https://kraken-infinity-grid.readthedocs.io/en/latest/configuration.html#environment-variables
+# https://infinity-grid.readthedocs.io/en/latest/configuration.html#environment-variables
 # for more information.
 #
-# Note: For running multiple instances of the kraken-infinity-grid in parallel,
+# Note: For running multiple instances of the infinity-grid in parallel,
 # you can simply duplicate and configure the service, as it supports sharing the
 # same database.
 
 name: infinity-grid
 
 services:
-  kraken-infinity-grid:
-    image: btschwertfeger/kraken-infinity-grid:latest # dclint disable-line service-image-require-explicit-tag
+  infinity-grid:
+    image: btschwertfeger/infinity-grid:latest # dclint disable-line service-image-require-explicit-tag
     depends_on:
       postgresql:
         condition: service_healthy
     environment:
       TZ: Europe/Berlin
       # General settings
-      KRAKEN_API_KEY: ${KRAKEN_API_KEY}
-      KRAKEN_SECRET_KEY: ${KRAKEN_SECRET_KEY}
-      KRAKEN_BOT_VERBOSE: false
-      KRAKEN_DRY_RUN: false
+      INFINITY_GRID_API_KEY: ${INFINITY_GRID_API_KEY}
+      INFINITY_GRID_SECRET_KEY: ${INFINITY_GRID_SECRET_KEY}
+      INFINITY_GRID_BOT_VERBOSE: false
+      INFINITY_GRID_DRY_RUN: false
       # Strategy settings
-      KRAKEN_RUN_NAME: ${KRAKEN_RUN_NAME}
-      KRAKEN_RUN_USERREF: ${KRAKEN_RUN_USERREF}
-      KRAKEN_RUN_BASE_CURRENCY: ${KRAKEN_RUN_BASE_CURRENCY}
-      KRAKEN_RUN_QUOTE_CURRENCY: ${KRAKEN_RUN_QUOTE_CURRENCY}
-      KRAKEN_RUN_AMOUNT_PER_GRID: ${KRAKEN_RUN_AMOUNT_PER_GRID}
-      KRAKEN_RUN_INTERVAL: ${KRAKEN_RUN_INTERVAL}
-      KRAKEN_RUN_N_OPEN_BUY_ORDERS: ${KRAKEN_RUN_N_OPEN_BUY_ORDERS}
-      KRAKEN_RUN_MAX_INVESTMENT: ${KRAKEN_RUN_MAX_INVESTMENT}
-      KRAKEN_RUN_STRATEGY: ${KRAKEN_RUN_STRATEGY}
+      INFINITY_GRID_RUN_NAME: ${INFINITY_GRID_RUN_NAME}
+      INFINITY_GRID_RUN_USERREF: ${INFINITY_GRID_RUN_USERREF}
+      INFINITY_GRID_RUN_BASE_CURRENCY: ${INFINITY_GRID_RUN_BASE_CURRENCY}
+      INFINITY_GRID_RUN_QUOTE_CURRENCY: ${INFINITY_GRID_RUN_QUOTE_CURRENCY}
+      INFINITY_GRID_RUN_AMOUNT_PER_GRID: ${INFINITY_GRID_RUN_AMOUNT_PER_GRID}
+      INFINITY_GRID_RUN_INTERVAL: ${INFINITY_GRID_RUN_INTERVAL}
+      INFINITY_GRID_RUN_N_OPEN_BUY_ORDERS: ${INFINITY_GRID_RUN_N_OPEN_BUY_ORDERS}
+      INFINITY_GRID_RUN_MAX_INVESTMENT: ${INFINITY_GRID_RUN_MAX_INVESTMENT}
+      INFINITY_GRID_RUN_STRATEGY: ${INFINITY_GRID_RUN_STRATEGY}
       # Notification settings
-      KRAKEN_RUN_TELEGRAM_TOKEN: ${KRAKEN_RUN_TELEGRAM_TOKEN}
-      KRAKEN_RUN_TELEGRAM_CHAT_ID: ${KRAKEN_RUN_TELEGRAM_CHAT_ID}
-      KRAKEN_RUN_EXCEPTION_TOKEN: ${KRAKEN_RUN_EXCEPTION_TOKEN}
-      KRAKEN_RUN_EXCEPTION_CHAT_ID: ${KRAKEN_RUN_EXCEPTION_CHAT_ID}
+      INFINITY_GRID_RUN_TELEGRAM_TOKEN: ${INFINITY_GRID_RUN_TELEGRAM_TOKEN}
+      INFINITY_GRID_RUN_TELEGRAM_CHAT_ID: ${INFINITY_GRID_RUN_TELEGRAM_CHAT_ID}
+      INFINITY_GRID_RUN_EXCEPTION_TOKEN: ${INFINITY_GRID_RUN_EXCEPTION_TOKEN}
+      INFINITY_GRID_RUN_EXCEPTION_CHAT_ID: ${INFINITY_GRID_RUN_EXCEPTION_CHAT_ID}
       # Database settings
-      KRAKEN_RUN_DB_USER: ${KRAKEN_RUN_DB_USER}
-      KRAKEN_RUN_DB_NAME: ${KRAKEN_RUN_DB_NAME}
-      KRAKEN_RUN_DB_PASSWORD: ${KRAKEN_RUN_DB_PASSWORD}
-      KRAKEN_RUN_DB_HOST: ${KRAKEN_RUN_DB_HOST}
-      KRAKEN_RUN_DB_PORT: ${KRAKEN_RUN_DB_PORT}
+      INFINITY_GRID_RUN_DB_USER: ${INFINITY_GRID_RUN_DB_USER}
+      INFINITY_GRID_RUN_DB_NAME: ${INFINITY_GRID_RUN_DB_NAME}
+      INFINITY_GRID_RUN_DB_PASSWORD: ${INFINITY_GRID_RUN_DB_PASSWORD}
+      INFINITY_GRID_RUN_DB_HOST: ${INFINITY_GRID_RUN_DB_HOST}
+      INFINITY_GRID_RUN_DB_PORT: ${INFINITY_GRID_RUN_DB_PORT}
     networks:
       - internal_network
     restart: always
@@ -63,14 +63,14 @@ services:
       - postgres-data:/var/lib/postgresql/data
     environment:
       TZ: Europe/Berlin
-      POSTGRES_USER: kraken_infinity_grid
-      POSTGRES_PASSWORD: kraken_infinity_grid
-      POSTGRES_DB: kraken_infinity_grid
+      POSTGRES_USER: infinity_grid
+      POSTGRES_PASSWORD: infinity_grid
+      POSTGRES_DB: infinity_grid
     networks:
       - internal_network
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kraken_infinity_grid"]
+      test: ["CMD-SHELL", "pg_isready -U infinity_grid"]
       interval: 10s
       retries: 5
 
