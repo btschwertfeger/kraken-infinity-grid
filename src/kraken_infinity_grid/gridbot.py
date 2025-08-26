@@ -168,6 +168,7 @@ class KrakenInfinityGridBot(SpotWSClient):
         self.strategy: str = config["strategy"]
         self.userref: int = config["userref"]
         self.name: str = config["name"]
+        self.skip_price_check = config.get("skip_price_check", False)
 
         # Commonly used config values
         ##
@@ -474,9 +475,11 @@ class KrakenInfinityGridBot(SpotWSClient):
                     # Send update once per hour to Telegram
                     self.t.send_telegram_update()
 
-                if conf["last_price_time"] + timedelta(seconds=600) < now:
-                    # Exit if no price update for a long time (10 minutes).
-                    LOG.error("No price update for a long time, exiting!")
+                if (
+                    not self.skip_price_check
+                    and conf["last_price_time"] + timedelta(seconds=600) < now
+                ):
+                    LOG.error("No price update within the last 10 minutes - exiting!")
                     self.state_machine.transition_to(States.ERROR)
                     return
 
