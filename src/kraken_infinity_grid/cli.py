@@ -249,6 +249,16 @@ def cli(ctx: Context, **kwargs: dict) -> None:
     """,
 )
 @option(
+    "--skip-price-check",
+    is_flag=True,
+    default=False,
+    help="""
+    Skip checking if there was a price update in the last 10 minutes. By default,
+    the bot will exit if no recent price data is available. This might be useful
+    for assets that aren't traded that often.
+    """,
+)
+@option(
     "--sqlite-file",
     type=STRING,
     help="SQLite file to use as database.",
