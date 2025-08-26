@@ -56,7 +56,7 @@ def ensure_larger_equal_zero(
 
 @group(
     context_settings={
-        "auto_envvar_prefix": "KRAKEN",
+        "auto_envvar_prefix": "INFINITY_GRID",
         "help_option_names": ["-h", "--help"],
     },
     formatter_settings=HelpFormatter.settings(
@@ -132,7 +132,7 @@ def cli(ctx: Context, **kwargs: dict) -> None:
 
 @cli.command(
     context_settings={
-        "auto_envvar_prefix": "KRAKEN_RUN",
+        "auto_envvar_prefix": "INFINITY_GRID_RUN",
         "help_option_names": ["-h", "--help"],
     },
     formatter_settings=HelpFormatter.settings(
@@ -320,6 +320,19 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         ~IsSet("sqlite_file") & ~IsSet("in_memory"),
         then=require_all,
         else_=accept_none,
+    ),
+)
+@option_group(
+    "Additional options",
+    option(
+        "--skip-price-timeout",
+        is_flag=True,
+        default=False,
+        help="""
+        Skip checking if there was a price update in the last 10 minutes. By
+        default, the bot will exit if no recent price data is available. This
+        might be useful for assets that aren't traded that often.
+        """,
     ),
 )
 @pass_context

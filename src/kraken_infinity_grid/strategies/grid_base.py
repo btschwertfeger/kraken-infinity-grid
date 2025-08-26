@@ -174,9 +174,11 @@ class GridStrategyBase:
                     # Send update once per hour
                     self.send_status_update()
 
-                if conf["last_price_time"] + timedelta(seconds=600) < now:
-                    # Exit if no price update for a long time (10 minutes).
-                    LOG.error("No price update for a long time, exiting!")
+                if (
+                    not self._config.skip_price_timeout
+                    and conf["last_price_time"] + timedelta(seconds=600) < now
+                ):
+                    LOG.error("No price update since 10 minutes - exiting!")
                     self._state_machine.transition_to(States.ERROR)
                     return
 

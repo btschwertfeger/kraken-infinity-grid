@@ -54,7 +54,7 @@ dev = ["mypy", "black", "ruff"]
 test = ["pytest", "pytest-cov", "pytest-asyncio"]
 
 [project.scripts]
-kraken-infinity-grid = "kraken_infinity_grid.core.cli:cli"
+infinity-grid = "kraken_infinity_grid.core.cli:cli"
 
 [tool.setuptools]
 include-package-data = false
