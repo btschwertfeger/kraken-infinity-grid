@@ -35,6 +35,11 @@ rebuild: clean build
 doc:
 	cd doc && make html
 
+## image	Build the Docker image
+##
+image:
+	docker build -t btschwertfeger/infinity-grid:dev .
+
 ## ======= I N S T A L L A T I O N =============================================
 ## install	Install the package
 ##

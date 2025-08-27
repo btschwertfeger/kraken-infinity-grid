@@ -20,7 +20,7 @@ FROM python:3.13-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# hadolint ignore=DL3008
+# hadolint ignore=DL3008,DL3013,SC2102
 RUN --mount=type=bind,target=/context,from=builder,source=/apps \
     --mount=type=cache,target=/var/lib/apt/,sharing=locked \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -36,9 +36,9 @@ RUN --mount=type=bind,target=/context,from=builder,source=/apps \
         libpq-dev \
         locales \
         procps \
-    && locale-gen en_US.UTF.8 \
+    && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/* \
-    && python -m pip install --compile --no-cache-dir "/context/dist/*.whl[kraken]"
+    && python -m pip install --compile --no-cache-dir $(find /context/dist -name "*.whl")[kraken]
 
 ENTRYPOINT ["infinity-grid", "run"]
 
