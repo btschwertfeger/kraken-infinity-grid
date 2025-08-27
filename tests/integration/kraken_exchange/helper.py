@@ -22,10 +22,13 @@ from infinity_grid.models.configuration import (
 )
 
 
-class KrakenAPI(Trade, User, Market):
+class KrakenAPI(Market, Trade, User):
     """
-    Class mocking the User and Trade client of the python-kraken-sdk to
-    simulate real trading.
+    Class extending the Market, Trade, and User client of the python-kraken-sdk
+    to use its methods for non-authenticated requests.
+
+    This class tries to simulate the backend of the Kraken Exchange, handling
+    orders and trades used during tests.
     """
 
     def __init__(self: Self) -> None:
