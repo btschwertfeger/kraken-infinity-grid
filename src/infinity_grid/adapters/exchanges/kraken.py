@@ -328,7 +328,16 @@ class KrakenExchangeRESTServiceAdapter(IExchangeRESTService):
         )
 
         base_currency = quote_currency = None
+        assets = {self.__base_currency, self.__quote_currency}
         for key, value in asset_response.items():
+            if key.startswith("Z") and key[1:] in assets:
+                # The Kraken exchange is inconsistent in terms of return values.
+                # When BTC is the base and EUR the quote currency, the altnames
+                # will be BTC and EUR, while the asset pair AVAX/EUR or DOT/EUR
+                # will return AVAX and ZEUR or DOT ZEUR. So we need to cut of
+                # the Z in case
+                key = key[1:]  # noqa: PLW2901
+
             if key == self.__base_currency:
                 base_currency = value["altname"]
             elif key == self.__quote_currency:

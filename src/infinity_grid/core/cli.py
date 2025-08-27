@@ -94,13 +94,6 @@ def ensure_larger_equal_zero(
     count=True,
     help="Increase the verbosity of output. Use -vv for even more verbosity.",
 )
-@option(
-    "--dry-run",
-    required=False,
-    is_flag=True,
-    default=False,
-    help="Enable dry-run mode which do not execute trades.",
-)
 @pass_context
 def cli(ctx: Context, **kwargs: dict) -> None:
     """
@@ -333,6 +326,13 @@ def cli(ctx: Context, **kwargs: dict) -> None:
         default, the bot will exit if no recent price data is available. This
         might be useful for assets that aren't traded that often.
         """,
+    ),
+    option(
+        "--dry-run",
+        required=False,
+        is_flag=True,
+        default=False,
+        help="Enable dry-run mode which do not execute trades.",
     ),
 )
 @pass_context
