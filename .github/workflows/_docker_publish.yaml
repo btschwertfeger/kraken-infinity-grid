@@ -31,7 +31,7 @@ jobs:
       id-token: write
     environment:
       name: Docker Hub
-      url: https://hub.docker.com/r/btschwertfeger/kraken-infinity-grid
+      url: https://hub.docker.com/r/btschwertfeger/infinity-grid
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0

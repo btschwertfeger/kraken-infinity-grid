@@ -5,8 +5,8 @@
 .. https://github.com/btschwertfeger
 ..
 
-Welcome to kraken-infinity-grid's documentation!
-================================================
+Welcome to infinity-grid's documentation!
+=========================================
 
 |GitHub badge| |PyVersions badge| |Downloads badge|
 |CI/CD badge| |Typing badge| |codecov badge|

@@ -1,7 +1,7 @@
-# Welcome to kraken-infinity-grid contributing guide
+# Welcome to infinity-grid contributing guide
 
 Thank you for investing your time in contributing to the
-[kraken-infinity-grid](https://github.com/btschwertfeger/kraken-infinity-grid/)
+[infinity-grid](https://github.com/btschwertfeger/infinity-grid/)
 project! 🔥
 
 Read our [Code of Conduct](./CODE_OF_CONDUCT.md) to keep our community
@@ -9,7 +9,7 @@ approachable and respectable.
 
 If you have any questions, comments, suggestions or general topics, please feel
 free to open or join a thread at
-[kraken-infinity-grid/discussions](https://github.com/btschwertfeger/kraken-infinity-grid/discussions).
+[infinity-grid/discussions](https://github.com/btschwertfeger/infinity-grid/discussions).
 We are looking forward to nice conversations, strategy exchange and an knowledge
 transfer!
 
@@ -23,17 +23,17 @@ an issue, creating a PR, reviewing, and merging the PR.
 #### Create a new issue
 
 If you have an issue that's not yet listed in the troubleshooting section of
-[README.md](https://github.com/btschwertfeger/kraken-infinity-grid#readme) or in
-[documentation](https://kraken-infinity-grid.readthedocs.io/en/stable), feel
+[README.md](https://github.com/btschwertfeger/infinity-grid#readme) or in
+[documentation](https://infinity-grid.readthedocs.io/en/stable), feel
 free to create a new
-[issue](https://github.com/btschwertfeger/kraken-infinity-grid/issues) if there
+[issue](https://github.com/btschwertfeger/infinity-grid/issues) if there
 is no similar one listed among the existing ones. Also, for any features that
 are missing, this is the right place to request them.
 
 #### Solve an issue
 
 Scan through our [existing
-issues](https://github.com/btschwertfeger/kraken-infinity-grid/issues) to find
+issues](https://github.com/btschwertfeger/infinity-grid/issues) to find
 one that interests you. If the future brings more and more features or issues -
 you can also filter for specific `labels`.
 
@@ -42,15 +42,15 @@ you can also filter for specific `labels`.
 1. Fork the repository and clone your fork locally.
 
 ```bash
-git clone https://github.com/<username>/kraken-infinity-grid.git
+git clone https://github.com/<username>/infinity-grid.git
 ```
 
 2. Install the provided [pre-commit](https://pre-commit.com/) hooks within the
    repository and make sure that all hooks run through, before pushing changes.
 
 ```bash
-cd kraken-infinity-grid
-kraken-infinity-grid~$: pre-commit install
+cd infinity-grid
+infinity-grid~$: pre-commit install
 ```
 
 3. Create a new branch and start implementing your changes.
@@ -58,7 +58,7 @@ kraken-infinity-grid~$: pre-commit install
    In the project provides a `Makefile` which offers many shortcuts to execute
    different commands. For example, you can use `make test` to run all unit
    tests or `make build` to build the package. `make dev` installs the
-   kraken-infinity-grid in editable state into the current environment. However,
+   infinity-grid in editable state into the current environment. However,
    for development it is recommended to set up a virtual environment first.
 
 ### Commit your updates 🎬

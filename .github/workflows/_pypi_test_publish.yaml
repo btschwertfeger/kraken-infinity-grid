@@ -26,7 +26,7 @@ jobs:
       id-token: write # IMPORTANT: this permission is mandatory for OIDC publishing
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/kraken-infinity-grid
+      url: https://test.pypi.org/p/infinity-grid
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0

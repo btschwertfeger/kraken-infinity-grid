@@ -22,7 +22,7 @@ from typing import Any
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "kraken-infinity-grid"
+project = "infinity-grid"
 copyright = "2025, Benjamin Thomas Schwertfeger"  # noqa: A001 # pylint: disable=redefined-builtin
 author = "Benjamin Thomas Schwertfeger"
 
@@ -76,6 +76,6 @@ html_static_path = ["_static"]
 html_context = {
     "display_github": True,
     "github_user": "btschwertfeger",
-    "github_repo": "kraken-infinity-grid",
+    "github_repo": "infinity-grid",
     "github_version": "master/doc/",
 }

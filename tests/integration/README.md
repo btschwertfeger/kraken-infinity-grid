@@ -24,7 +24,7 @@ The following cases are implemented in the integration tests.
 
 **Characteristics**
 
-- Mocks external dependencies (Kraken API)
+- Mocks external dependencies to avoid accidental trades (e.g. Kraken API)
 - Tests multiple components working together (Focuses on component interactions)
 - Tests full system behavior (Verifies business logic flows end-to-end)
 - Verifies component interactions (Uses mocks only for external systems)

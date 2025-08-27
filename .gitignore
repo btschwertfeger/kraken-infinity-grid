@@ -13,7 +13,7 @@ build/
 dist/
 
 # Version file
-kraken_infinity_grid/_version.py
+infinity_grid/_version.py
 
 # Environments
 .env
@@ -51,5 +51,6 @@ doc/_build/
 *.csv
 
 # Other artifacts
-*.sqlite
+*.sqlite*
+*sqlite*
 *.sqlite-journal

@@ -50,11 +50,10 @@ Terms and definitions
 Fundamental concepts
 --------------------
 
-`kraken-infinity-grid`_ is a sophisticated trading algorithm designed for
-automated cryptocurrency trading using a grid strategy. This approach is
-particularly effective in volatile markets, where frequent price fluctuations
-allow for consistent profit opportunities through structured buying and selling
-patterns.
+`infinity-grid`_ is a sophisticated trading algorithm designed for automated
+cryptocurrency trading using a grid strategy. This approach is particularly
+effective in volatile markets, where frequent price fluctuations allow for
+consistent profit opportunities through structured buying and selling patterns.
 
 The core idea: Grid trading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -75,7 +74,7 @@ leveraging the natural oscillations in market prices.
 Key Elements of Grid Trading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **Intervals**: Unlike fully static systems, `kraken-infinity-grid`_ uses
+1. **Intervals**: Unlike fully static systems, `infinity-grid`_ uses
    fixed intervals that shift up or down based on price movements, ensuring
    continuous trading and avoids manual interactions. This flexibility is
    crucial for maintaining profitability in diverse market environments.
