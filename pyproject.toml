@@ -51,7 +51,7 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = ["mypy", "black", "ruff"]
-test = ["pytest", "pytest-cov", "pytest-asyncio"]
+test = ["pytest", "pytest-cov", "pytest-asyncio", "python-kraken-sdk~=3.2"]
 kraken = ["python-kraken-sdk~=3.2"]
 
 [project.scripts]
