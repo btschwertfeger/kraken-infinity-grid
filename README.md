@@ -1,3 +1,7 @@
+<h1>
+⚠️ This project will be archived soon, please migrate to https://github.com/btschwertfeger/infinity-grid
+</h1>
+
 <h1 align="center">Infinity Grid Trading Algorithm for the Kraken Exchange</h1>
 
 <div align="center">

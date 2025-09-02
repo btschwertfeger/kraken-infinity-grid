@@ -12,6 +12,8 @@ Introduction
 |CI/CD badge| |Typing badge| |codecov badge|
 |Release date badge| |Release version badge| |DOI badge|
 
+⚠️ This project will be archived soon, please migrate to
+https://github.com/btschwertfeger/infinity-grid
 
 Disclaimer
 ----------
