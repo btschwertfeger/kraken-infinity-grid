@@ -12,6 +12,9 @@ Welcome to kraken-infinity-grid's documentation!
 |CI/CD badge| |Typing badge| |codecov badge|
 |Release date badge| |Release version badge| |DOI badge|
 
+⚠️ This project will be archived soon, please migrate to
+https://github.com/btschwertfeger/infinity-grid
+
 .. toctree::
    :caption: Contents:
    :maxdepth: 2
